@@ -1,0 +1,101 @@
+@Tutorial(time: 20) {
+    @Intro(title: "갇힌 세계 짓기") {
+        SceneKit 세계는 두 가지 의미에서 닫혀 있다. 이 세계에 있는 모든 것은
+        개발자가 코드로 선언한 것의 총합이고, 그 존재 방식조차 SCNNode 하나가
+        생김새·물리·행동을 전부 짊어지는 구조다. 이 장에서는 그걸 설명이 아니라
+        캐릭터가 실패를 겪는 과정으로 직접 확인한다.
+    }
+
+    @Section(title: "프로젝트 세팅") {
+        @ContentAndMedia {
+            SwiftUI 앱에서 SceneKit의 SCNView를 UIViewRepresentable로 감싸는
+            껍데기를 만든다. 이 단계는 서사적 의미 없는 빌드 준비다.
+        }
+
+        @Steps {
+            @Step {
+                `ClosedWorldSceneView`를 만들어 SwiftUI에서 SceneKit 씬을 호스팅할
+                준비를 한다.
+
+                @Code(name: "ClosedWorldSceneView.swift", file: "01-ClosedWorld-01-01.swift")
+            }
+        }
+    }
+
+    @Section(title: "방 짓기") {
+        @ContentAndMedia {
+            `SCNBox`로 벽을 세우고, `Ground_Color.usdc`를 바닥으로 재사용한다.
+            좌표 원점(0,0,0)도 여기서 임의로 선언한다. 이 세계에 있는 모든 것 —
+            벽이든 바닥이든 — 은 지금 이 코드로 써넣은 것만 존재한다.
+        }
+
+        @Steps {
+            @Step {
+                `RoomBuilder`를 만들어 방을 짓는다. 벽 4개는 `SCNBox`로, 바닥은
+                `AssetLoader`로 `Ground_Color` 에셋을 불러와 만든다.
+
+                @Code(name: "RoomBuilder.swift", file: "01-ClosedWorld-02-01.swift")
+            }
+        }
+    }
+
+    @Section(title: "돼지 배치") {
+        @ContentAndMedia {
+            하드코딩된 좌표에 돼지를 놓는다. 이 좌표는 방 안 어떤 실제 기준과도
+            연결되어 있지 않다 — 그냥 숫자다.
+        }
+
+        @Steps {
+            @Step {
+                `PigPlacement`가 `Piggy.usdc`를 불러와 표준 높이로 정규화하고
+                하드코딩된 위치에 놓는다.
+
+                @Code(name: "PigPlacement.swift", file: "01-ClosedWorld-03-01.swift")
+            }
+        }
+    }
+
+    @Section(title: "노드 구조 탐구") {
+        @ContentAndMedia {
+            지금까지 만든 노드를 들여다보면, 생김새(geometry)·물리(physicsBody)·
+            행동(action)이 전부 SCNNode 하나에 붙어있다는 걸 확인할 수 있다.
+            책임이 분리되지 않는 구조다. RealityKit의 ECS는 이걸 쪼갠다 —
+            자세한 대비는 4장에서 다룬다.
+        }
+
+        @Steps {
+            @Step {
+                `NodeInspector`로 노드 하나에 얹힌 geometry·physicsBody·action을
+                모두 출력해 확인한다.
+
+                @Code(name: "NodeInspector.swift", file: "01-ClosedWorld-04-01.swift")
+            }
+        }
+    }
+
+    @Section(title: "\"숨어봐\" 시도") {
+        @ContentAndMedia {
+            `Wood_Color.usdc`를 가짜 소파로 미리 놓아두고, 탭하면 돼지가 그
+            좌표로 이동하는 액션을 실행한다. 진짜 소파가 화면 반대편(실제 방)에
+            있어도 이 동작은 그와 전혀 무관하게 실행된다 — 내가 선언한 가짜
+            소파로는 이동되지만, 진짜 소파는 이 세계에 아예 존재하지 않는다.
+        }
+
+        @Steps {
+            @Step {
+                `FakeSofa`와 `HideAction`을 추가하고, 탭 제스처로 돼지를
+                가짜 소파 위치까지 이동시킨다.
+
+                @Code(name: "HideAction.swift", file: "01-ClosedWorld-05-01.swift")
+            }
+        }
+    }
+
+    @Section(title: "다음 장 예고") {
+        @ContentAndMedia {
+            이 세계는 지금까지 내가 만든 것만으로 이루어져 있었다. 다음 장부터
+            이 세계는 더 이상 내가 만든 것만으로 이루어지지 않는다 — 균열
+            사이로 진짜 빛이 새어 든다.
+        }
+    }
+}

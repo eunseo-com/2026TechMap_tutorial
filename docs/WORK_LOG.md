@@ -4,11 +4,11 @@
 
 ## 현재 인수인계
 
-- 상태: Chapter 1 Task 7 완료 (최종 재검토 승인)
-- 진행 중 범위: `docs/superpowers/plans/2026-08-10-ch1-closed-world-implementation.md`의 Task 7 — ClosedWorldSceneView. 기존 구현과 1차 수정 뒤 실제 화면 검증에서 발견된 바닥·돼지 배치 문제까지 보정했다.
-- 마지막 완료 범위: Task 1~6 (Tuist 스캐폴드, 에셋+AssetLoader, RoomBuilder, PigPlacement+FakeSofa, NodeInspector, HideAction) — 전부 검증·검토 완료.
-- 마지막 검증: `xcodebuild ... test` 26/26 통과. Simulator에서 수평 바닥·돼지·가짜 소파가 한 프레임에 보임을 확인했다. 탭은 `Coordinator`가 HideAction을 시작하는 단위 테스트와, 표시된 씬에서 실제 액션 완료를 확인하는 HideAction 테스트로 검증했다.
-- 다음 시작점: Task 8(DocC 카탈로그)을 시작한다.
+- 상태: Chapter 1 Task 8 완료
+- 진행 중 범위: Chapter 1 `ClosedWorld` 구현과 DocC 카탈로그(Task 1~8)를 완료했다.
+- 마지막 완료 범위: Task 8 — Chapter 1 DocC 튜토리얼 카탈로그, 5개 현재 소스 스니펫, Tuist 타깃 인식 설정.
+- 마지막 검증: `tuist generate --no-open` 성공. `xcodebuild docbuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /tmp/piggyescape-docbuild`가 `.doccarchive`를 만들고 `** BUILD DOCUMENTATION SUCCEEDED **`로 완료했다.
+- 다음 시작점: Chapter 1 결과물을 검토하거나 다음 챕터의 별도 설계를 시작한다.
 - 차단 요소: 없음.
 
 ### Task 7에서 해결한 항목
@@ -21,6 +21,7 @@
 
 | 날짜 | 작업 범위 | 결과 | 검증 | 다음 시작점 |
 | --- | --- | --- | --- | --- |
+| 2026-08-10 | Chapter 1 Task 8 | Chapter 1 DocC 튜토리얼 카탈로그와 현재 구현을 반영한 5개 코드 스니펫을 추가하고 앱 타깃에 등록함 | `tuist generate --no-open` 성공, `xcodebuild docbuild`가 `.doccarchive`를 생성하고 성공으로 완료 | Chapter 1 결과물 검토 또는 다음 챕터 설계 |
 | 2026-08-10 | Chapter 1 Task 7 최종 재검토 | 구현·변환·카메라·인터랙션 회귀 검토를 마침. 생성물 제외 규칙과 테스트 추적 상태를 보완함 | 26/26 테스트 통과 결과와 변경 내용을 재검토 | Task 8 |
 | 2026-08-10 | Chapter 1 Task 7 보정·재검증 | Blender 좌표계 보정으로 바닥·돼지를 방 바닥에 맞추고, 초기 프레임에 돼지를 표시. Task 7 탭 연결 테스트 추가 | `tuist generate --no-open`, `xcodebuild ... build` 성공, `xcodebuild ... test` 26/26 통과, Simulator 장면 확인 | Task 7 최종 재검토·커밋 후 Task 8 |
 | 2026-08-10 | Chapter 1 Task 1~6 | Tuist 스캐폴드부터 HideAction까지 완료, 태스크마다 검토·필요 시 수정 라운드 거침 | 각 태스크 `xcodebuild test` 통과, 태스크별 검토 승인 | Task 7 |

@@ -1,0 +1,15 @@
+@Tutorials(name: "씬킷에서 리얼리티킷으로") {
+    @Intro(title: "갇힌 캐릭터의 탈출") {
+        개발자가 만든 가짜 세계에 갇혀 살던 돼지가 균열을 뚫고 진짜 세계로 도망친다.
+        이 튜토리얼은 그 탈출과 술래잡기를 직접 만들어보며,
+        SceneKit이 가짜로 짓는 세계와 RealityKit이 진짜로 읽는 세계의 차이를 체험한다.
+    }
+
+    @Chapter(name: "Chapter 1: 갇힌 세계") {
+        SceneKit만으로 방을 짓고 돼지를 그 안에 가둔다.
+        이 세계에 있는 모든 것은 코드로 선언한 것의 총합일 뿐이라는 걸,
+        "숨어봐"가 실패하는 순간으로 직접 확인한다.
+
+        @TutorialReference(tutorial: "doc:01-ClosedWorld")
+    }
+}

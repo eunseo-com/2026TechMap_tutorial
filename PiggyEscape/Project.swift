@@ -10,7 +10,7 @@ let project = Project(
             bundleId: "com.techmap.piggyescape",
             deploymentTargets: .iOS("17.0"),
             infoPlist: .default,
-            sources: ["PiggyEscape/Sources/**"],
+            sources: ["PiggyEscape/Sources/**", "PiggyEscape/Tutorials/**"],
             resources: ["PiggyEscape/Resources/**"]
         ),
         .target(
