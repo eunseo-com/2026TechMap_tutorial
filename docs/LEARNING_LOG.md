@@ -28,6 +28,90 @@
 
 ## 항목
 
+### L-20260810-032 — Task 5 시작 전 원격 fetch가 연결 작업 트리 메타데이터 권한으로 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 5 — 실제 물체 숨기 계획과 LiDAR 지원 판정
+- 재현: `git fetch --prune origin`
+- 관찰: `error: cannot open '/Users/yang-eunseo/Downloads/SpatialComputing_TechMap/.git/worktrees/ch1-reality-escape/FETCH_HEAD': Operation not permitted`로 원격 참조 갱신 전에 종료됨
+- 영향: 구현 전 원격 변경 동기화 상태를 현재 권한 범위에서 확정할 수 없음
+- 원인/가설: 이전 연결 작업 트리의 L-20260810-020와 같은 공용 Git 메타데이터 `FETCH_HEAD` 쓰기 경로 권한 제약으로 보임
+- 조치: 공용 Git 메타데이터에 접근 가능한 권한으로 같은 명령을 재실행함
+- 검증: 권한 재실행 `git fetch --prune origin`이 성공했고, 직후 `git status --short`는 이 항목을 포함한 `docs/LEARNING_LOG.md` 변경과 기존 사용자 소유 `.claude/`만 표시함
+- 배운 점: 시작 순서의 fetch가 권한으로 중단되면 구현이나 테스트 재시도 전에 실패 근거를 먼저 남긴다.
+
+### L-20260810-033 — Task 5 RED 준비의 Tuist 생성이 세션 상태 디렉터리 권한으로 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 5 — 실제 물체 숨기 계획과 LiDAR 지원 판정
+- 재현: `cd PiggyEscape && tuist generate --no-open`
+- 관찰: `Fatal error: Error raised at top level: Permission denied: /Users/yang-eunseo/.local/state/tuist/sessions/5EB5AE43-8EB9-4043-ADD9-EFD4F37F3DED`로 새 XCTest 파일을 생성 프로젝트에 반영하기 전에 종료됨
+- 영향: 새 Reality 계획·지원 판정 테스트의 의도적인 타입 부재 RED를 아직 실행할 수 없음
+- 원인/가설: Tuist가 연결 작업 트리 밖 사용자 세션 상태 경로에 쓰기를 시도하지만 현재 권한 범위에 포함되지 않음
+- 조치: 해당 세션 상태 경로에 접근 가능한 권한으로 같은 생성 명령을 재실행함
+- 검증: 권한 재실행 `tuist generate --no-open`가 `✔ Success`로 완료되어 새 Reality XCTest가 생성 프로젝트에 반영됨
+- 배운 점: 새 XCTest를 추가한 뒤 RED를 확인하려면 생성 프로젝트뿐 아니라 Tuist 세션 상태 쓰기 권한도 먼저 충족해야 한다.
+
+### L-20260810-034 — Task 5 RED XCTest가 Simulator 서비스 접근 제한으로 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 5 — 실제 물체 숨기 계획과 LiDAR 지원 판정
+- 재현: `xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/RealityHidePlannerTests -only-testing:PiggyEscapeTests/RealityCapabilityTests test`
+- 관찰: `CoreSimulatorService connection became invalid`, `Error opening log file ... Operation not permitted`, `Unable to discover any Simulator runtimes`가 발생해 새 타입 부재 컴파일 단계 전에 XCTest가 종료됨
+- 영향: Reality 계획·지원 판정의 의도적인 RED를 아직 확인할 수 없음
+- 원인/가설: Simulator 기기·로그·DerivedData 상태 경로가 현재 파일 권한 범위 밖에 있음
+- 조치: Simulator 서비스와 Xcode 상태 경로에 접근 가능한 권한으로 같은 focused XCTest를 재실행함
+- 검증: 권한 재실행에서 `RealityMeshSupporting`과 `RealityAvailabilityMessage`를 찾지 못해 `PiggyEscapeTests` 컴파일이 실패했고, 지정 Reality 계약이 아직 구현되지 않았음을 확인함
+- 배운 점: Simulator 기반 RED에서는 환경 권한 실패와 새 API 부재를 분리해 기록해야 테스트 의도를 보존할 수 있다.
+
+### L-20260810-035 — Task 5 GREEN 준비의 Tuist 명령이 잘못된 작업 디렉터리에서 실행됨
+
+- 상태: 해결
+- 발생 태스크: Task 5 — 실제 물체 숨기 계획과 LiDAR 지원 판정
+- 재현: 작업 트리 루트에서 `tuist generate --no-open` 뒤 지정 Reality focused XCTest 실행
+- 관찰: Tuist가 `Manifest not found at path .../.worktrees/ch1-reality-escape`로 종료했고, 이어진 XCTest는 기존 생성 프로젝트를 사용해 새 `RealityMeshSupporting`과 `RealityAvailabilityMessage`를 찾지 못함
+- 영향: 방금 추가한 Reality 소스가 생성 프로젝트에 반영되지 않아 GREEN 동작을 검증할 수 없음
+- 원인/가설: `Project.swift`는 `PiggyEscape/`에 있는데 생성 명령의 작업 디렉터리가 그 상위 작업 트리 루트였음. 따라서 생성 실패 후 이전 `.xcodeproj`의 소스 목록이 유지된 것으로 보임
+- 조치: `PiggyEscape/Project.swift`가 존재하고 이전 `.xcodeproj`에는 Reality 테스트만 포함하며 Reality 소스는 빠진 것을 확인함. manifest가 있는 `PiggyEscape/`에서만 생성 명령을 재실행함
+- 검증: `cd PiggyEscape && tuist generate --no-open`가 성공했고, 같은 focused XCTest가 `RealityHidePlanner.swift`와 `RealityCapability.swift`를 컴파일한 뒤 8/8 assertion을 통과함
+- 배운 점: Tuist 생성은 프로젝트 파일 위치가 아니라 manifest를 기준으로 작업 디렉터리를 선택하며, 생성 실패 뒤에는 기존 Xcode 프로젝트를 검증 근거로 사용하지 않는다.
+
+### L-20260810-036 — Task 5 focused XCTest에 기존 Simulator 런타임 경고가 출력됨
+
+- 상태: 보류
+- 발생 태스크: Task 5 — 실제 물체 숨기 계획과 LiDAR 지원 판정
+- 재현: `cd PiggyEscape && xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/RealityHidePlannerTests -only-testing:PiggyEscapeTests/RealityCapabilityTests test`
+- 관찰: 8개 XCTest와 `** TEST SUCCEEDED **`는 확인했지만 `Metadata extraction skipped. No AppIntents.framework dependency found`, `TBB Global TLS count is not == 1`, `UIFocus` 캐시 제한 경고가 함께 출력됨
+- 영향: Reality 계획·메시지·주입 지원 판정 회귀 assertion은 통과했지만 XCTest 출력이 경고 없이 깨끗하다는 조건은 충족하지 못함
+- 원인/가설: 기존 AppIntents 의존성이 없는 앱 타깃과 iOS Simulator 런타임 진단으로, Task 5 순수 Swift·ARKit 지원 경계의 컴파일 또는 assertion 실패는 아님
+- 조치: Task 5 범위 밖의 앱 타깃·Simulator 런타임을 변경하지 않고, 경고를 보류한 채 전체 XCTest와 Simulator build로 회귀 범위를 확인함
+- 검증: focused Reality XCTest 8/8과 전체 XCTest 58/58이 통과했고, 같은 destination의 `xcodebuild ... build`가 `** BUILD SUCCEEDED **`로 완료됨
+- 배운 점: LiDAR 지원 자체는 Fake `RealityMeshSupporting`로 결정론적으로 검증하고, Simulator 런타임 경고 또는 실제 LiDAR 판정을 자동 테스트 성공으로 대체하지 않는다.
+
+### L-20260810-037 — Task 5의 실제 LiDAR 메쉬 지원과 물리 오클루전은 Simulator에서 검증할 수 없음
+
+- 상태: 실기기 대기
+- 발생 태스크: Task 5 — 실제 물체 숨기 계획과 LiDAR 지원 판정
+- 재현: LiDAR가 있는 iOS 기기에서 `SystemRealityMeshSupport.supportsMeshWithClassification`을 확인하고, 실제 세로 물체·바닥을 스캔한 뒤 메쉬가 돼지보다 앞에 있을 때와 벗어났을 때를 관찰하는 절차
+- 관찰: 이 태스크에서는 순수 입력·거리·평면 수학, 0.03m 재발견 허용오차, Fake 지원 주입만 자동 검증했다. Simulator ARKit으로 LiDAR 지원을 흉내 내거나 실제 메쉬 오클루전을 실행하지 않았음
+- 영향: 지원 여부의 시스템 API 결과와 실제 재구성 메쉬의 거리 데이터는 자동 테스트만으로 확정할 수 없음
+- 원인/가설: LiDAR 센서와 실제 환경 메쉬는 Simulator가 제공하지 않는 하드웨어·공간 입력임
+- 조치: 시스템 판정은 `SystemRealityMeshSupport` 한 곳으로 제한하고, 테스트는 ARKit을 호출하지 않는 Fake 주입으로 true/false 경계를 검증함
+- 검증: `RealityCapabilityTests/test_injectedCapabilityDoesNotDependOnTheSimulator`가 true/false Fake를 모두 통과했고, 실제 기기 검증은 Task 6의 ARView 연결 뒤 수행할 예정임
+- 배운 점: LiDAR 가능 여부와 실제 오클루전은 시스템 API·실기기 근거로만 확인하며, Simulator의 값이나 순수 테스트를 하드웨어 검증으로 표현하지 않는다.
+
+### L-20260810-038 — Task 5 인수인계·학습 기록 통합 패치가 문맥 불일치로 적용되지 않음
+
+- 상태: 해결
+- 발생 태스크: Task 5 — 실제 물체 숨기 계획과 LiDAR 지원 판정
+- 재현: `docs/LEARNING_LOG.md`와 `docs/WORK_LOG.md`를 함께 갱신하는 `apply_patch`
+- 관찰: `apply_patch verification failed`가 `WORK_LOG.md`의 현재 인수인계 문맥을 찾지 못해 전체 패치가 적용되지 않음
+- 영향: 학습 기록의 전체 XCTest·실기기 한계 갱신과 Task 5 인수인계가 아직 저장되지 않음
+- 원인/가설: 패치 문맥이 실제 제목 `## 현재 인수인계`와 달리 앞 공백이 있는 문자열을 사용해 정확히 일치하지 않았음
+- 조치: 실패 뒤 두 문서의 실제 첫 부분을 읽어 문맥 불일치를 확인했고, 학습 기록과 인수인계를 별도 정확 문맥 패치로 분리함
+- 검증: 분리 패치가 전체 XCTest 58/58·Simulator build 성공, 실제 LiDAR 실기기 대기, Task 6 다음 시작점을 각각 두 문서에 반영함
+- 배운 점: 서로 다른 문서를 한 패치로 바꿀 때는 각 문서의 제목·공백까지 실제 문맥을 먼저 대조하고, 실패 시 부분 적용을 가정하지 않는다.
+
 ### L-20260810-031 — Task 4 리뷰 RED에서 놀람 콜백 순서와 Coordinator 수명 누수가 확인됨
 
 - 상태: 해결
