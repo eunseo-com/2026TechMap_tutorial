@@ -4,11 +4,11 @@
 
 ## 현재 인수인계
 
-- 상태: C3 월드 기반 SceneKit → RealityKit 재설계 승인, 구현 시작 전
+- 상태: C3 월드 기반 SceneKit → RealityKit 재설계 승인, 구현 계획 작성 완료
 - 진행 중 범위: Draft PR의 Chapter 1 결과물을 기준선으로 두고, C3_Piggy의 3D 월드와 실제 공간 숨기 흐름을 결합하는 별도 브랜치 설계를 시작했다.
 - 마지막 완료 범위: Task 8 — Chapter 1 DocC 튜토리얼 카탈로그, 5개 현재 소스 스니펫, Tuist 타깃 인식 설정.
 - 마지막 검증: `tuist generate --no-open` 성공. `xcodebuild docbuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /tmp/piggyescape-docbuild`가 `.doccarchive`를 만들고 `** BUILD DOCUMENTATION SUCCEEDED **`로 완료했다.
-- 다음 시작점: `docs/superpowers/specs/2026-08-10-ch1-reality-escape-design.md`를 검토한 뒤 구현 계획을 작성한다.
+- 다음 시작점: `docs/superpowers/plans/2026-08-10-ch1-reality-escape-implementation.md`의 Task 1부터 태스크별 테스트·검토·커밋 순서로 구현한다.
 - 차단 요소: 없음.
 
 ### Task 7에서 해결한 항목
@@ -21,6 +21,7 @@
 
 | 날짜 | 작업 범위 | 결과 | 검증 | 다음 시작점 |
 | --- | --- | --- | --- | --- |
+| 2026-08-10 | Chapter 1 C3 월드→RealityKit 구현 계획 | C3 에셋·상태 기계·섬 어댑터·가짜 숨기·LiDAR 실제 숨기·자동 전환·DocC/실기기 검증을 8개 독립 태스크로 분해함 | 설계 명세·C3 원본 코드·현재 프로젝트/테스트 구조·Apple ARKit/RealityKit 공식 API 대조 | 실행 방식 선택 후 Task 1 |
 | 2026-08-10 | Chapter 1 C3 월드·현실 숨기 재설계 | C3 SceneKit 월드에서 나무 뒤로 숨었다가 카메라 회전에 들키면 놀란 돼지 모델·자막·강한 확대 반응을 보이고, RealityKit의 실제 메쉬 뒤에서 다시 들킬 때는 같은 반응과 화면 확대를 보이는 흐름을 설계함. 금융·저장·Watch 범위는 제외 | 설계 문서 검토 대기 | 구현 계획 작성 |
 | 2026-08-10 | Chapter 1 최종 검토 | 가짜 소파 바닥 정렬, 실제 노드 구조 탐구 실행, DocC 단계 완결성, 공통 인수인계 문서 통합의 보완 필요를 확인 | 전체 변경·문서·검증 근거 검토 | 보완 커밋과 재검토 |
 | 2026-08-10 | Chapter 1 Task 8 | Chapter 1 DocC 튜토리얼 카탈로그와 현재 구현을 반영한 5개 코드 스니펫을 추가하고 앱 타깃에 등록함 | `tuist generate --no-open` 성공, `xcodebuild docbuild`가 `.doccarchive`를 생성하고 성공으로 완료 | Chapter 1 결과물 검토 또는 다음 챕터 설계 |
