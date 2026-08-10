@@ -4,12 +4,12 @@
 
 ## 현재 인수인계
 
-- 상태: Task 6 최종 monitor 보수 2차 완료, 독립 검토 대기
+- 상태: Chapter 1 C3 월드→RealityKit 숨기 흐름 구현·태스크별 검토·전체 브랜치 재검토 완료. 실기기 수용 목록만 `실기기 대기`다.
 - 진행 중 범위: 앱 진입점은 `EscapeRootView` 하나다. C3 발견 callback은 놀란 상태를 기록하고 0.70초 페이드가 끝난 뒤에만 카메라 권한을 한 번 요청한다. 허용 시 `RealityHideARView`를 자동으로 열고 스캔 준비·타깃 수락·돼지 도착·재발견·오류 callback을 상태 순서로 연결한다. RealityKit은 첫 `ARMeshAnchor` 또는 분류된 수평 floor anchor를 관찰한 뒤에만 스캔 준비 callback을 한 번 전달한다. 실제 물체 선택에는 회전된 AR floor footprint 안의 동일 XZ를 floor Y로 투영하며, anchor 중심이 아닌 `planeExtent`의 width·height·Y축 회전을 사용한다. 숨은 뒤 재발견은 최초로 실제 가림이 확인된 camera pose를 hide cycle 동안 기준으로 삼고, 실제 camera pose가 그 지점에서 0.15m 이상 이동하거나 15° 이상 회전한 뒤 두 frame 연속 nonblocking일 때 한 번만 발생한다. 이후 blocked frame은 visible 안정 count만 초기화하며, camera transform 부재·screen-out·camera-behind 같은 invalid 관찰도 그 count만 초기화하고 최초 pose는 보존한다. 사용자가 `설정 열기`를 탭해 Settings 복귀 대기를 남긴 경우에만 다음 active가 현재 권한을 한 번 읽고, 허용이면 요청·Settings 재열기 없이 한 번 AR 스캔으로 전환한다. Settings를 열지 않은 active와 대기 소비 뒤의 active는 거부·제한 상태에서도 조회하지 않으며, 두 번째 명시적 Settings 탭은 새 1회 조회를 허용한다. AR 외부 callback은 다음 MainActor turn의 취소 가능한 relay를 거쳐 SwiftUI 생성·갱신 중 루트 상태를 바꾸지 않으며, AR 화면 해제 뒤 예약된 callback은 폐기한다. 현실 재발견에는 `ARView` 컨테이너 1.12→1.0 확대가 추가됐고 실제 AR camera transform은 변경하지 않으며 Reduce Motion에서는 화면 확대를 생략한다. DocC는 같은 흐름을 C3 섬·카메라 발견·권한 전환·실제 메쉬·물리적 재발견의 다섯 장면으로 설명한다.
 - 실패 기록: `docs/LEARNING_LOG.md`에 실패·검증 한계의 재현 조건·원인/가설·조치·재발 방지 근거를 기록한다.
-- 마지막 완료 범위: Task 6 최종 monitor 보수 2차 — 최초 blocking pose latch와 invalid 관찰 안정성 reset.
-- 마지막 검증: `cd PiggyEscape && xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/RealityHidePlannerTests -only-testing:PiggyEscapeTests/RealityHideARViewCoordinatorTests test`가 focused 28/28, 0 failures 및 `** TEST SUCCEEDED **`; 이어 `-derivedDataPath /tmp/piggyescape-task6-monitor-repair2-tests test`가 전체 99/99, 0 failures 및 `** TEST SUCCEEDED **`; 같은 destination의 `-derivedDataPath /tmp/piggyescape-task6-monitor-repair2-build build`가 `** BUILD SUCCEEDED **`로 완료됐다. worktree 루트에서 프로젝트 상대 경로를 지정한 재실행 1회는 테스트 시작 전 중단됐고, 올바른 `PiggyEscape` 디렉터리에서 전체 XCTest 99/99와 build를 다시 성공시켰다(L-20260811-087).
-- 다음 시작점: 이 보수를 독립 검토한 뒤 LiDAR 지원 실기기에서 아래 수용 목록을 관찰해 결과·기기·OS를 기록한다.
+- 마지막 완료 범위: 전체 브랜치 최종 재검토 — Settings 복귀 권한 토큰, floor footprint, 물리적 재발견 안정성까지 보수하고 재검토 승인.
+- 마지막 검증: `cd PiggyEscape && xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /tmp/piggyescape-final-tests test`가 전체 XCTest 99/99, 0 failures 및 `** TEST SUCCEEDED **`; 같은 destination의 `-derivedDataPath /tmp/piggyescape-final-build build`가 `** BUILD SUCCEEDED **`; `-derivedDataPath /tmp/piggyescape-final-docc docbuild`가 `** BUILD DOCUMENTATION SUCCEEDED **`로 완료됐다. `tuist test`는 test action을 비워 실제 테스트를 건너뛸 수 있으므로 통과 근거로 사용하지 않는다(L-20260811-066).
+- 다음 시작점: LiDAR 지원 실기기에서 아래 수용 목록을 관찰해 결과·기기·OS를 기록하고, 실제 체감과 센서 동작이 다르면 재현 조건을 `LEARNING_LOG.md`에 추가한다.
 - 차단 요소: 실제 카메라 권한 UI·0.70초 전환·Settings 복귀·1.12 화면 확대·LiDAR 메쉬·물리 오클루전은 관찰 전까지 `실기기 대기`다. 실제 floor 분류·planeExtent 회전·메쉬 가림·최초 block 기준 0.15m/15° 재발견·시야 이탈 뒤 안정 관찰 reset은 자동 테스트로 계약을 보호하지만 실기기 체감과 센서 동작은 아직 검증하지 않았다. DocC는 새 이미지 에셋을 추가하지 않는 제약 때문에 Chapter Image 경고 1건을 남긴다.
 
 ### 실기기 수용 목록 — 실기기 대기

@@ -28,6 +28,18 @@
 
 ## 항목
 
+### L-20260811-088 — 최종 인수인계 커밋이 worktree Git index 잠금 권한으로 중단됨
+
+- 상태: 조사 중
+- 발생 태스크: 전체 브랜치 최종 검증 — 인수인계 결과를 Git으로 공유
+- 재현: worktree에서 `git add docs/WORK_LOG.md && git commit -m 'Record final escape verification'`를 실행한다.
+- 관찰: `fatal: Unable to create '.../.git/worktrees/ch1-reality-escape/index.lock': Operation not permitted`로 스테이징 전에 종료했다.
+- 영향: 최신 전체 검증 결과를 추적 커밋으로 공유하지 못했으며, 코드·문서 내용은 변경되지 않았다.
+- 원인/가설: 연결 worktree의 공용 Git 메타데이터에 현재 실행 권한으로 `index.lock`를 만들 수 없다.
+- 조치: 실패 자체를 먼저 기록하고, 공용 Git 메타데이터 쓰기가 허용된 동일 명령으로 재실행한다.
+- 검증: 재실행 결과를 이 항목에 갱신한다.
+- 배운 점: 연결 worktree에서 최종 문서 커밋도 소스 변경과 동일하게 Git 메타데이터 쓰기 권한을 사전 확인해야 한다.
+
 ### L-20260811-087 — worktree 루트에서 XCTest 프로젝트 경로를 찾지 못함
 
 - 상태: 해결
