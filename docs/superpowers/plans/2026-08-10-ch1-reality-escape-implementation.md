@@ -1077,7 +1077,7 @@ git commit -m "Connect C3 world to RealityKit escape"
 - Produces: Chapter 1 DocC that teaches the C3 closed world, camera-driven failure to hide, camera-permission transition, LiDAR mesh occlusion, and physical rediscovery.
 - Produces: Git-tracked shared context with actual automated and manual verification evidence, without claimed real-device results until they were observed.
 
-- [ ] **Step 1: DocC snippets가 새 코드 계약을 설명하도록 실패 검증을 준비한다.**
+- [x] **Step 1: DocC snippets가 새 코드 계약을 설명하도록 실패 검증을 준비한다.**
 
 Replace each existing room/fake-sofa snippet with a compilable focused excerpt: state gate, C3 named tree and model container, tree hide calculation/discovery reaction, `ARWorldTrackingConfiguration` + scene understanding options, and real mesh reveal monitor. Each snippet must define all names it uses inside the snippet or import them from the adjacent snippet's declared context.
 
@@ -1093,7 +1093,7 @@ xcodebuild docbuild -project PiggyEscape.xcodeproj -scheme PiggyEscape \
 
 Expected before updating snippets: DocC content still describes room/fake sofa and no longer matches the running app, even if `docbuild` technically succeeds.
 
-- [ ] **Step 2: 튜토리얼을 다섯 장면으로 다시 작성한다.**
+- [x] **Step 2: 튜토리얼을 다섯 장면으로 다시 작성한다.**
 
 Use this exact tutorial progression:
 
@@ -1107,11 +1107,11 @@ Use this exact tutorial progression:
 
 Explain that `sceneReconstruction = .meshWithClassification` is guarded by `supportsSceneReconstruction`, and explain `.occlusion` as depth-only use of reconstructed geometry. Link the primary Apple documentation URLs already listed in the design spec; do not copy third-party descriptions.
 
-- [ ] **Step 3: shared Markdown을 실제 상태로 갱신한다.**
+- [x] **Step 3: shared Markdown을 실제 상태로 갱신한다.**
 
 Create `docs/PROJECT_CONTEXT.md` by reconciling the root workspace's collaboration rules with this branch's newer approved `reality-escape` design: the current approved scope is this C3→RealityKit Chapter 1 experience, the Draft PR remains the baseline, and Task 8 manual LiDAR verification is not completed until observed. In `docs/TROUBLESHOOTING.md`, record only observed limitations: ARKit cannot perform physical mesh occlusion in Simulator; camera permission can only be fully checked on device; and `ARView` screen scaling is deliberately not a lens/FOV change. In `docs/WORK_LOG.md`, state exact test commands and the remaining manual checks.
 
-- [ ] **Step 4: 전체 자동 검증과 DocC 빌드를 실행한다.**
+- [x] **Step 4: 전체 자동 검증과 DocC 빌드를 실행한다.**
 
 Run:
 
@@ -1147,7 +1147,7 @@ Use the physical LiDAR-capable iPhone to verify this exact checklist, recording 
 [ ] 권한 거부, LiDAR 미지원, 수평면 탭, 너무 가까운 탭, 바닥 추적 부족은 각각 안내와 복구 경로를 보인다.
 ```
 
-- [ ] **Step 6: 최종 인수인계를 기록하고 커밋한다.**
+- [x] **Step 6: 최종 인수인계를 기록하고 커밋한다.**
 
 Only stage source-controlled Markdown and tutorial source files; never stage `/tmp` outputs or `.claude/`.
 

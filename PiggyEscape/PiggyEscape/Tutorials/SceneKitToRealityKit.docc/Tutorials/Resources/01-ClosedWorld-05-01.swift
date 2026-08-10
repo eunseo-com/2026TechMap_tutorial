@@ -1,10 +1,15 @@
-import SceneKit
+import simd
 
-/// "숨어봐" 인터랙션의 핵심: 하드코딩된 가짜 소파 좌표로 이동하는 액션 하나.
-/// 이 액션은 실제 방에 있는 진짜 소파가 어디 있든 상관하지 않는다 —
-/// 목적지는 오직 FakeSofa.hardcodedPosition, 즉 개발자가 선언한 좌표뿐이다.
-enum HideAction {
-    static func makeMoveAction() -> SCNAction {
-        .move(to: FakeSofa.hardcodedPosition, duration: 0.5)
+/// 실제 메쉬가 먼저 한 번 가린 뒤에만, 사용자의 이동으로 다시 보인 순간을 발행한다.
+struct RealityRevealMonitorLesson {
+    private var observedBlockingMesh = false
+    private var reportedReveal = false
+
+    mutating func update(meshDistance: Float?, pigDistance: Float) -> Bool {
+        let isBlocked = meshDistance.map { $0 + 0.03 < pigDistance } ?? false
+        observedBlockingMesh = observedBlockingMesh || isBlocked
+        guard observedBlockingMesh, !isBlocked, !reportedReveal else { return false }
+        reportedReveal = true
+        return true
     }
 }

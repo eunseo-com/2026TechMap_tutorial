@@ -1,40 +1,43 @@
 import SceneKit
 
-/// 돼지를 하드코딩된 좌표에 배치한다. 이 좌표는 개발자가 정한 것일 뿐,
-/// 방 안의 어떤 실제 기준(가구 위치 등)과도 연결되어 있지 않다.
-enum PigPlacement {
-    static let hardcodedPosition = SCNVector3(0, 0, 0)
-    private static let standardHeight: Float = 0.6
+@MainActor
+final class C3DiscoveryReactionLesson {
+    private var hideStartYaw: Float?
+    private var hasDiscovered = false
 
-    @MainActor
-    static func makePigNode() -> SCNNode {
-        let pig = SCNNode()
-        let model = SCNNode()
-        let art: SCNNode
+    func startHiding(at cameraYaw: Float) {
+        hideStartYaw = cameraYaw
+        hasDiscovered = false
+    }
 
-        if let bundledModel = AssetLoader.object(named: "Piggy") {
-            // Piggy.usdc는 Blender의 Z-up 좌표계로 만든 모델이다. SceneKit의 y-up 세계에
-            // 세워 주고, 화면을 향하도록 roll을 보정한다.
-            bundledModel.eulerAngles = SCNVector3(Float.pi / 2, 0, Float.pi)
-            art = bundledModel
-        } else {
-            art = AssetLoader.voxelBox(width: 0.4, height: 0.4, length: 0.6, color: .systemPink)
+    func discoverIfNeeded(
+        cameraYaw: Float,
+        pigIsInsideCameraFrustum: Bool,
+        pigContainer: SCNNode,
+        installSurprisedModel: () -> Void,
+        showCaption: (String) -> Void
+    ) {
+        guard let hideStartYaw,
+              !hasDiscovered,
+              abs(wrappedYawDelta(cameraYaw - hideStartYaw)) >= 0.70,
+              pigIsInsideCameraFrustum else {
+            return
         }
-        model.addChildNode(art)
 
-        // 바깥 `pig`은 위치와 행동을 맡고, 안쪽 `model`은 에셋의 회전·크기·바닥 정렬만
-        // 맡는다. 그래서 나중에 이동 액션을 실행해도 모델 보정값이 섞이지 않는다.
-        SceneKitGeometry.normalize(model, toHeight: standardHeight)
-        pig.addChildNode(model)
+        hasDiscovered = true
+        installSurprisedModel()
+        let grow = SCNAction.scale(to: 1.5, duration: 0.16)
+        grow.timingMode = .easeOut
+        let restore = SCNAction.scale(to: 1.0, duration: 0.34)
+        restore.timingMode = .easeInEaseOut
+        pigContainer.runAction(.sequence([grow, restore]), forKey: "escapePig.surpriseScale")
+        showCaption("아, 들켰네… 제대로 숨고 싶은데.")
+    }
 
-        let (lo, hi) = SceneKitGeometry.boundingBox(of: pig)
-        model.position = SCNVector3(
-            -(lo.x + hi.x) / 2,
-            -lo.y,
-            -(lo.z + hi.z) / 2
-        )
-        pig.name = "Piggy"
-        pig.position = hardcodedPosition
-        return pig
+    private func wrappedYawDelta(_ angle: Float) -> Float {
+        var result = angle.truncatingRemainder(dividingBy: 2 * .pi)
+        if result > .pi { result -= 2 * .pi }
+        if result < -.pi { result += 2 * .pi }
+        return result
     }
 }

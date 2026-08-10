@@ -4,13 +4,26 @@
 
 ## 현재 인수인계
 
-- 상태: Task 7 — 자동 SceneKit→RealityKit 전환과 C3 스타일 안내 구현 완료, 독립 검토 대기
-- 진행 중 범위: 앱 진입점은 `EscapeRootView` 하나로 교체됐다. C3 발견 callback은 놀란 상태를 기록하고 0.70초 페이드가 끝난 뒤에만 카메라 권한을 한 번 요청한다. 허용 시 `RealityHideARView`를 자동으로 열고 Task 6의 스캔 준비·타깃 수락·돼지 도착·재발견·오류 callback을 Task 2 상태 순서로 연결한다. 거부·제한은 각각 안내한 뒤 사용자가 직접 누른 경우에만 앱 Settings를 연다. 현실 재발견에는 ARView 컨테이너 1.12→1.0 확대가 추가됐고 실제 AR camera transform은 변경하지 않으며 Reduce Motion에서는 화면 확대를 생략한다.
+- 상태: Task 8 — C3→RealityKit DocC·공통 인수인계·자동 검증 기록 완료, 실기기 수용 검증 대기
+- 진행 중 범위: 앱 진입점은 `EscapeRootView` 하나다. C3 발견 callback은 놀란 상태를 기록하고 0.70초 페이드가 끝난 뒤에만 카메라 권한을 한 번 요청한다. 허용 시 `RealityHideARView`를 자동으로 열고 스캔 준비·타깃 수락·돼지 도착·재발견·오류 callback을 상태 순서로 연결한다. 현실 재발견에는 `ARView` 컨테이너 1.12→1.0 확대가 추가됐고 실제 AR camera transform은 변경하지 않으며 Reduce Motion에서는 화면 확대를 생략한다. DocC는 같은 흐름을 C3 섬·카메라 발견·권한 전환·실제 메쉬·물리적 재발견의 다섯 장면으로 설명한다.
 - 실패 기록: `docs/LEARNING_LOG.md`에 실패·검증 한계의 재현 조건·원인/가설·조치·재발 방지 근거를 기록한다.
-- 마지막 완료 범위: Task 7 — 자동 SceneKit→RealityKit 전환과 C3 스타일 안내 구현.
-- 마지막 검증: focused `EscapeRootCoordinatorTests` 8/8, 명시적 Xcode scheme 전체 XCTest 79/79, iPhone 17 Pro Simulator 대상 `xcodebuild ... build`가 `** BUILD SUCCEEDED **`로 완료됐다. 권한·Tuist·actor·Reduce Motion 학습은 L-20260811-058~066에 기록했다.
-- 다음 시작점: Task 7 독립 검토 뒤 구현 계획의 Task 8 — DocC·프로젝트 컨텍스트·실기기 검증 정리.
-- 차단 요소: 실제 카메라 권한 UI·0.70초 시각 전환·Settings 복귀·1.12 화면 확대와 기존 LiDAR 메쉬·물리 오클루전은 L-20260811-065 및 L-20260810-047에 `실기기 대기`로 남겼다.
+- 마지막 완료 범위: Task 8 — C3→RealityKit DocC·프로젝트 컨텍스트·자동 회귀 검증 기록.
+- 마지막 검증: `cd PiggyEscape && tuist generate --no-open` 성공. 이어 명시적인 `xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /tmp/piggyescape-reality-tests test`가 79/79, 0 failures 및 `** TEST SUCCEEDED **`; 같은 destination의 `/tmp/piggyescape-reality-build build`가 `** BUILD SUCCEEDED **`; `/tmp/piggyescape-reality-docc` `docbuild`가 archive 생성과 `** BUILD DOCUMENTATION SUCCEEDED **`로 완료됐다. DocC의 Chapter Image 경고 1건과 환경 재시도는 L-20260811-067~070에 기록했다.
+- 다음 시작점: LiDAR 지원 실기기에서 아래 수용 목록을 관찰해 결과·기기·OS를 기록하고, 그 뒤 전체 변경을 독립 검토한다.
+- 차단 요소: 실제 카메라 권한 UI·0.70초 전환·Settings 복귀·1.12 화면 확대·LiDAR 메쉬·물리 오클루전은 관찰 전까지 `실기기 대기`다. DocC는 새 이미지 에셋을 추가하지 않는 제약 때문에 Chapter Image 경고 1건을 남긴다.
+
+### 실기기 수용 목록 — 실기기 대기
+
+- [ ] C3 섬·기존 나무·초기 나레이션이 보인다.
+- [ ] 초기 나레이션이 끝나기 전 돼지 탭은 무시된다.
+- [ ] 탭 뒤 걷는 돼지가 현재 카메라 반대편 나무 뒤로 이동한다.
+- [ ] 카메라를 0.70 rad 이상 돌려 돼지가 보일 때 놀란 모델·자막·1.5배 확대 후 복귀가 한 번 실행된다.
+- [ ] 페이드 뒤 시스템 카메라 권한 문구가 보이고, 허용 뒤 AR 스캔 안내가 열린다.
+- [ ] 권한 거부·제한과 Settings 복구를 각각 관찰한다.
+- [ ] 실제 물체의 수직 옆면을 탭하면 돼지가 반대편 바닥으로 걸어간다.
+- [ ] 초기 시점에서 실제 물체의 LiDAR 메쉬가 돼지를 가린다.
+- [ ] 사용자가 옆으로 이동해 다시 볼 때 놀란 모델·자막·1.5배 돼지 확대·1.12배 화면 확대가 한 번 실행되고 복귀한다.
+- [ ] LiDAR 미지원, 수평면 탭, 너무 가까운 탭, 바닥 추적 부족, 돼지 에셋 로드 실패 안내와 재시도 경로를 관찰한다.
 
 ### Task 7에서 해결한 항목
 
@@ -22,6 +35,7 @@
 
 | 날짜 | 작업 범위 | 결과 | 검증 | 다음 시작점 |
 | --- | --- | --- | --- | --- |
+| 2026-08-11 | Task 8 — 전체 회귀·실기기 검증과 DocC·인수인계 | 방·가짜 소파 중심 DocC를 C3 섬·나무 뒤 숨기·카메라 발견·권한 전환·실제 메쉬 오클루전·물리적 재발견의 다섯 장면으로 교체하고, `PROJECT_CONTEXT`·트러블슈팅·실기기 수용 목록을 추가함. 실기기 항목은 관찰하지 않아 모두 `실기기 대기`로 유지함 | `tuist generate --no-open` 성공, 명시적 전체 XCTest 79/79·0 failures, iPhone 17 Pro Simulator build 성공, DocC archive 생성·documentation build 성공. 연결 worktree fetch·Simulator 권한 재시도와 Chapter Image 경고 1건은 L-20260811-067~070 | LiDAR 지원 실기기 수용 목록 관찰 후 전체 독립 검토 |
 | 2026-08-11 | Task 7 — 자동 SceneKit→RealityKit 전환과 C3 스타일 안내 | C3 발견 뒤 0.70초 페이드 완료 시점에만 시스템 카메라 권한을 한 번 요청하고, 허용 시 AR 화면을 자동으로 열어 Task 6의 스캔·선택·도착·재발견·오류 callback을 상태 기계에 연결함. 거부·제한 안내와 명시적 Settings 복구, C3 스타일 material 패널, AR 화면 1.12→1.0 확대와 Reduce Motion 대안을 추가하고 `ContentView`를 새 루트로 교체함 | 루트 전환 TDD RED 뒤 focused 8/8, 명시적 Xcode scheme 전체 XCTest 79/79, iOS Simulator build 성공. 실패·환경·접근성 학습은 L-20260811-058~066, 실제 기기 대기는 L-20260811-065 | Task 7 독립 검토 후 Task 8 |
 | 2026-08-11 | Task 6 독립 리뷰 2차 수정 | running·idle·surprised 에셋 실패를 `Result`로 종결해 대기 또는 숨김 상태로 복구하고 Task 7용 `onError`·고정 한국어 메시지를 추가함. 고정 카메라 전방 시작점 대신 선택 면의 카메라 쪽 0.28m·정확한 바닥 Y에서 시작해 반대편 목적지로 걷도록 함 | 결함별 focused RED 뒤 coordinator 10/10, visual 3/3, 전체 XCTest 71/71 및 iOS Simulator build 성공. 원인·학습은 L-20260811-055~057 | Task 6 재검토 후 Task 7 |
 | 2026-08-11 | Task 6 독립 리뷰 수정 | 화면 밖·카메라 뒤 관찰을 재발견 입력에서 제외하고, 놀란 모델 설치 뒤에만 확대·발견 콜백을 실행함. 타깃 수락과 돼지 도착 이벤트를 분리하고 도착 전 발견을 막았으며, 유효한 바닥 Y·카메라 전방 시작 위치가 생기기 전 돼지를 비활성화함 | 결함별 RED 확인 후 visual focused 3/3, coordinator focused 7/7, 전체 XCTest 68/68 및 iOS Simulator build 성공. 원인·학습은 L-20260811-050~054 | Task 6 재검토 후 Task 7 |

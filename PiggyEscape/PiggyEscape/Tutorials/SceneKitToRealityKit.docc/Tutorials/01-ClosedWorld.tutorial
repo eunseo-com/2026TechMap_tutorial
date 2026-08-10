@@ -1,101 +1,115 @@
-@Tutorial(time: 20) {
-    @Intro(title: "갇힌 세계 짓기") {
-        SceneKit 세계는 두 가지 의미에서 닫혀 있다. 이 세계에 있는 모든 것은
-        개발자가 코드로 선언한 것의 총합이고, 그 존재 방식조차 SCNNode 하나가
-        생김새·물리·행동을 전부 짊어지는 구조다. 이 장에서는 그걸 설명이 아니라
-        캐릭터가 실패를 겪는 과정으로 직접 확인한다.
+@Tutorial(time: 30) {
+    @Intro(title: "C3 월드에서 현실로 숨기") {
+        이 장의 돼지는 숨을 장소를 직접 고른다. 먼저 SceneKit의 C3 섬에서 기존 나무
+        뒤로 가지만, 사용자가 궤도 카메라를 돌리면 들킨다. 그 실패가 시스템 카메라
+        권한과 RealityKit의 실제 깊이 오클루전으로 넘어가는 이유가 된다.
     }
 
-    @Section(title: "프로젝트 세팅") {
+    @Section(title: "1. C3가 만든 섬을 SceneKit에 놓기") {
         @ContentAndMedia {
-            SwiftUI 앱에서 SceneKit의 SCNView를 UIViewRepresentable로 감싸는
-            껍데기를 만든다. 이 단계는 서사적 의미 없는 빌드 준비다.
+            첫 장면은 C3_Piggy의 섬·나무·돼지 포즈를 SceneKit 노드로 다시 조립한다.
+            `HideTree`와 `EscapePig`처럼 역할이 드러나는 이름을 붙이면, 이후의 숨기
+            계산과 탭 판정이 모델 파일 이름이나 화면 좌표에 묶이지 않는다.
         }
 
         @Steps {
             @Step {
-                `ClosedWorldSceneView`를 만들어 SwiftUI에서 SceneKit 씬을 호스팅할
-                준비를 한다.
+                바깥 돼지 컨테이너는 위치와 액션을, 안쪽 모델은 원본 좌표계 보정을
+                맡게 한다. 그래서 걷기·놀람 모델을 바꿔도 월드 위치가 흔들리지 않는다.
 
-                @Code(name: "ClosedWorldSceneView.swift", file: "01-ClosedWorld-01-01.swift")
+                @Code(name: "C3ClosedWorld.swift", file: "01-ClosedWorld-01-01.swift")
             }
         }
     }
 
-    @Section(title: "방 짓기") {
+    @Section(title: "2. 나무 뒤에 갔지만 카메라를 돌리면 보이기") {
         @ContentAndMedia {
-            `SCNBox`로 벽을 세우고, `Ground_Color.usdc`를 바닥으로 재사용한다.
-            좌표 원점(0,0,0)도 여기서 임의로 선언한다. 이 세계에 있는 모든 것 —
-            벽이든 바닥이든 — 은 지금 이 코드로 써넣은 것만 존재한다.
+            나레이션이 끝나기 전 탭은 상태 기계가 거부한다. 수락된 탭은 현재 카메라에서
+            멀어지는 나무 반대편 좌표를 계산한다. 이것은 실제 숨기가 아니라, 궤도 카메라가
+            다른 쪽을 볼 수 있는 닫힌 월드의 한계를 보여 주는 장면이다.
         }
 
         @Steps {
             @Step {
-                `RoomBuilder`를 만들어 방을 짓는다. 벽 4개는 `SCNBox`로, 바닥은
-                `AssetLoader`로 `Ground_Color` 에셋을 불러와 만든다.
+                yaw 변화가 0.70 rad 이상이고 돼지가 실제 프러스텀에 들어온 경우에만
+                놀란 돼지·자막·1.5배 확대 후 복귀를 한 번 시작한다.
 
-                @Code(name: "RoomBuilder.swift", file: "01-ClosedWorld-02-01.swift")
+                @Code(name: "EscapeStateAndTreeHide.swift", file: "01-ClosedWorld-02-01.swift")
+                @Code(name: "C3DiscoveryReaction.swift", file: "01-ClosedWorld-03-01.swift")
             }
         }
     }
 
-    @Section(title: "돼지 배치") {
+    @Section(title: "3. 놀란 돼지 뒤 시스템 카메라 권한으로 전환하기") {
         @ContentAndMedia {
-            하드코딩된 좌표에 돼지를 놓는다. 이 좌표는 방 안 어떤 실제 기준과도
-            연결되어 있지 않다 — 그냥 숫자다.
+            발견 자막 “아, 들켰네… 제대로 숨고 싶은데.”와 놀람 모델은 같은 순간에
+            시작한다. C3 화면이 0.70초 동안 사라진 뒤에만 카메라 권한을 요청한다.
+            허용되면 다음 장면의 AR 스캔 안내를 자동으로 연다. 권한 거부·제한은
+            AR 세션을 시작하지 않고 복구 안내를 보여 준다.
         }
 
         @Steps {
             @Step {
-                `PigPlacement`가 `Piggy.usdc`를 불러와 표준 높이로 정규화하고
-                하드코딩된 위치에 놓는다.
-
-                @Code(name: "PigPlacement.swift", file: "01-ClosedWorld-03-01.swift")
+                발견 callback에서 즉시 돼지의 놀람 반응을 시작하고, 페이드 완료 callback에서만
+                시스템 권한을 요청한다. 이 순서를 상태 기계의 `discoveredByCamera`와
+                `requestingCameraPermission` 전이로 분리한다.
             }
         }
     }
 
-    @Section(title: "노드 구조 탐구") {
+    @Section(title: "4. RealityKit에서 실제 물체의 반대편 계산하기") {
         @ContentAndMedia {
-            지금까지 만든 노드를 들여다보면, 생김새(geometry)·물리(physicsBody)·
-            행동(action)이 전부 SCNNode 하나에 붙어있다는 걸 확인할 수 있다.
-            책임이 분리되지 않는 구조다. RealityKit의 ECS는 이걸 쪼갠다 —
-            자세한 대비는 4장에서 다룬다.
+            AR 세션은 먼저 기기가 분류된 메쉬 재구성을 지원하는지 확인한다.
+            [`ARWorldTrackingConfiguration.sceneReconstruction`](https://developer.apple.com/documentation/arkit/arworldtrackingconfiguration/scenereconstruction)를
+            `.meshWithClassification`으로 설정하기 전
+            [`supportsSceneReconstruction(_:)`](https://developer.apple.com/documentation/arkit/arworldtrackingconfiguration/supportsscenereconstruction(_:))를
+            반드시 확인한다. 사용자는 실제 물체의 수직 옆면을 탭하고, 수평면·너무 가까운
+            면·바닥을 찾지 못한 위치는 다시 선택하게 한다.
         }
 
         @Steps {
             @Step {
-                `NodeInspector`로 노드 하나에 얹힌 geometry·physicsBody·action을
-                모두 출력해 확인한다.
+                지원 기기에서 수평·수직 평면과 분류된 메쉬를 시작하고, scene understanding에
+                오클루전·충돌·물리·조명을 모두 켠다.
 
-                @Code(name: "NodeInspector.swift", file: "01-ClosedWorld-04-01.swift")
+                @Code(name: "RealityMeshSession.swift", file: "01-ClosedWorld-04-01.swift")
             }
         }
     }
 
-    @Section(title: "\"숨어봐\" 시도") {
+    @Section(title: "5. 실제 깊이로 가리고 몸을 움직여 다시 찾기") {
         @ContentAndMedia {
-            `Wood_Color.usdc`를 가짜 소파로 미리 놓아두고, 탭하면 돼지가 그
-            좌표로 이동하는 액션을 실행한다. 진짜 소파가 화면 반대편(실제 방)에
-            있어도 이 동작은 그와 전혀 무관하게 실행된다 — 내가 선언한 가짜
-            소파로는 이동되지만, 진짜 소파는 이 세계에 아예 존재하지 않는다.
+            [`SceneUnderstanding.Options.occlusion`](https://developer.apple.com/documentation/realitykit/arview/environment-swift.struct/sceneunderstanding-swift.struct/options-swift.struct/occlusion)은
+            재구성한 실제 기하를 깊이 버퍼에 사용한다. 색칠한 가짜 벽을 세우는 것이 아니라,
+            실제 메쉬가 카메라와 돼지 사이에 있을 때만 돼지를 가린다. 한 번이라도 가려진 뒤
+            사용자가 실제로 움직여 메쉬가 앞을 막지 않게 되었을 때만 재발견을 한 번 발행한다.
         }
 
         @Steps {
             @Step {
-                `FakeSofa`와 `HideAction`을 추가하고, 탭 제스처로 돼지를
-                가짜 소파 위치까지 이동시킨다.
+                재발견 때 `Piggy_surprised`·자막·바깥 돼지 1.5배→1.0배를 시작한다.
+                화면은 `ARView`를 담는 SwiftUI 컨테이너만 1.12배→1.0배로 확대한다.
+                AR 카메라의 렌즈·FOV·transform은 바꾸지 않는다.
 
-                @Code(name: "HideAction.swift", file: "01-ClosedWorld-05-01.swift")
+                @Code(name: "RealityRevealMonitor.swift", file: "01-ClosedWorld-05-01.swift")
             }
         }
     }
 
-    @Section(title: "다음 장 예고") {
+    @Section(title: "실기기에서 확인하기") {
         @ContentAndMedia {
-            이 세계는 지금까지 내가 만든 것만으로 이루어져 있었다. 다음 장부터
-            이 세계는 더 이상 내가 만든 것만으로 이루어지지 않는다 — 균열
-            사이로 진짜 빛이 새어 든다.
+            Simulator와 단위 테스트는 실제 카메라 권한 화면·LiDAR 메쉬·물리 오클루전을
+            재현하지 않는다. 수직 물체를 탭한 뒤 현재 위치에서는 돼지가 가려지고, 몸을 옆으로
+            옮겼을 때만 한 번 다시 보이는지 LiDAR 지원 기기에서 확인한다. 실제 관찰 결과는
+            `docs/WORK_LOG.md`와 `docs/LEARNING_LOG.md`에 기록한다.
+        }
+
+        @Steps {
+            @Step {
+                실제 LiDAR 지원 기기에서 권한 허용·거부, 수직면 선택, 가려진 초기 시점,
+                물리적 이동 뒤의 한 번만 실행되는 재발견을 차례로 관찰한다. 관찰하지 못한
+                항목은 통과로 쓰지 않고 `실기기 대기`로 남긴다.
+            }
         }
     }
 }

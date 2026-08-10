@@ -28,6 +28,66 @@
 
 ## 항목
 
+### L-20260811-071 — Task 8 문서 staging이 연결 작업 트리 index 잠금 권한으로 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 8 — 전체 회귀·실기기 검증과 DocC·인수인계
+- 재현: `git add PiggyEscape/PiggyEscape/Tutorials docs/PROJECT_CONTEXT.md docs/WORK_LOG.md docs/LEARNING_LOG.md docs/TROUBLESHOOTING.md docs/superpowers/plans/2026-08-10-ch1-reality-escape-implementation.md`
+- 관찰: `fatal: Unable to create '.../.git/worktrees/ch1-reality-escape/index.lock': Operation not permitted`로 명시 경로 staging 전에 종료됨
+- 영향: 검증된 Task 8 튜토리얼·공유 문서를 아직 커밋할 수 없음
+- 원인/가설: L-20260810-048과 같은 연결 작업 트리 공용 Git index 잠금 경로가 현재 권한 범위 밖인 것으로 보임
+- 조치: 실패 기록 뒤 동일한 명시 경로만 공용 Git 메타데이터에 접근 가능한 권한으로 한 번 재실행했다. `.claude/`와 생성물은 계속 제외했다.
+- 검증: 권한 재실행 뒤 cached diff 검사에 오류가 없었고, staged 목록은 Task 8 tutorial·tracked 문서만, 작업 트리에는 사용자 소유 `.claude/`만 남았다.
+- 배운 점: 최종 문서 태스크도 worktree 파일 수정과 Git index lock 쓰기는 다른 권한 경계이므로, staging 실패 뒤 일부 파일이 추가됐다고 가정하지 않는다.
+
+### L-20260811-070 — Task 8 DocC build가 두 개의 섹션에 Steps 지시문 누락 경고를 출력함
+
+- 상태: 보류
+- 발생 태스크: Task 8 — 전체 회귀·실기기 검증과 DocC·인수인계
+- 재현: `cd PiggyEscape && xcodebuild docbuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /tmp/piggyescape-reality-docc`
+- 관찰: DocC archive는 생성됐지만 카메라 권한 전환·실기기 확인 섹션에서 각각 `Missing 'Steps' child directive` 경고가 출력됨. Chapter의 Image child 경고도 기존 이미지 에셋을 추가하지 않는 범위에서 계속 출력됨.
+- 영향: 문서는 생성됐지만 두 섹션이 튜토리얼 단계 구조를 충족하지 못하며, 경고 없는 DocC 결과로 해석할 수 없음
+- 원인/가설: 두 섹션이 `@ContentAndMedia`만 포함하고 `@Steps`를 선언하지 않았음. Chapter Image 경고는 새 이미지 에셋을 금지한 현재 C3 디자인 제약과 기존 카탈로그 구조의 충돌임.
+- 조치: Steps 누락은 같은 튜토리얼 안에 짧은 관찰·복구 단계를 추가해 고쳤다. Image 경고는 존재하지 않는 이미지 파일을 참조하거나 새 이미지 에셋을 추가하지 않고, 제한 사항으로 남긴다.
+- 검증: 수정 뒤 같은 `xcodebuild docbuild`를 재실행해 두 Steps 경고가 사라졌고 `** BUILD DOCUMENTATION SUCCEEDED **` 및 `/tmp/piggyescape-reality-docc/Build/Products/Debug-iphonesimulator/PiggyEscape.doccarchive` 존재를 확인했다. `@Chapter`의 Image child 경고 1건은 남아 있다.
+- 배운 점: DocC가 archive를 생성해도 구조 경고를 성공으로 묶지 말고, 코드·에셋 범위 제약으로 남는 경고와 문서 구조 결함을 구분한다.
+
+### L-20260811-069 — Task 8 전체 XCTest가 Simulator 서비스 접근 제한으로 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 8 — 전체 회귀·실기기 검증과 DocC·인수인계
+- 재현: `cd PiggyEscape && xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /tmp/piggyescape-reality-tests test`
+- 관찰: `CoreSimulatorService connection became invalid`, `Error opening log file ... Operation not permitted`, `Unable to discover any Simulator runtimes`가 출력돼 XCTest 실행 전 Simulator 초기화가 중단됨
+- 영향: 전체 XCTest 수·실패 수를 현재 권한에서 확인할 수 없으며, 이 종료를 코드·DocC 실패로 해석할 수 없음
+- 원인/가설: L-20260811-059와 같은 Simulator 서비스·로그·기기 상태 경로가 작업 트리 밖에 있어 접근이 거부된 것으로 보임
+- 조치: 실패 기록 뒤 Simulator 서비스에 접근 가능한 권한으로 같은 명시 명령을 한 번 재실행했다.
+- 검증: 권한 재실행에서 `PiggyEscapeTests.xctest` 79개가 0 failures로 끝났고 `** TEST SUCCEEDED **`를 확인했다. 기존 AppIntents·SceneKit·RealityKit Simulator 경고는 L-20260811-064·L-20260810-046과 같은 범위 밖 진단으로 별도 보류한다.
+- 배운 점: 최종 회귀도 종료 코드나 사전 기록이 아니라, 현재 실행의 XCTest 수와 `TEST SUCCEEDED`를 근거로만 판정한다.
+
+### L-20260811-068 — Task 8 DocC 검증 준비의 Tuist 생성이 세션 상태 디렉터리 권한으로 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 8 — 전체 회귀·실기기 검증과 DocC·인수인계
+- 재현: `cd PiggyEscape && tuist generate --no-open`
+- 관찰: `Fatal error: Error raised at top level: Permission denied: /Users/yang-eunseo/.local/state/tuist/sessions/...`로 생성 프로젝트 갱신 전에 종료됨
+- 영향: 바뀐 DocC 원본과 전체 XCTest가 현재 생성 프로젝트에 반영됐는지 확인할 수 없음
+- 원인/가설: L-20260811-058과 같은 Tuist 사용자 세션 상태 경로가 작업 트리 밖에 있어 현재 권한에서 쓰기 거부된 것으로 보임
+- 조치: 이 실패를 기록한 뒤 사용자 세션 상태에 접근 가능한 권한으로 같은 명령을 한 번 재실행했다.
+- 검증: 권한 재실행이 `✔ Success`로 끝나 `PiggyEscape.xcodeproj`·workspace를 새로 생성했다. XCTest·DocC 결과는 별도 명령으로 계속 검증한다.
+- 배운 점: 최종 DocC 검증도 일반 Xcode 프로젝트가 최신이라고 가정하지 말고, Tuist 생성 실패와 문서 자체 오류를 분리해야 한다.
+
+### L-20260811-067 — Task 8 시작 전 원격 fetch가 연결 작업 트리 메타데이터 권한으로 중단됨
+
+- 상태: 보류
+- 발생 태스크: Task 8 — 전체 회귀·실기기 검증과 DocC·인수인계
+- 재현: `git fetch --prune origin`
+- 관찰: `error: cannot open '.../.git/worktrees/ch1-reality-escape/FETCH_HEAD': Operation not permitted`로 원격 참조 갱신 전에 종료됨
+- 영향: Task 8 문서·검증 시작 시점의 원격 변경 여부를 현재 권한 범위에서 확정할 수 없음
+- 원인/가설: L-20260811-049와 같은 연결 작업 트리 공용 Git 메타데이터 `FETCH_HEAD` 쓰기 경로의 권한 제약이 재발한 것으로 보임
+- 조치: 실패 근거를 먼저 남기고, 권한이 허용되는 환경에서 같은 명령을 한 번만 재실행해 결과를 확인한다. 그 전에는 원격 상태를 추정하지 않는다.
+- 검증: 재실행 전 상태는 사용자 소유의 추적되지 않은 `.claude/`만 표시하며, Task 8 문서 변경은 아직 시작하지 않음
+- 배운 점: 최종 문서 태스크도 시작 순서의 fetch 실패를 이전 성공으로 대체하지 말고, 현재 재현·영향·보류 상태를 독립 항목으로 남긴다.
+
 ### L-20260811-066 — 최종 `tuist test`가 성공 코드와 함께 테스트를 건너뜀
 
 - 상태: 해결
