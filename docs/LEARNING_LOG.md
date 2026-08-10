@@ -28,6 +28,114 @@
 
 ## 항목
 
+### L-20260811-066 — 최종 `tuist test`가 성공 코드와 함께 테스트를 건너뜀
+
+- 상태: 해결
+- 발생 태스크: Task 7 — 자동 SceneKit→RealityKit 전환과 C3 스타일 안내
+- 재현: `PiggyEscape` 디렉터리에서 최종 검증으로 `tuist test PiggyEscape` 실행
+- 관찰: exit 0이었지만 `The scheme PiggyEscape's test action has no tests to run, finishing early.`가 출력되어 XCTest 79개가 실제 실행되지 않음
+- 영향: exit code만으로는 최종 전체 회귀 성공을 주장할 수 없으며, 생성된 scheme 또는 Tuist 명령의 테스트 대상 해석을 확인해야 함
+- 원인/가설: `tuist test PiggyEscape`의 testing용 생성 결과에서 `PiggyEscapeTests` 타깃과 scheme testable이 빠진 것을 직접 확인했다. 같은 manifest를 `tuist generate --no-open`로 일반 생성하면 테스트 타깃과 scheme testable이 복원되어 manifest·테스트 소스 부재는 원인이 아니었으며, 현재 Tuist testing 생성 경로의 해석 차이가 원인으로 남음
+- 조치: 빈 test action의 exit 0을 성공으로 집계하지 않았다. 일반 프로젝트 생성 뒤 명시적인 `xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test`를 전체 회귀의 기준 명령으로 사용함
+- 검증: 명시적 Xcode scheme 실행에서 79/79, 0 failures와 `** TEST SUCCEEDED **`를 확인함
+- 배운 점: `tuist test`의 exit 0보다 XCTest case 개수와 `TEST SUCCEEDED` 출력을 완료 근거로 우선한다.
+
+### L-20260811-065 — Task 7 실제 카메라 권한·자동 AR 전환·화면 확대는 실기기 대기
+
+- 상태: 실기기 대기
+- 발생 태스크: Task 7 — 자동 SceneKit→RealityKit 전환과 C3 스타일 안내
+- 재현: LiDAR 지원 iPhone에서 C3 돼지를 나무 뒤로 보내고 카메라 회전으로 발견한 뒤 0.70초 페이드, 시스템 카메라 권한, AR 스캔 화면 전환을 관찰함. 거부·제한 경로에서는 Settings 버튼을 직접 탭하고, 현실 재발견에서는 돼지 1.5배와 화면 1.12배 동시 반응을 관찰함
+- 관찰: 현재 환경에서는 주입 fake로 권한 허용·거부·제한과 callback 순서를 자동 검증하고 iOS Simulator build를 확인했지만, 실제 시스템 권한 문구·실기기 카메라 영상·LiDAR 메쉬·물리 오클루전·체감 확대는 실행하지 못함
+- 영향: 실제 기기에서 시스템 알림의 시점, 앱 복귀 후 상태, 0.70초 페이드와 카메라 전환의 시각 연속성, 화면 확대의 체감 품질은 아직 확정할 수 없음
+- 원인/가설: Simulator와 단위 테스트가 실제 카메라 센서·LiDAR 공간 재구성과 시스템 권한 상호작용을 제공하지 않는 하드웨어 검증 경계임
+- 조치: 권한 요청은 페이드 완료 callback 뒤 한 번만 발생하도록 하고 실제 AR camera transform을 변경하지 않는 화면 container scale로 구현했으며, 실기기 절차는 Task 8 수동 검증으로 넘김
+- 검증: 자동 근거는 Task 7 focused 8/8, 전체 79/79, Simulator build 성공이며 실제 기기 결과는 기록하지 않음
+- 배운 점: 권한 fake와 Simulator build가 통과해도 시스템 권한 UI·카메라 영상·물리 오클루전·전환 감각은 실기기 관찰 전에는 완료로 단정하지 않는다.
+
+### L-20260811-064 — Task 7 focused XCTest는 통과했지만 기존 Simulator 런타임 경고가 반복됨
+
+- 상태: 보류
+- 발생 태스크: Task 7 — 자동 SceneKit→RealityKit 전환과 C3 스타일 안내
+- 재현: Task 7 coordinator focused XCTest 8개 실행
+- 관찰: 8/8과 `** TEST SUCCEEDED **`를 확인했지만 AppIntents metadata skip, `TBB Global TLS count is not == 1`, `SCNView` focus caching 경고가 함께 출력됨
+- 영향: Task 7 assertion과 앱 컴파일은 성공했지만 테스트 로그가 경고 없이 깨끗한 상태는 아님
+- 원인/가설: L-20260810-046 등에서 이미 관찰한 앱 타깃·SceneKit Simulator 런타임 진단이 같은 조건에서 반복된 것이며 새 루트 상태 전이 assertion 실패는 아님
+- 조치: Task 7 범위 밖 Simulator/AppIntents 설정은 변경하지 않고 focused·전체 검증 결과와 분리해 보류함
+- 검증: focused `EscapeRootCoordinatorTests` 8/8, 명시적 Xcode scheme 전체 XCTest 79/79, iPhone 17 Pro Simulator 대상 build가 모두 통과했으며 기존 경고만 별도로 남음
+- 배운 점: 전환 coordinator의 회귀 결과와 반복되는 SceneKit Simulator 진단을 하나의 성공 신호로 합치지 않는다.
+
+### L-20260811-063 — RealityKit 화면 확대가 Reduce Motion 설정을 구분하지 않음
+
+- 상태: 해결
+- 발생 태스크: Task 7 — 자동 SceneKit→RealityKit 전환과 C3 스타일 안내
+- 재현: Reduce Motion 켜짐/꺼짐 입력에 따라 AR 화면 확대 목표값이 달라지는 focused 테스트를 추가하고 실행함
+- 관찰: 기존 모션 계약은 1.12 상수만 제공해 접근성 설정을 입력받을 함수가 없었고, 테스트는 `cannot call value of non-function type 'CGFloat'`의 의도적인 RED로 종료됨
+- 영향: 동작 줄이기를 선호하는 사용자에게도 실제 카메라 화면이 강제로 확대되어 불편이나 멀미를 유발할 수 있음
+- 원인/가설: 승인된 연출의 최대 확대값만 모델링하고 SwiftUI의 `accessibilityReduceMotion` 환경값을 모션 결정에 포함하지 않은 것이 원인임
+- 조치: 모션 계약이 접근성 설정을 입력받아 일반 모드에는 1.12, Reduce Motion에는 1.0을 반환하게 하고 View의 확대 실행도 같은 값을 사용하도록 함
+- 검증: `test_reducedMotionDoesNotDigitallyScaleTheRealityCameraSurface`를 포함한 Task 7 focused XCTest 8/8이 통과함
+- 배운 점: 카메라처럼 화면 전체를 움직이는 연출은 기능 요구 수치와 함께 시스템 Reduce Motion 대안을 처음부터 계약으로 둔다.
+
+### L-20260811-062 — 프로토콜 적합성으로 격리된 시스템 기본값을 View 기본 인자에서 생성할 수 없음
+
+- 상태: 해결
+- 발생 태스크: Task 7 — 자동 SceneKit→RealityKit 전환과 C3 스타일 안내
+- 재현: Tuist 재생성 뒤 Task 7 focused XCTest로 `EscapeRootView.swift`를 컴파일함
+- 관찰: `CameraAuthorizing`와 `AppSettingsOpening`의 `@MainActor` 적합성으로 시스템 구현의 초기화도 격리됐고, View initializer의 default argument 평가 지점은 동기 비격리로 판단되어 두 `init()` 호출이 컴파일 오류가 됨
+- 영향: 앱 모듈 생성이 중단되어 focused assertion을 실행하지 못함
+- 원인/가설: initializer 선언에 `@MainActor`를 붙여도 기본 인자 표현식의 평가 격리를 보장하지 않는 Swift 기본 인자 규칙이 확인된 원인임
+- 조치: 첫 수정에서 View initializer만 분리했으나 coordinator initializer에도 같은 기본 인자가 남은 사실을 재컴파일로 확인했다. 두 타입 모두 시스템 구현을 만드는 무인자 격리 initializer와 주입 객체만 받는 initializer를 분리해 기본 인자 표현식을 제거함
+- 검증: 두 initializer의 기본 인자를 제거한 뒤 focused XCTest 7/7이 통과했고 해당 actor 격리 오류가 다시 출력되지 않음
+- 배운 점: actor-isolated 의존성은 기본 인자에서 즉석 생성하지 말고 격리된 convenience 경계에서 명시적으로 생성한다.
+
+### L-20260811-061 — Task 7 첫 GREEN 컴파일에 새 루트 소스가 생성 프로젝트에 포함되지 않음
+
+- 상태: 해결
+- 발생 태스크: Task 7 — 자동 SceneKit→RealityKit 전환과 C3 스타일 안내
+- 재현: RED 프로젝트 생성 뒤 `EscapeRootView.swift`를 새로 추가하고 같은 focused XCTest를 실행함
+- 관찰: 앱의 Swift 파일 목록에 새 파일이 없고 `ContentView.swift: cannot find 'EscapeRootView' in scope`로 컴파일이 중단됨
+- 영향: 루트 구현 자체의 컴파일과 테스트 assertion까지 아직 도달하지 못함
+- 원인/가설: Tuist 프로젝트는 glob을 생성 시점에 해석하는데 RED 때는 테스트 파일만 존재했고, production 파일은 그 뒤 추가되어 기존 `.xcodeproj` 소스 목록에 반영되지 않은 것이 확인된 원인임
+- 조치: production 소스 추가 뒤 `tuist generate --no-open`를 다시 실행해 프로젝트 파일 목록을 갱신함
+- 검증: 재생성 뒤 같은 focused XCTest의 앱 Swift 파일 목록에 `EscapeRootView.swift`가 포함됐고 해당 파일 컴파일까지 진행됨
+- 배운 점: Tuist glob 프로젝트에서 RED 후 새 production 파일을 만들면 GREEN 검증 전에 반드시 프로젝트를 다시 생성한다.
+
+### L-20260811-060 — Task 7 RED가 루트 전환 계약의 구현 부재를 확인함
+
+- 상태: 해결
+- 발생 태스크: Task 7 — 자동 SceneKit→RealityKit 전환과 C3 스타일 안내
+- 재현: 환경 권한을 확보한 뒤 Task 7 coordinator focused XCTest를 실행함
+- 관찰: `EscapeRootCoordinator`, `CameraAuthorizing`, `CameraAuthorizationResult`, `AppSettingsOpening`, 루트 문구·모션 계약을 찾지 못해 테스트 타깃 컴파일이 `** TEST FAILED **`로 종료됨
+- 영향: C3 발견 뒤 페이드·카메라 권한·RealityKit 상태 연결과 복구 UI의 공개 계약이 아직 구현되지 않았음을 확인함
+- 원인/가설: Task 6까지는 C3·AR 화면 내부 콜백만 존재하며 두 화면을 소유하는 Task 7 루트 타입은 계획대로 아직 추가되지 않았음
+- 조치: 실패한 테스트가 요구하는 순수 상태 coordinator, 시스템 권한·Settings 주입 경계, SwiftUI 루트 화면을 최소 구현함
+- 검증: 구현 뒤 같은 focused XCTest 8/8, 명시적 Xcode scheme 전체 XCTest 79/79, iPhone 17 Pro Simulator 대상 build가 모두 통과함
+- 배운 점: 센서 UI 자체를 단위 테스트하지 않더라도 권한 요청 시점과 물리 이벤트 순서는 주입 가능한 상위 coordinator에서 먼저 고정할 수 있다.
+
+### L-20260811-059 — Task 7 focused RED가 Simulator 서비스 접근 제한으로 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 7 — 자동 SceneKit→RealityKit 전환과 C3 스타일 안내
+- 재현: `xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/EscapeRootCoordinatorTests test`
+- 관찰: `CoreSimulatorService connection became invalid`, Simulator 로그 접근 거부, `Unable to find a device matching`이 발생해 새 루트 타입 부재 컴파일 단계 전에 exit 70으로 종료됨
+- 영향: 권한 전환 테스트가 의도한 기능 부재 RED인지 아직 확인하지 못함
+- 원인/가설: Simulator 서비스·Xcode DerivedData가 현재 작업 트리 쓰기 권한 밖인 기존 환경 경계와 같은 증상임
+- 조치: 이 기록을 남긴 뒤 Simulator와 Xcode 상태 경로에 접근 가능한 권한으로 같은 focused 테스트를 한 번 재실행함
+- 검증: 권한 재실행이 Simulator를 찾고 테스트 타깃 컴파일까지 진행해 `EscapeRootCoordinator` 등 새 타입 부재의 의도적인 RED에 도달함
+- 배운 점: 기능 RED 전에 Simulator 환경이 실패하면 성공·실패 의미를 섞지 않고 같은 명령을 환경 권한만 바꿔 재현한다.
+
+### L-20260811-058 — Task 7 RED 준비의 Tuist 생성이 세션 상태 디렉터리 권한으로 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 7 — 자동 SceneKit→RealityKit 전환과 C3 스타일 안내
+- 재현: `PiggyEscape` 디렉터리에서 `tuist generate --no-open` 실행
+- 관찰: `Permission denied: /Users/yang-eunseo/.local/state/tuist/sessions/...`로 새 루트 coordinator 테스트를 생성 프로젝트에 반영하기 전에 종료됨
+- 영향: 카메라 권한·페이드·RealityKit 전환 타입 부재를 의도한 RED로 아직 확인하지 못함
+- 원인/가설: 이전 L-20260810-039와 같은 Tuist 사용자 세션 상태 경로가 현재 작업 트리 쓰기 권한 밖에 있는 환경 제약으로 보임
+- 조치: 이 기록을 먼저 남긴 뒤 해당 상태 경로에 접근 가능한 권한으로 같은 생성 명령을 한 번 재실행함
+- 검증: 권한 재실행 `tuist generate --no-open`가 `✔ Success`로 완료되어 새 테스트 파일이 생성 프로젝트에 반영됨
+- 배운 점: 새 테스트 파일을 추가한 태스크에서는 테스트 전에 Tuist 생성 단계의 환경 실패와 기능 부재 RED를 분리해 기록한다.
+
 ### L-20260811-057 — 테스트 기본 RealityKit 로더의 actor 격리 계약이 누락됨
 
 - 상태: 해결
