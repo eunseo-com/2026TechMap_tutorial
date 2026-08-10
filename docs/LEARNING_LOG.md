@@ -28,6 +28,18 @@
 
 ## 항목
 
+### L-20260810-031 — Task 4 리뷰 RED에서 놀람 콜백 순서와 Coordinator 수명 누수가 확인됨
+
+- 상태: 해결
+- 발생 태스크: Task 4 — SceneKit 나레이션·탭·가짜 숨기·카메라 발견 (리뷰 보완)
+- 재현: `xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/ClosedWorldEscapeTests -only-testing:PiggyEscapeTests/C3ClosedWorldSceneViewOwnershipTests -only-testing:PiggyEscapeTests/NarrationOverlaySceneTests test`
+- 관찰: 12개 focused XCTest 중 10개는 통과했으나, `test_surpriseScaleActionStartsBeforeCaptionCallback`은 콜백 안에서 `escapePig.surpriseScale` action을 찾지 못했고, `test_coordinatorIsReleasedWhenWorldOutlivesInstalledCallbacks`는 외부가 `world`를 보유한 뒤에도 `Coordinator`가 해제되지 않았음
+- 영향: 외부 `onDiscovered`가 동기적으로 뷰를 해제하면 필수 놀람 action 시작 전에 씬이 사라질 수 있고, 발견 뒤 화면 전환에서 world→closure→coordinator 순환 참조가 남을 수 있음
+- 원인/가설: `performSurpriseReaction()`이 keyed scale action보다 `onSurpriseCaption`을 먼저 호출했고, `world.onSurpriseCaption` closure가 coordinator `self`를 강하게 캡처했음
+- 조치: scale sequence를 외부 caption callback보다 먼저 시작하고, callback closure가 coordinator와 overlay를 약하게 캡처하도록 변경함
+- 검증: 같은 focused XCTest가 12/12을 통과했고, 전체 `xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test`가 50/50, 같은 destination의 `xcodebuild ... build`가 `** BUILD SUCCEEDED **`로 완료됨
+- 배운 점: 외부 전환 콜백보다 먼저 화면 내 필수 action을 등록하고, owned world에 저장하는 callback은 owner를 약하게 캡처해 수명 경계를 테스트한다.
+
 ### L-20260810-019 — Task 4 시작 순서의 프로젝트 맥락 문서가 작업 트리에 없음
 
 - 상태: 보류

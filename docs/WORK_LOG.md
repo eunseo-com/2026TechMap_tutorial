@@ -4,11 +4,11 @@
 
 ## 현재 인수인계
 
-- 상태: Task 4 — C3 SceneKit 나레이션·탭·가짜 숨기·카메라 발견 완료
+- 상태: Task 4 — C3 SceneKit 나레이션·탭·가짜 숨기·카메라 발견 완료 (리뷰 보완 포함)
 - 진행 중 범위: C3 섬 위에 SpriteKit 나레이션을 표시하고, 실제 `HideTree` 뒤로 달리는 돼지와 카메라 프러스텀 기반 발견·놀람 반응을 SceneKit 뷰에 연결했다. 카메라 권한·페이드·ARKit·RealityKit 전환은 구현하지 않았다.
 - 실패 기록: `docs/LEARNING_LOG.md`에 실패·검증 한계의 재현 조건·원인/가설·조치·재발 방지 근거를 기록한다.
 - 마지막 완료 범위: Task 4 — C3 SceneKit 나레이션·탭·가짜 숨기·카메라 발견.
-- 마지막 검증: `tuist generate --no-open` 성공. focused `xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/ClosedWorldEscapeTests -only-testing:PiggyEscapeTests/NarrationOverlaySceneTests test`가 6/6을 통과했고, 전체 `xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test`가 44/44을 통과했다. `xcodebuild ... build`도 성공했다. Simulator/AppIntents 런타임 경고와 실제 제스처 시각 확인 한계는 `docs/LEARNING_LOG.md`의 L-20260810-029~030에 기록했다.
+- 마지막 검증: `tuist generate --no-open` 성공. 리뷰 focused `xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/ClosedWorldEscapeTests -only-testing:PiggyEscapeTests/C3ClosedWorldSceneViewOwnershipTests -only-testing:PiggyEscapeTests/NarrationOverlaySceneTests test`가 12/12을 통과했고, 전체 `xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test`가 50/50을 통과했다. `xcodebuild ... build`도 성공했다. Simulator/AppIntents 런타임 경고와 실제 제스처 시각 확인 한계는 `docs/LEARNING_LOG.md`의 L-20260810-029~030에 기록했다.
 - 다음 시작점: 구현 계획의 Task 5 — C3 발견 뒤 카메라 권한 전환. 이 Task 4에서는 시작하지 않았다.
 - 차단 요소: 실제 제스처·렌더러 프러스텀의 수동 Simulator 시각 확인은 L-20260810-030에 보류했다. 원격 fetch와 시작 순서 누락 문서는 Task 4에서 각각 L-20260810-020, L-20260810-019에 갱신했다.
 
@@ -22,7 +22,7 @@
 
 | 날짜 | 작업 범위 | 결과 | 검증 | 다음 시작점 |
 | --- | --- | --- | --- | --- |
-| 2026-08-10 | Task 4 — C3 SceneKit 나레이션·탭·가짜 숨기·카메라 발견 | `NarrationOverlayScene`의 C3 스타일 자막, 실제 `HideTree`가 필수인 나무 뒤 달리기, 0.70rad wrapped yaw·실제 `SCNView` 프러스텀·1회 가드 발견, `Piggy_surprised` 1.5→1.0 확대를 추가하고 C3 제스처 뷰를 앱 진입점에 연결함 | RED API 부재 컴파일 실패 후 focused 6/6·전체 44/44 XCTest 및 iOS Simulator build 성공. 기존 런타임 경고와 수동 시각 확인 한계는 L-20260810-029~030에 기록 | Task 5 — C3 발견 뒤 카메라 권한 전환 |
+| 2026-08-10 | Task 4 — C3 SceneKit 나레이션·탭·가짜 숨기·카메라 발견 | `NarrationOverlayScene`의 C3 스타일 자막, 실제 `HideTree`가 필수인 나무 뒤 달리기, 0.70rad wrapped yaw·실제 `SCNView` 프러스텀·1회 가드 발견, `Piggy_surprised` 1.5→1.0 확대를 추가하고 C3 제스처 뷰를 앱 진입점에 연결함. 리뷰 보완으로 확대 action을 외부 콜백보다 먼저 등록하고, world callback의 Coordinator 캡처를 약하게 바꾸며 도착 전·frustum false·yaw 경계·1회 가드를 회귀 테스트로 확장함 | 리뷰 RED 2건 뒤 focused 12/12·전체 50/50 XCTest 및 iOS Simulator build 성공. 기존 런타임 경고와 수동 시각 확인 한계는 L-20260810-029~030, 리뷰 수정 근거는 L-20260810-031에 기록 | Task 5 — C3 발견 뒤 카메라 권한 전환 |
 | 2026-08-10 | Task 3 — C3 섬·돼지 모델·궤도 카메라 어댑터 | `C3Island`의 7개 `Ground_Color` 타일과 C3 장식 배치, 실제 `HideTree`·`BigPigSpawn`, `EscapePig`의 idle/running/surprised 내부 USD 보정·정규화, C3 궤도 카메라·그라데이션·조명을 추가함 | RED에서 `C3ClosedWorld` 부재 컴파일 실패와 내부 USD 보정 소유 노드 오류를 확인한 뒤 focused 8/8·전체 38/38 XCTest 통과. Simulator/AppIntents 런타임 경고는 L-20260810-016에 기록 | Task 4 — C3 씬 뷰와 숨김 상호작용 |
 | 2026-08-10 | Task 2 — 경험 상태와 숨기 좌표 순수 로직 | 상태 기계의 합법 전이와 XZ 카메라 반대편 나무 숨기 좌표를 프레임워크 독립 순수 Swift 타입으로 추가함 | RED에서 `EscapeExperienceMachine` 부재 컴파일 실패 확인 후 focused 3/3·전체 30/30 XCTest 통과. 기존 Simulator/AppIntents 경고는 L-20260810-007에 기록 | Task 3 — C3 섬 어댑터와 자동 전환 |
 | 2026-08-10 | Task 1 — C3 에셋과 카메라 권한 | C3 원본 11개를 바이트 변경 없이 앱 리소스에 등록하고, 고정 카메라 목적 문구와 실제 앱 번들 로딩 회귀 테스트를 추가함 | RED에서 새 에셋 8개가 누락되어 16개 assertion 실패 확인 후, `AssetLoaderTests` 5/5 통과·11개 `cmp -s` 일치·생성 Info.plist 목적 문구 확인 | Task 2 — 경험 상태와 숨기 좌표 순수 로직 |

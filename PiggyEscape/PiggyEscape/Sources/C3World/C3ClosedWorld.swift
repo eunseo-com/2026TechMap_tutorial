@@ -89,13 +89,13 @@ final class C3ClosedWorld {
         setPose(.surprised)
         lastCaption = "아, 들켰네… 제대로 숨고 싶은데."
         surprisePeakScale = 1.5
-        onSurpriseCaption?(lastCaption)
 
         let grow = SCNAction.scale(to: 1.5, duration: 0.16)
         grow.timingMode = .easeOut
         let restore = SCNAction.scale(to: 1.0, duration: 0.34)
         restore.timingMode = .easeInEaseOut
         pigContainer.runAction(.sequence([grow, restore]), forKey: "escapePig.surpriseScale")
+        onSurpriseCaption?(lastCaption)
     }
 
     func zoom(by factor: Float) {

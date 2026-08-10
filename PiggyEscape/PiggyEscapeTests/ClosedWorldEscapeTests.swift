@@ -38,6 +38,70 @@ final class ClosedWorldEscapeTests: XCTestCase {
         XCTAssertNotNil(world.pigContainer.action(forKey: "escapePig.surpriseScale"))
     }
 
+    func test_surpriseScaleActionStartsBeforeCaptionCallback() {
+        let world = C3ClosedWorld()
+        var scaleActionWasInstalled = false
+        world.onSurpriseCaption = { _ in
+            scaleActionWasInstalled = world.pigContainer.action(
+                forKey: "escapePig.surpriseScale"
+            ) != nil
+        }
+
+        world.performSurpriseReaction()
+
+        XCTAssertTrue(scaleActionWasInstalled)
+    }
+
+    func test_discoveryDoesNotRunBeforePigReachesTree() {
+        let world = C3ClosedWorld()
+        world.isPigInCameraFrustum = { true }
+        world.completeOpeningNarration()
+        XCTAssertTrue(world.tapPig())
+        world.rotateCamera(byYaw: .pi)
+
+        XCTAssertFalse(world.isDiscoveredAfterCameraRotation())
+        XCTAssertEqual(world.currentPose, .running)
+    }
+
+    func test_discoveryRequiresVisiblePigAfterTreeArrival() {
+        let world = C3ClosedWorld()
+        world.isPigInCameraFrustum = { false }
+        world.completeOpeningNarration()
+        XCTAssertTrue(world.tapPig())
+        world.finishTreeHideForTesting()
+        world.rotateCamera(byYaw: .pi / 2)
+
+        XCTAssertFalse(world.isDiscoveredAfterCameraRotation())
+        XCTAssertEqual(world.currentPose, .idle)
+    }
+
+    func test_discoveryUsesWrappedYawThreshold() {
+        let world = C3ClosedWorld()
+        world.isPigInCameraFrustum = { true }
+        world.completeOpeningNarration()
+        XCTAssertTrue(world.tapPig())
+        world.finishTreeHideForTesting()
+        world.rotateCamera(byYaw: 2 * .pi - 0.69)
+
+        XCTAssertFalse(world.isDiscoveredAfterCameraRotation())
+        world.rotateCamera(byYaw: -0.02)
+
+        XCTAssertTrue(world.isDiscoveredAfterCameraRotation())
+    }
+
+    func test_discoveryRunsOnlyOnce() {
+        let world = C3ClosedWorld()
+        world.isPigInCameraFrustum = { true }
+        world.completeOpeningNarration()
+        XCTAssertTrue(world.tapPig())
+        world.finishTreeHideForTesting()
+        world.rotateCamera(byYaw: .pi / 2)
+        XCTAssertTrue(world.isDiscoveredAfterCameraRotation())
+        world.rotateCamera(byYaw: .pi / 2)
+
+        XCTAssertFalse(world.isDiscoveredAfterCameraRotation())
+    }
+
     func test_hidingUsesTheActualInSceneHideTree() {
         let world = C3ClosedWorld()
         let islandTree = world.scene.rootNode.childNode(

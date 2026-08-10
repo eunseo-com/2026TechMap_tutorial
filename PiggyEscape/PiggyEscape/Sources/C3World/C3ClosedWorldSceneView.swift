@@ -72,10 +72,10 @@ struct C3ClosedWorldSceneView: UIViewRepresentable {
                 guard let self, let scnView else { return false }
                 return scnView.isNode(world.pigContainer, insideFrustumOf: world.cameraNode)
             }
-            world.onSurpriseCaption = { [weak overlay] caption in
+            world.onSurpriseCaption = { [weak self, weak overlay] caption in
                 guard caption == "아, 들켰네… 제대로 숨고 싶은데." else { return }
                 overlay?.showSurpriseCaption()
-                self.onDiscovered()
+                self?.onDiscovered()
             }
         }
 
