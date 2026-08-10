@@ -4,23 +4,25 @@
 
 ## 현재 인수인계
 
-- 상태: Chapter 1 Task 7 진행 중 (일시 중지)
-- 진행 중 범위: `docs/superpowers/plans/2026-08-10-ch1-closed-world-implementation.md`의 Task 7 — ClosedWorldSceneView. 구현과 1차 수정은 끝났지만 재검토 전.
+- 상태: Chapter 1 Task 7 완료 (최종 재검토 승인)
+- 진행 중 범위: `docs/superpowers/plans/2026-08-10-ch1-closed-world-implementation.md`의 Task 7 — ClosedWorldSceneView. 기존 구현과 1차 수정 뒤 실제 화면 검증에서 발견된 바닥·돼지 배치 문제까지 보정했다.
 - 마지막 완료 범위: Task 1~6 (Tuist 스캐폴드, 에셋+AssetLoader, RoomBuilder, PigPlacement+FakeSofa, NodeInspector, HideAction) — 전부 검증·검토 완료.
-- 마지막 검증: `xcodebuild ... test` 23/23 통과. Task 7 커밋 범위(`6c0ce56..dc1feac`)는 아직 검토자 재검토를 받지 않음.
-- 다음 시작점: 아래 "Task 7 미해결 항목" 3가지를 먼저 처리하고, Task 7을 완료 처리한 뒤 Task 8(DocC 카탈로그)을 시작한다.
-- 차단 요소: 시뮬레이터 화면 접근 권한이 이번 세션 내내 승인되지 않아 탭 인터랙션 검증을 못 했다. 사용자가 시뮬레이터 패널에서 접근을 허용해야 풀린다.
+- 마지막 검증: `xcodebuild ... test` 26/26 통과. Simulator에서 수평 바닥·돼지·가짜 소파가 한 프레임에 보임을 확인했다. 탭은 `Coordinator`가 HideAction을 시작하는 단위 테스트와, 표시된 씬에서 실제 액션 완료를 확인하는 HideAction 테스트로 검증했다.
+- 다음 시작점: Task 8(DocC 카탈로그)을 시작한다.
+- 차단 요소: 없음.
 
-### Task 7 미해결 항목
+### Task 7에서 해결한 항목
 
-1. **RoomBuilder 바닥 방향 문제** — `Ground_Color` 에셋이 4×4m 방에 비해 축소가 필요한데, 얇은 축이 로컬 y가 아니라 z라 `PigPlacement`/`FakeSofa`와 같은 높이 기준 스케일링을 그대로 적용하면 바닥이 카메라를 삼켜버린다. 회전을 먼저 맞추고 나서 스케일링해야 한다. 의도적으로 손대지 않고 남겨둠(짐작으로 고치지 않기 위해).
-2. **돼지 가시성 미확인** — `view.pointOfView` 누락 버그를 고친 뒤 화면 구성은 방/바닥/소파로 나아졌지만, 그 프레임 안에 돼지가 실제로 보이는지는 확인하지 못했다.
-3. **탭 인터랙션 미검증** — 시뮬레이터 접근 권한 문제로 "탭하면 돼지가 가짜 소파로 이동" 동작을 실제로 눌러보지 못했다.
+1. **RoomBuilder 바닥 방향** — `Ground_Color`을 X축으로 -90° 회전하고, 변환된 경계를 재서 4×4×0.1m에 맞춘 뒤 바닥면을 y=0에 정렬했다. 회전 전 원본 경계로 스케일하는 실수를 회귀 테스트로 막는다.
+2. **돼지 좌표계·바닥 정렬** — `Piggy`도 Blender Z-up 모델이므로 내부 모델에서 Y-up 회전·균일 스케일·바닥 정렬을 수행하고, 바깥 노드는 위치와 액션만 맡게 분리했다.
+3. **초기 프레이밍** — 카메라와 너무 가까워 화면 밖으로 밀리던 돼지의 임의 하드코딩 z 좌표를 1에서 0으로 조정했다. 카메라 설정과 `allowsCameraControl`은 계획값을 유지한다.
 
 ## 작업 이력
 
 | 날짜 | 작업 범위 | 결과 | 검증 | 다음 시작점 |
 | --- | --- | --- | --- | --- |
+| 2026-08-10 | Chapter 1 Task 7 최종 재검토 | 구현·변환·카메라·인터랙션 회귀 검토를 마침. 생성물 제외 규칙과 테스트 추적 상태를 보완함 | 26/26 테스트 통과 결과와 변경 내용을 재검토 | Task 8 |
+| 2026-08-10 | Chapter 1 Task 7 보정·재검증 | Blender 좌표계 보정으로 바닥·돼지를 방 바닥에 맞추고, 초기 프레임에 돼지를 표시. Task 7 탭 연결 테스트 추가 | `tuist generate --no-open`, `xcodebuild ... build` 성공, `xcodebuild ... test` 26/26 통과, Simulator 장면 확인 | Task 7 최종 재검토·커밋 후 Task 8 |
 | 2026-08-10 | Chapter 1 Task 1~6 | Tuist 스캐폴드부터 HideAction까지 완료, 태스크마다 검토·필요 시 수정 라운드 거침 | 각 태스크 `xcodebuild test` 통과, 태스크별 검토 승인 | Task 7 |
 | 2026-08-10 | Chapter 1 Task 7 (진행 중) | SwiftUI 화면 연결, 가짜 소파 스케일 버그와 `pointOfView` 누락 버그 발견·수정, 공용 지오메트리 헬퍼 분리 | `xcodebuild test` 23/23 통과. 위 3개 미해결 항목은 미검증 | 미해결 항목 처리 후 Task 7 완료, 이어서 Task 8 |
 

@@ -18,6 +18,17 @@ final class PigPlacementTests: XCTestCase {
     }
 
     @MainActor
+    func test_makePigNode_standsOnTheRoomFloor() {
+        let pig = PigPlacement.makePigNode()
+        let sceneRoot = SCNNode()
+        sceneRoot.addChildNode(pig)
+        let (lo, hi) = SceneKitGeometry.boundingBox(of: sceneRoot)
+
+        XCTAssertEqual(lo.y, 0, accuracy: 0.001, "the pig's feet should meet the room floor")
+        XCTAssertEqual(hi.y - lo.y, 0.6, accuracy: 0.01)
+    }
+
+    @MainActor
     func test_makePigNode_hasGeometryOrChildGeometry() {
         let pig = PigPlacement.makePigNode()
         XCTAssertTrue(hasGeometryDeep(pig))
@@ -43,9 +54,8 @@ final class PigPlacementTests: XCTestCase {
         XCTAssertGreaterThan(geometryNodeCount, 1, "expected multiple meshes from the real Piggy model, not the single-box fallback")
     }
 
-    /// Deep traversal of the node hierarchy, mirroring the pattern used by
-    /// PigPlacement.boundingBox(of:)'s enumerateHierarchy usage, instead of a
-    /// shallow one-level check.
+    /// Deep traversal of the node hierarchy, mirroring
+    /// SceneKitGeometry.boundingBox(of:), instead of a shallow one-level check.
     @MainActor
     private func hasGeometryDeep(_ node: SCNNode) -> Bool {
         var found = false

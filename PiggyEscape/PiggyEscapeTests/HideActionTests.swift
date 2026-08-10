@@ -50,7 +50,7 @@ final class HideActionTests: XCTestCase {
         // this is not expected to flake under normal CI/simulator load. A fully
         // deterministic alternative (manually pumping SCNRenderer.render(atTime:))
         // was tried first and crashed on this iOS 26.5 simulator runtime (see
-        // task-6-report.md), so the real-display-link + generous-timeout approach
+        // docs/TROUBLESHOOTING.md §2), so the real-display-link + generous-timeout approach
         // is an accepted, deliberate tradeoff rather than an oversight.
         wait(for: [expectation], timeout: 2.0)
         XCTAssertEqual(pig.position.x, FakeSofa.hardcodedPosition.x, accuracy: 0.01)
