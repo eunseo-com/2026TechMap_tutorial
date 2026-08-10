@@ -8,13 +8,8 @@ enum PigPlacement {
 
     @MainActor
     static func makePigNode() -> SCNNode {
-        var model = AssetLoader.object(named: "Piggy") {
+        let model = AssetLoader.object(named: "Piggy") {
             AssetLoader.voxelBox(width: 0.4, height: 0.4, length: 0.6, color: .systemPink)
-        }
-        // If the loaded model doesn't have geometry at the expected level, use fallback
-        let hasGeometry = model.geometry != nil || model.childNodes.contains { $0.geometry != nil }
-        if !hasGeometry {
-            model = AssetLoader.voxelBox(width: 0.4, height: 0.4, length: 0.6, color: .systemPink)
         }
         normalize(model, toHeight: standardHeight)
         model.name = "Piggy"

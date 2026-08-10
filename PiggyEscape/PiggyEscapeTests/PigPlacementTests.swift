@@ -20,7 +20,41 @@ final class PigPlacementTests: XCTestCase {
     @MainActor
     func test_makePigNode_hasGeometryOrChildGeometry() {
         let pig = PigPlacement.makePigNode()
-        let hasGeometry = pig.geometry != nil || pig.childNodes.contains { $0.geometry != nil }
-        XCTAssertTrue(hasGeometry)
+        XCTAssertTrue(hasGeometryDeep(pig))
+    }
+
+    /// The bundled "Piggy" asset nests its geometry several levels below the
+    /// wrapper node AssetLoader.object(named:) returns (wrapper -> root ->
+    /// body/eyes/tail meshes). This test walks the full hierarchy to confirm
+    /// makePigNode() is actually placing the real model and not silently
+    /// falling back to the placeholder voxel box.
+    @MainActor
+    func test_makePigNode_placesRealModel_notVoxelFallback() {
+        let pig = PigPlacement.makePigNode()
+        XCTAssertTrue(hasGeometryDeep(pig), "expected geometry somewhere in the node's subtree")
+
+        var geometryNodeCount = 0
+        pig.enumerateHierarchy { node, _ in
+            if node.geometry != nil { geometryNodeCount += 1 }
+        }
+        // The real Piggy.usdc model is made of multiple meshes (body/eyes/tail),
+        // while the voxel fallback is a single SCNBox node. More than one
+        // geometry-bearing node means the real model was placed, not the fallback.
+        XCTAssertGreaterThan(geometryNodeCount, 1, "expected multiple meshes from the real Piggy model, not the single-box fallback")
+    }
+
+    /// Deep traversal of the node hierarchy, mirroring the pattern used by
+    /// PigPlacement.boundingBox(of:)'s enumerateHierarchy usage, instead of a
+    /// shallow one-level check.
+    @MainActor
+    private func hasGeometryDeep(_ node: SCNNode) -> Bool {
+        var found = false
+        node.enumerateHierarchy { child, stop in
+            if child.geometry != nil {
+                found = true
+                stop.pointee = true
+            }
+        }
+        return found
     }
 }
