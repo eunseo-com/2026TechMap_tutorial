@@ -4,12 +4,12 @@
 
 ## 현재 인수인계
 
-- 상태: Task 2 — 경험 상태와 숨기 좌표 순수 로직 완료
-- 진행 중 범위: 허용된 전이만 처리하는 경험 상태 기계와 카메라 반대편 나무 뒤 좌표 계산을 순수 Swift 로직으로 추가했다.
+- 상태: Task 3 — C3 섬·돼지 모델·궤도 카메라 어댑터 완료
+- 진행 중 범위: C3의 비금융 섬 타일·장식·USD 돼지 포즈·궤도 카메라·조명을 SceneKit 어댑터로 추가했다. 숨김 상호작용·나레이션·현실 전환은 구현하지 않았다.
 - 실패 기록: `docs/LEARNING_LOG.md`에 실패·검증 한계의 재현 조건·원인/가설·조치·재발 방지 근거를 기록한다.
-- 마지막 완료 범위: Task 2 — 경험 상태와 숨기 좌표 순수 로직.
-- 마지막 검증: `tuist generate --no-open` 성공. focused `xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/EscapeExperienceStateTests -only-testing:PiggyEscapeTests/HidePlanningTests test`가 3/3을 통과했고, 전체 `xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test`가 30/30을 통과했다. Simulator/AppIntents 런타임 경고는 `docs/LEARNING_LOG.md`의 L-20260810-007에 기록했다.
-- 다음 시작점: `docs/superpowers/plans/2026-08-10-ch1-reality-escape-implementation.md`의 Task 3 — C3 섬 어댑터와 자동 전환.
+- 마지막 완료 범위: Task 3 — C3 섬·돼지 모델·궤도 카메라 어댑터.
+- 마지막 검증: `tuist generate --no-open` 성공. focused `xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/C3IslandBuilderTests -only-testing:PiggyEscapeTests/C3PigModelFactoryTests -only-testing:PiggyEscapeTests/C3ClosedWorldTests test`가 8/8을 통과했고, 전체 `xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test`가 38/38을 통과했다. Simulator/AppIntents 런타임 경고는 `docs/LEARNING_LOG.md`의 L-20260810-016에 기록했다.
+- 다음 시작점: `docs/superpowers/plans/2026-08-10-ch1-reality-escape-implementation.md`의 Task 4 — C3 씬 뷰와 숨김 상호작용.
 - 차단 요소: 원격 `git fetch`의 공용 Git 메타데이터 쓰기 권한과 시작 순서의 누락 문서는 `docs/LEARNING_LOG.md`에 보류 항목으로 기록했다.
 
 ### Task 7에서 해결한 항목
@@ -22,6 +22,7 @@
 
 | 날짜 | 작업 범위 | 결과 | 검증 | 다음 시작점 |
 | --- | --- | --- | --- | --- |
+| 2026-08-10 | Task 3 — C3 섬·돼지 모델·궤도 카메라 어댑터 | `C3Island`의 7개 `Ground_Color` 타일과 C3 장식 배치, 실제 `HideTree`·`BigPigSpawn`, `EscapePig`의 idle/running/surprised 내부 USD 보정·정규화, C3 궤도 카메라·그라데이션·조명을 추가함 | RED에서 `C3ClosedWorld` 부재 컴파일 실패와 내부 USD 보정 소유 노드 오류를 확인한 뒤 focused 8/8·전체 38/38 XCTest 통과. Simulator/AppIntents 런타임 경고는 L-20260810-016에 기록 | Task 4 — C3 씬 뷰와 숨김 상호작용 |
 | 2026-08-10 | Task 2 — 경험 상태와 숨기 좌표 순수 로직 | 상태 기계의 합법 전이와 XZ 카메라 반대편 나무 숨기 좌표를 프레임워크 독립 순수 Swift 타입으로 추가함 | RED에서 `EscapeExperienceMachine` 부재 컴파일 실패 확인 후 focused 3/3·전체 30/30 XCTest 통과. 기존 Simulator/AppIntents 경고는 L-20260810-007에 기록 | Task 3 — C3 섬 어댑터와 자동 전환 |
 | 2026-08-10 | Task 1 — C3 에셋과 카메라 권한 | C3 원본 11개를 바이트 변경 없이 앱 리소스에 등록하고, 고정 카메라 목적 문구와 실제 앱 번들 로딩 회귀 테스트를 추가함 | RED에서 새 에셋 8개가 누락되어 16개 assertion 실패 확인 후, `AssetLoaderTests` 5/5 통과·11개 `cmp -s` 일치·생성 Info.plist 목적 문구 확인 | Task 2 — 경험 상태와 숨기 좌표 순수 로직 |
 | 2026-08-10 | 실패·학습 기록 운영 | 실패한 테스트·빌드·실행·실기기 검증 한계를 재현 가능한 항목으로 남기는 별도 기록을 추가함 | 기록 형식·상태·필수 근거를 설계 문서와 대조 | Task 1 실행 |
