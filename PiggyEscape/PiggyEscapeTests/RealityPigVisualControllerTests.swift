@@ -18,6 +18,30 @@ final class RealityPigVisualControllerTests: XCTestCase {
         XCTAssertEqual(controller.surpriseRestoreScale, 1.0, accuracy: 0.0001)
     }
 
+    func test_surpriseCompletionWaitsUntilTheSurprisedModelIsInstalled() {
+        var requestedAsset: String?
+        var finishLoading: ((Result<Entity, Error>) -> Void)?
+        let controller = RealityPigVisualController.makeForTesting { asset, completion in
+            requestedAsset = asset
+            finishLoading = completion
+            return nil
+        }
+        var completed = false
+
+        controller.showSurprised {
+            completed = true
+        }
+
+        XCTAssertEqual(requestedAsset, "Piggy_surprised")
+        XCTAssertFalse(completed)
+        XCTAssertNil(controller.outerEntity.findEntity(named: "RealityPigModel_surprised"))
+
+        finishLoading?(.success(Entity()))
+
+        XCTAssertTrue(completed)
+        XCTAssertNotNil(controller.outerEntity.findEntity(named: "RealityPigModel_surprised"))
+    }
+
     func test_testingWalkMovesStableOuterEntityAndFinishesIdle() {
         let controller = RealityPigVisualController.makeForTesting()
         let outerEntity = controller.outerEntity

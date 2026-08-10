@@ -5,10 +5,10 @@
 ## 현재 인수인계
 
 - 상태: Task 6 — RealityKit 돼지 포즈와 실제 메쉬 뒤 숨기 완료
-- 진행 중 범위: `RealityPigVisualController`가 실제 C3 돼지 3종 에셋을 비동기로 불러 안정적인 `RealityEscapePig` 바깥 엔티티 안에서 교체하고, 걷기·정지·놀람 포즈와 1.5→1.0 확대를 담당한다. `RealityHideARView`는 지원 기기에서만 수동 AR 세션을 시작하고, LiDAR 메쉬 세로 면 탭·분류된 수평 바닥·Task 5 숨기 계획을 연결해 물체 반대편으로 이동한 뒤 실제 메쉬 선행 충돌이 사라질 때 한 번만 재발견을 알린다. 카메라 권한·SceneKit 페이드·루트 화면 전환·1.12 화면 확대는 Task 7 범위로 아직 구현하지 않았다.
+- 진행 중 범위: `RealityPigVisualController`가 실제 C3 돼지 3종 에셋을 비동기로 불러 안정적인 `RealityEscapePig` 바깥 엔티티 안에서 교체하고, 걷기·정지·놀람 포즈와 1.5→1.0 확대를 담당한다. 돼지는 유효한 바닥 기반 시작 위치가 생기기 전까지 보이지 않으며, `RealityHideARView`는 타깃 수락과 돼지 도착을 별도 콜백으로 전달한다. 도착 뒤에만 유효한 화면 안·카메라 앞 관찰을 받아 실제 메쉬 선행 충돌이 사라질 때 놀란 모델 설치→확대→재발견 순서로 한 번 알린다. 카메라 권한·SceneKit 페이드·루트 화면 전환·1.12 화면 확대는 Task 7 범위로 아직 구현하지 않았다.
 - 실패 기록: `docs/LEARNING_LOG.md`에 실패·검증 한계의 재현 조건·원인/가설·조치·재발 방지 근거를 기록한다.
 - 마지막 완료 범위: Task 6 — RealityKit 돼지 포즈와 실제 메쉬 뒤 숨기.
-- 마지막 검증: `cd PiggyEscape && tuist generate --no-open` 성공. focused `xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/RealityPigVisualControllerTests -only-testing:PiggyEscapeTests/RealityHideARViewCoordinatorTests test`가 5/5, 전체 같은 destination의 `xcodebuild ... test`가 63/63을 통과했다. 같은 destination의 `xcodebuild ... build`도 `** BUILD SUCCEEDED **`로 완료됐다. Simulator/AppIntents 런타임 경고와 실제 LiDAR·물리 오클루전 실기기 한계는 `docs/LEARNING_LOG.md`의 L-20260810-046~047에 기록했다.
+- 마지막 검증: 독립 리뷰 수정 뒤 focused `RealityPigVisualControllerTests` 3/3, `RealityHideARViewCoordinatorTests` 7/7, 전체 같은 destination의 XCTest 68/68이 통과했다. 같은 destination의 `xcodebuild ... build`도 `** BUILD SUCCEEDED **`로 완료됐다. 리뷰에서 발견하고 수정한 네 경계는 `docs/LEARNING_LOG.md`의 L-20260811-050~054, Simulator/AppIntents 런타임 경고와 실제 LiDAR·물리 오클루전 실기기 한계는 L-20260810-046~047에 기록했다.
 - 다음 시작점: 구현 계획의 Task 7 — 자동 SceneKit→RealityKit 전환, 카메라 권한, C3 스타일 안내와 1.12 화면 확대. 이 Task 6에서는 시작하지 않았다.
 - 차단 요소: 실제 LiDAR 메쉬 세로 면 탭·분류된 바닥·물리 오클루전·카메라 이동 재발견은 L-20260810-047에 `실기기 대기`로 남겼다. Task 6 구현 중 해결한 환경·SDK 타입 실패는 L-20260810-039~045에 기록했다.
 
@@ -22,6 +22,7 @@
 
 | 날짜 | 작업 범위 | 결과 | 검증 | 다음 시작점 |
 | --- | --- | --- | --- | --- |
+| 2026-08-11 | Task 6 독립 리뷰 수정 | 화면 밖·카메라 뒤 관찰을 재발견 입력에서 제외하고, 놀란 모델 설치 뒤에만 확대·발견 콜백을 실행함. 타깃 수락과 돼지 도착 이벤트를 분리하고 도착 전 발견을 막았으며, 유효한 바닥 Y·카메라 전방 시작 위치가 생기기 전 돼지를 비활성화함 | 결함별 RED 확인 후 visual focused 3/3, coordinator focused 7/7, 전체 XCTest 68/68 및 iOS Simulator build 성공. 원인·학습은 L-20260811-050~054 | Task 6 재검토 후 Task 7 |
 | 2026-08-10 | Task 6 — RealityKit 돼지 포즈와 실제 메쉬 뒤 숨기 | 실제 C3 돼지 3종의 비동기 포즈 교체·높이 정규화·걷기·1.5→1.0 놀람 확대를 안정 바깥 엔티티에 구현하고, LiDAR 지원 guard·수동 AR 세션·scene understanding 4종 옵션·실제 메쉬 세로 면 탭·분류된 바닥·숨기 이동·blocked→visible 1회 재발견을 ARView에 연결함. 카메라/렌즈 transform은 변경하지 않음 | RED에서 두 Task 6 타입 부재를 확인한 뒤 focused 5/5·전체 63/63 XCTest와 iOS Simulator build 성공. 환경·SDK 실패는 L-20260810-039~046, 실제 LiDAR 검증은 L-20260810-047 `실기기 대기` | Task 7 — 자동 SceneKit→RealityKit 전환과 C3 스타일 안내 |
 | 2026-08-10 | Task 5 — 실제 물체 숨기 계획과 LiDAR 지원 판정 | 세로 면·카메라 거리·근접 바닥을 검증해 카메라 반대편의 정확한 바닥 Y 숨기 위치를 계산하는 순수 계획, 0.03m 허용오차의 1회 재발견 감시, ARKit 호출을 시스템 구현 하나에 한정한 LiDAR 지원 주입 경계와 안내 문자열을 추가함. ARView·RealityKit 렌더링·권한·UI 전환은 추가하지 않음 | RED에서 Reality 계획·지원 타입 부재를 확인한 뒤 focused 8/8·전체 58/58 XCTest 및 iOS Simulator build 성공. 기존 Simulator/AppIntents 경고와 실제 LiDAR·물리 오클루전 실기기 한계는 L-20260810-036~037에 기록 | Task 6 — RealityKit 돼지 포즈와 실제 메쉬 뒤 숨기 |
 | 2026-08-10 | Task 4 — C3 SceneKit 나레이션·탭·가짜 숨기·카메라 발견 | `NarrationOverlayScene`의 C3 스타일 자막, 실제 `HideTree`가 필수인 나무 뒤 달리기, 0.70rad wrapped yaw·실제 `SCNView` 프러스텀·1회 가드 발견, `Piggy_surprised` 1.5→1.0 확대를 추가하고 C3 제스처 뷰를 앱 진입점에 연결함. 리뷰 보완으로 확대 action을 외부 콜백보다 먼저 등록하고, world callback의 Coordinator 캡처를 약하게 바꾸며 도착 전·frustum false·yaw 경계·1회 가드를 회귀 테스트로 확장함 | 리뷰 RED 2건 뒤 focused 12/12·전체 50/50 XCTest 및 iOS Simulator build 성공. 기존 런타임 경고와 수동 시각 확인 한계는 L-20260810-029~030, 리뷰 수정 근거는 L-20260810-031에 기록 | Task 5 — C3 발견 뒤 카메라 권한 전환 |

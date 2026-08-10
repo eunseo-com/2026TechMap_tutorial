@@ -3,9 +3,66 @@ import Combine
 import RealityKit
 import SwiftUI
 
+enum RealityProjectionGate {
+    static func canObserve(
+        projectedPoint: CGPoint?,
+        viewportBounds: CGRect,
+        pigPosition: SIMD3<Float>,
+        cameraTransform: simd_float4x4
+    ) -> Bool {
+        guard let projectedPoint,
+              !viewportBounds.isEmpty,
+              viewportBounds.contains(projectedPoint) else {
+            return false
+        }
+
+        let cameraPosition = SIMD3(
+            cameraTransform.columns.3.x,
+            cameraTransform.columns.3.y,
+            cameraTransform.columns.3.z
+        )
+        let cameraForward = -SIMD3(
+            cameraTransform.columns.2.x,
+            cameraTransform.columns.2.y,
+            cameraTransform.columns.2.z
+        )
+        return simd_dot(cameraForward, pigPosition - cameraPosition) > 0
+    }
+}
+
+enum RealityInitialPigPlacement {
+    static func position(
+        cameraPosition: SIMD3<Float>,
+        cameraForward: SIMD3<Float>,
+        floorY: Float
+    ) -> SIMD3<Float>? {
+        guard cameraPosition.x.isFinite,
+              cameraPosition.y.isFinite,
+              cameraPosition.z.isFinite,
+              cameraForward.x.isFinite,
+              cameraForward.y.isFinite,
+              cameraForward.z.isFinite,
+              floorY.isFinite,
+              floorY < cameraPosition.y - 0.2 else {
+            return nil
+        }
+
+        let horizontalForward = SIMD3(cameraForward.x, 0, cameraForward.z)
+        let length = simd_length(horizontalForward)
+        guard length > 0.0001 else { return nil }
+        let direction = horizontalForward / length
+        return SIMD3(
+            cameraPosition.x + direction.x * 0.8,
+            floorY,
+            cameraPosition.z + direction.z * 0.8
+        )
+    }
+}
+
 struct RealityHideARView: UIViewRepresentable {
     let onScanningReady: () -> Void
     let onTargetAccepted: () -> Void
+    let onPigReachedTarget: () -> Void
     let onRevealed: () -> Void
     let onUnavailable: () -> Void
     let onMessage: (String) -> Void
@@ -13,12 +70,14 @@ struct RealityHideARView: UIViewRepresentable {
     init(
         onScanningReady: @escaping () -> Void,
         onTargetAccepted: @escaping () -> Void,
+        onPigReachedTarget: @escaping () -> Void,
         onRevealed: @escaping () -> Void,
         onUnavailable: @escaping () -> Void,
         onMessage: @escaping (String) -> Void
     ) {
         self.onScanningReady = onScanningReady
         self.onTargetAccepted = onTargetAccepted
+        self.onPigReachedTarget = onPigReachedTarget
         self.onRevealed = onRevealed
         self.onUnavailable = onUnavailable
         self.onMessage = onMessage
@@ -29,6 +88,7 @@ struct RealityHideARView: UIViewRepresentable {
             meshSupport: SystemRealityMeshSupport(),
             onScanningReady: onScanningReady,
             onTargetAccepted: onTargetAccepted,
+            onPigReachedTarget: onPigReachedTarget,
             onRevealed: onRevealed,
             onUnavailable: onUnavailable,
             onMessage: onMessage
@@ -53,6 +113,7 @@ struct RealityHideARView: UIViewRepresentable {
             case waitingForTarget
             case walking
             case hidden
+            case revealing
             case revealed
         }
 
@@ -60,6 +121,7 @@ struct RealityHideARView: UIViewRepresentable {
         private let visualController: RealityPigVisualController
         private let onScanningReady: () -> Void
         private let onTargetAccepted: () -> Void
+        private let onPigReachedTarget: () -> Void
         private let onRevealed: () -> Void
         private let onUnavailable: () -> Void
         private let onMessage: (String) -> Void
@@ -81,6 +143,7 @@ struct RealityHideARView: UIViewRepresentable {
             visualController: RealityPigVisualController? = nil,
             onScanningReady: @escaping () -> Void = {},
             onTargetAccepted: @escaping () -> Void = {},
+            onPigReachedTarget: @escaping () -> Void = {},
             onRevealed: @escaping () -> Void = {},
             onUnavailable: @escaping () -> Void = {},
             onMessage: @escaping (String) -> Void = { _ in }
@@ -89,6 +152,7 @@ struct RealityHideARView: UIViewRepresentable {
             self.visualController = visualController ?? RealityPigVisualController()
             self.onScanningReady = onScanningReady
             self.onTargetAccepted = onTargetAccepted
+            self.onPigReachedTarget = onPigReachedTarget
             self.onRevealed = onRevealed
             self.onUnavailable = onUnavailable
             self.onMessage = onMessage
@@ -132,19 +196,43 @@ struct RealityHideARView: UIViewRepresentable {
         }
 
         @discardableResult
-        func processRevealFrame(meshDistance: Float?, pigDistance: Float) -> Bool {
-            guard hideState != .revealed,
+        func processRevealFrame(
+            isObservationValid: Bool,
+            meshDistance: Float?,
+            pigDistance: Float
+        ) -> Bool {
+            guard isObservationValid,
+                  hideState == .hidden,
                   revealMonitor.update(meshDistance: meshDistance, pigDistance: pigDistance) else {
                 return false
             }
 
-            hideState = .revealed
+            hideState = .revealing
             revealSubscription?.cancel()
             revealSubscription = nil
-            visualController.showSurprised()
-            visualController.playSurpriseScale()
-            onRevealed()
+            visualController.showSurprised { [weak self] in
+                guard let self, self.hideState == .revealing else { return }
+                self.visualController.playSurpriseScale()
+                self.hideState = .revealed
+                self.onRevealed()
+            }
             return true
+        }
+
+        func acceptHideTarget(destination: SIMD3<Float>, initialPosition: SIMD3<Float>) {
+            guard hideState == .waitingForTarget else { return }
+            hideState = .walking
+            visualController.outerEntity.setPosition(initialPosition, relativeTo: nil)
+            visualController.outerEntity.isEnabled = true
+            onTargetAccepted()
+            visualController.walk(to: destination) { [weak self] in
+                guard let self else { return }
+                self.hideState = .hidden
+                self.onPigReachedTarget()
+                if let arView = self.arView {
+                    self.beginRevealMonitoring(in: arView)
+                }
+            }
         }
 
         func stop() {
@@ -209,13 +297,20 @@ struct RealityHideARView: UIViewRepresentable {
             case let .rejected(rejection):
                 onMessage(message(for: rejection))
             case let .accepted(destination):
-                hideState = .walking
-                onTargetAccepted()
-                visualController.walk(to: destination) { [weak self, weak arView] in
-                    guard let self, let arView else { return }
-                    self.hideState = .hidden
-                    self.beginRevealMonitoring(in: arView)
+                let cameraForward = -SIMD3(
+                    frame.camera.transform.columns.2.x,
+                    frame.camera.transform.columns.2.y,
+                    frame.camera.transform.columns.2.z
+                )
+                guard let initialPosition = RealityInitialPigPlacement.position(
+                    cameraPosition: cameraPosition,
+                    cameraForward: cameraForward,
+                    floorY: destination.y
+                ) else {
+                    onMessage(RealityAvailabilityMessage.scanFirst)
+                    return
                 }
+                acceptHideTarget(destination: destination, initialPosition: initialPosition)
             }
         }
 
@@ -246,8 +341,14 @@ struct RealityHideARView: UIViewRepresentable {
 
         private func evaluateReveal(in arView: ARView) {
             let pigPosition = visualController.worldPosition
-            guard let screenPoint = arView.project(pigPosition),
-                  let cameraTransform = arView.session.currentFrame?.camera.transform else { return }
+            guard let cameraTransform = arView.session.currentFrame?.camera.transform else { return }
+            let screenPoint = arView.project(pigPosition)
+            guard RealityProjectionGate.canObserve(
+                projectedPoint: screenPoint,
+                viewportBounds: arView.bounds,
+                pigPosition: pigPosition,
+                cameraTransform: cameraTransform
+            ), let screenPoint else { return }
 
             let cameraPosition = Self.position(from: cameraTransform)
             let meshDistance = arView.hitTest(
@@ -256,7 +357,11 @@ struct RealityHideARView: UIViewRepresentable {
                 mask: .sceneUnderstanding
             ).first.map { simd_distance(cameraPosition, $0.position) }
             let pigDistance = simd_distance(cameraPosition, pigPosition)
-            processRevealFrame(meshDistance: meshDistance, pigDistance: pigDistance)
+            processRevealFrame(
+                isObservationValid: true,
+                meshDistance: meshDistance,
+                pigDistance: pigDistance
+            )
         }
 
         private static func position(from transform: simd_float4x4) -> SIMD3<Float> {

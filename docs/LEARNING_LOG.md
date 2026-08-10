@@ -28,6 +28,66 @@
 
 ## 항목
 
+### L-20260811-054 — AR 진입 직후 돼지가 월드 원점에 활성화되는 배치 계약이 없음
+
+- 상태: 해결
+- 발생 태스크: Task 6 독립 리뷰 수정 1차 — 유효 바닥 기반 초기 배치
+- 재현: 돼지 시각 컨트롤러 생성 직후 `outerEntity.isEnabled`와 `RealityHideARView.attach`의 월드 원점 anchor 연결 순서를 검사하고, 카메라 전방·바닥 높이 입력의 순수 배치 테스트를 추가함
+- 관찰: 기존 엔티티는 활성 상태였고 바닥을 찾기 전 `(0, 0, 0)` anchor에 붙어 카메라 원점 부근에 보일 수 있었으며, 유효한 시작 위치를 계산하는 규칙이 없었음
+- 영향: AR 진입 직후 돼지가 눈앞이나 잘못된 높이에 나타나 현실 공간 전환의 연속성이 깨질 수 있었음
+- 원인/가설: 최종 숨기 목적지는 계획했지만 AR에서 돼지를 처음 표시할 시점과 시작 위치를 별도 상태로 설계하지 않은 것이 원인임
+- 조치: 돼지 엔티티를 기본 비활성화하고, 바닥이 카메라보다 충분히 낮고 수평 카메라 전방 벡터가 유효할 때만 바닥 Y의 전방 0.8m 위치를 만들며, 타깃 수락 뒤 그 위치에서 활성화하도록 함
+- 검증: `RealityHideARViewCoordinatorTests.test_initialPlacementUsesFloorAndCameraForwardOnlyWhenDefensible`와 타깃 이동 테스트를 포함한 coordinator focused XCTest 7/7 통과
+- 배운 점: AR 콘텐츠는 anchor 생성과 표시를 같은 사건으로 취급하지 말고, 센서로 방어 가능한 배치가 확보될 때까지 비활성 상태를 유지해야 한다.
+
+### L-20260811-053 — 실제 타깃 선택과 돼지 도착을 하나의 이벤트로 축약함
+
+- 상태: 해결
+- 발생 태스크: Task 6 독립 리뷰 수정 1차 — 실제 숨기 이동 완료 경계
+- 재현: Task 2 상태 전이와 `RealityHideARView.handleTap`의 수락·이동 completion 호출을 대조하고, 지연 모델 로더로 이동 중 발견 입력과 callback 순서를 검사함
+- 관찰: 기존 공개 계약에는 `onTargetAccepted`만 있고 `onPigReachedTarget`이 없어 `.walkingBehindRealObject`에서 `.hiddenInReality`로 전이할 실제 완료 신호가 없었음
+- 영향: 상위 화면이 선택 직후 숨김 완료로 오인하거나 돼지 도착 전에 발견 상태로 넘어갈 수 있었음
+- 원인/가설: 사용자 입력 수락과 비동기 이동·idle 포즈 설치 완료를 하나의 콜백으로 축약한 것이 원인임
+- 조치: `onPigReachedTarget`을 분리하고, running 로드·이동·idle 설치 완료 뒤에만 호출하며 reveal monitor도 `.hidden` 상태에서만 입력을 소비하도록 함
+- 검증: `RealityHideARViewCoordinatorTests.test_targetAcceptedAndReachedCallbacksAreSeparatedByMovementCompletion`이 `accepted → reached → revealed` 순서와 도착 전 발견 불가를 확인했고 coordinator focused XCTest 7/7 통과
+- 배운 점: 입력 수락, 애니메이션 도착, 발견은 각각 별도 도메인 이벤트여야 상태 기계와 실제 화면이 같은 순서를 유지한다.
+
+### L-20260811-052 — 놀람 콜백이 비동기 모델 설치보다 먼저 실행됨
+
+- 상태: 해결
+- 발생 태스크: Task 6 독립 리뷰 수정 1차 — 놀람 포즈 완료 경계
+- 재현: 완료를 수동으로 방출하는 entity loader를 주입해 `showSurprised` 호출 직후와 로드 성공 뒤의 자식 엔티티·callback 상태를 비교함
+- 관찰: 기존 `showSurprised()`는 비동기 로드를 시작한 직후 coordinator가 확대와 `onRevealed`를 실행해 idle/running 모델이 확대될 수 있었음
+- 영향: “들켰다” 자막·상태가 놀란 돼지 모델보다 먼저 나타나 시각 연출 순서가 깨질 수 있었음
+- 원인/가설: pose 요청 상태와 모델 설치 완료 상태를 구분하지 않고 호출 반환을 완료로 간주한 것이 원인임
+- 조치: entity loader를 완료 경계로 추상화하고, 놀란 모델을 안정 바깥 엔티티에 실제 설치한 뒤에만 completion을 호출하며 coordinator의 확대·발견 콜백을 그 completion 안으로 옮김
+- 검증: `RealityPigVisualControllerTests.test_surpriseCompletionWaitsUntilTheSurprisedModelIsInstalled`를 포함한 visual focused XCTest 3/3 통과
+- 배운 점: 비동기 에셋 전환의 도메인 이벤트는 요청 시점이 아니라 화면 트리에 새 모델이 설치된 시점에 발생해야 한다.
+
+### L-20260811-050 — Task 6 독립 검토가 AR 재발견·포즈·상태·초기 배치 경계 결함 4건을 확인함
+
+- 상태: 해결
+- 발생 태스크: Task 6 — RealityKit 돼지 포즈와 실제 메쉬 뒤 숨기 리뷰 수정
+- 재현: `RealityHideARView.evaluateReveal`, `processRevealFrame`, 실제 타깃 수락 분기, `attach`, `RealityPigVisualController.showSurprised`의 호출 순서와 상태 입력을 추적함
+- 관찰: (1) 투영점의 bounds·카메라 전방 검증 없이 mesh hit `nil`을 visible로 소비함, (2) 놀란 에셋 비동기 로드 완료 전 scale·`onRevealed`를 호출함, (3) 선택 수락 콜백만 있고 돼지 도착 콜백이 없음, (4) 유효한 바닥을 찾기 전에 1.5m 돼지를 활성 상태로 AR 원점에 붙임
+- 영향: 화면 밖/카메라 뒤 돼지가 발견될 수 있고, idle/running 모델에 놀람 확대가 적용될 수 있으며, Task 2의 `realTargetAccepted → pigReachedRealObject → realityPigDiscovered` 순서를 루트가 표현할 수 없고, AR 진입 직후 돼지가 카메라 원점·눈높이에 나타날 수 있음
+- 원인/가설: 센서 입력을 테스트 가능한 관찰/배치 규칙으로 추출하지 않았고, 비동기 모델 설치와 외부 이벤트 콜백을 하나의 완료 경계로 묶지 않았으며, 선택과 도착을 같은 콜백으로 축약한 것이 확인된 원인임
+- 조치: 네 경계를 각각 실패 테스트로 고정한 뒤 화면 유효성 gate, 포즈 설치 completion, 별도 도착 callback, 유효 계획 이후 floor-Y 전방 시작 위치와 pending-hidden 규칙을 구현함
+- 검증: 원인별 focused GREEN은 L-20260811-051~054에 기록했으며, 수정 뒤 전체 XCTest 68/68과 iOS Simulator build가 성공함
+- 배운 점: AR 화면의 `nil hit`은 보임을 뜻하지 않고 유효 관찰 문맥 안에서만 의미가 있으며, 비동기 시각 상태와 경험 상태 이벤트는 실제 완료 순간을 공유해야 한다.
+
+### L-20260811-049 — Task 6 리뷰 수정 시작 전 원격 fetch가 worktree 메타데이터 권한으로 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 6 — RealityKit 돼지 포즈와 실제 메쉬 뒤 숨기 리뷰 수정
+- 재현: `git fetch --prune origin`
+- 관찰: `error: cannot open '.../.git/worktrees/ch1-reality-escape/FETCH_HEAD': Operation not permitted`로 원격 참조 갱신 전에 종료됨
+- 영향: 리뷰 수정 전 원격 변경 유무를 현재 권한으로 확정하지 못함
+- 원인/가설: 이전 L-20260810-020·032와 같은 연결 작업 트리 공용 Git 메타데이터 쓰기 권한 경계가 재발함
+- 조치: 공용 Git 메타데이터에 접근 가능한 권한으로 같은 fetch를 한 번 재실행함
+- 검증: 권한 재실행 `git fetch --prune origin`이 오류 없이 완료됐고, 직후 상태는 이 학습 기록 변경과 사용자 소유 `.claude/`뿐이며 기준 HEAD는 `e3f58d9`임
+- 배운 점: 리뷰 수정 라운드도 새 구현처럼 원격 상태 확인 실패를 먼저 기록하고, 성공을 추정하지 않는다.
+
 ### L-20260810-048 — Task 6 staging이 연결 작업 트리 index lock 권한으로 중단됨
 
 - 상태: 해결
@@ -603,3 +663,14 @@
 - 조치: 현재 작업 트리의 `git status --short`와 브랜치 정보를 확인하고, 원격 fetch 재시도는 권한이 확보될 때까지 보류함
 - 검증: `git status --short`에서 사용자 소유의 추적되지 않은 `.claude/`만 확인됨; 원격 fetch는 미검증 상태로 남음
 - 배운 점: 연결 작업 트리에서는 원격 확인 전에 공용 Git 메타데이터의 쓰기 권한을 먼저 확인한다.
+### L-20260811-051 — 화면 밖 관찰도 발견 프레임으로 소비하는 회귀 테스트가 컴파일 RED를 만듦
+
+- 상태: 해결
+- 발생 태스크: Task 6 독립 리뷰 수정 1차 — 유효한 화면 관찰만 발견 판정에 반영
+- 재현: `xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/RealityHideARViewCoordinatorTests test`
+- 관찰: 새 테스트가 요구한 `isObservationValid` 인자와 `RealityProjectionGate`가 구현에 없어 컴파일이 실패함
+- 영향: 기존 구현은 투영점이 화면 밖이거나 돼지가 카메라 뒤에 있어도 메시 히트가 없으면 가시 프레임으로 소비할 수 있었음
+- 원인/가설: `ARView.project`가 반환한 좌표의 뷰포트 포함 여부와 카메라 전방 반공간을 확인하지 않고 거리 모니터에 전달했음
+- 조치: 투영점이 화면 안에 있고 돼지가 카메라 전방에 있을 때만 관찰을 유효하게 만드는 순수 `RealityProjectionGate`를 추가하고, 무효 프레임은 `RealityRevealMonitor`에 전달하지 않도록 함
+- 검증: 수정 전 컴파일 RED를 확인했고 `RealityHideARViewCoordinatorTests` focused XCTest 5/5를 통과함
+- 배운 점: 화면 좌표 변환의 성공 여부만으로 가시성을 추론하지 말고, 뷰포트 경계와 카메라 기준 깊이를 함께 검증해야 한다.

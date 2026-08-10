@@ -5,6 +5,8 @@ import simd
 
 @MainActor
 final class RealityPigVisualController {
+    typealias EntityLoader = (String, @escaping (Result<Entity, Error>) -> Void) -> AnyCancellable?
+
     let outerEntity: Entity
 
     private(set) var currentPose: C3PigPose = .idle
@@ -16,6 +18,7 @@ final class RealityPigVisualController {
     }
 
     private let skipsAssetLoadingAndTiming: Bool
+    private let entityLoader: EntityLoader
     private var modelLoad: AnyCancellable?
     private var movementCompletion: DispatchWorkItem?
 
@@ -23,18 +26,27 @@ final class RealityPigVisualController {
         outerEntity = Entity()
         outerEntity.name = "RealityEscapePig"
         outerEntity.orientation = simd_quatf(angle: 3 * .pi / 4, axis: SIMD3(0, 1, 0))
+        outerEntity.isEnabled = false
         skipsAssetLoadingAndTiming = false
+        entityLoader = Self.loadEntity
     }
 
-    private init(testing: Bool) {
+    private init(testing: Bool, entityLoader: @escaping EntityLoader) {
         outerEntity = Entity()
         outerEntity.name = "RealityEscapePig"
         outerEntity.orientation = simd_quatf(angle: 3 * .pi / 4, axis: SIMD3(0, 1, 0))
+        outerEntity.isEnabled = false
         skipsAssetLoadingAndTiming = testing
+        self.entityLoader = entityLoader
     }
 
-    static func makeForTesting() -> RealityPigVisualController {
-        RealityPigVisualController(testing: true)
+    static func makeForTesting(
+        entityLoader: @escaping EntityLoader = { _, completion in
+            completion(.success(Entity()))
+            return nil
+        }
+    ) -> RealityPigVisualController {
+        RealityPigVisualController(testing: true, entityLoader: entityLoader)
     }
 
     func loadIdlePig() {
@@ -73,9 +85,9 @@ final class RealityPigVisualController {
         }
     }
 
-    func showSurprised() {
+    func showSurprised(completion: @escaping () -> Void = {}) {
         movementCompletion?.cancel()
-        setPose(.surprised)
+        setPose(.surprised, completion: completion)
     }
 
     func playSurpriseScale() {
@@ -113,25 +125,13 @@ final class RealityPigVisualController {
 
     private func setPose(_ pose: C3PigPose, completion: (() -> Void)? = nil) {
         currentPose = pose
-        guard !skipsAssetLoadingAndTiming else {
-            completion?()
-            return
-        }
-
         modelLoad?.cancel()
-        modelLoad = Entity.loadAsync(named: assetName(for: pose), in: .main)
-            .sink(
-                receiveCompletion: { result in
-                    if case .failure = result {
-                        completion?()
-                    }
-                },
-                receiveValue: { [weak self] entity in
-                    guard let self, self.currentPose == pose else { return }
-                    self.install(entity, for: pose)
-                    completion?()
-                }
-            )
+        modelLoad = entityLoader(assetName(for: pose)) { [weak self] result in
+            guard let self, self.currentPose == pose else { return }
+            guard case let .success(entity) = result else { return }
+            self.install(entity, for: pose)
+            completion?()
+        }
     }
 
     private func assetName(for pose: C3PigPose) -> String {
@@ -168,5 +168,20 @@ final class RealityPigVisualController {
             entity.playAnimation($0.repeat())
         }
         entity.children.forEach(playAnimations(in:))
+    }
+
+    private static func loadEntity(
+        named assetName: String,
+        completion: @escaping (Result<Entity, Error>) -> Void
+    ) -> AnyCancellable? {
+        Entity.loadAsync(named: assetName, in: .main)
+            .sink(
+                receiveCompletion: { result in
+                    if case let .failure(error) = result {
+                        completion(.failure(error))
+                    }
+                },
+                receiveValue: { completion(.success($0)) }
+            )
     }
 }
