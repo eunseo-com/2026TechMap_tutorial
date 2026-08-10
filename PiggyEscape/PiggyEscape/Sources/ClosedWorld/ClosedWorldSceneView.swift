@@ -29,6 +29,10 @@ struct ClosedWorldSceneView: UIViewRepresentable {
         scene.rootNode.addChildNode(light)
 
         view.scene = scene
+        // pointOfView가 비어 있으면 SceneKit이 전체 씬을 자동으로 프레이밍하는
+        // 기본 카메라를 대신 사용한다 — 위에서 공들여 배치한 cameraNode는
+        // 렌더링에 전혀 쓰이지 않고 무시된다. 반드시 명시적으로 지정해야 한다.
+        view.pointOfView = cameraNode
         view.allowsCameraControl = true
         view.autoenablesDefaultLighting = true
 
