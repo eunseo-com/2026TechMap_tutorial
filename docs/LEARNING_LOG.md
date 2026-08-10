@@ -28,6 +28,150 @@
 
 ## 항목
 
+### L-20260810-019 — Task 4 시작 순서의 프로젝트 맥락 문서가 작업 트리에 없음
+
+- 상태: 보류
+- 발생 태스크: Task 4 — SceneKit 나레이션·탭·가짜 숨기·카메라 발견
+- 재현: `sed -n '1,260p' docs/PROJECT_CONTEXT.md`
+- 관찰: `sed: docs/PROJECT_CONTEXT.md: No such file or directory`로 지정 문서를 읽지 못했고, 이어지는 시작 순서 명령은 실행되지 않았음
+- 영향: 시작 순서의 프로젝트 맥락 문서를 현재 브랜치에서 직접 검토할 수 없음
+- 원인/가설: L-20260810-010 및 L-20260810-004와 같이 이 연결 작업 트리에 해당 문서가 포함되지 않은 상태임
+- 조치: 존재하는 `docs/WORK_LOG.md`, Reality escape 설계·구현 계획, Task 4 브리프를 대체 근거로 사용하며 범위를 넓히지 않음
+- 검증: `rg --files -g 'PROJECT_CONTEXT.md' -g 'WORK_LOG.md' -g '*task-4*'`에서 `PROJECT_CONTEXT.md` 부재와 대체 문서 존재를 확인함
+- 배운 점: 시작 필수 문서의 경로 부재는 명령이 중단된 태스크마다 재현·대체 근거를 남기고, 없는 문서를 추정하지 않는다.
+
+### L-20260810-020 — Task 4 시작 전 원격 fetch가 연결 작업 트리 메타데이터 권한으로 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 4 — SceneKit 나레이션·탭·가짜 숨기·카메라 발견
+- 재현: `git fetch --prune origin`
+- 관찰: `error: cannot open '/Users/yang-eunseo/Downloads/SpatialComputing_TechMap/.git/worktrees/ch1-reality-escape/FETCH_HEAD': Operation not permitted`로 원격 참조 갱신 전에 종료됨
+- 영향: 구현 전 원격 변경 동기화 상태를 현재 권한 범위에서 확정할 수 없음
+- 원인/가설: L-20260810-009와 같은 연결 작업 트리 공용 Git 메타데이터 `FETCH_HEAD` 쓰기 경로 권한 제약으로 보임
+- 조치: 공용 Git 메타데이터에 접근 가능한 권한으로 같은 명령을 한 번 재실행해 원격 상태를 확인함
+- 검증: 권한 재실행 `git fetch --prune origin && git status --short`가 성공했고, Task 4 시작 시점의 추적 변경은 기록 문서와 사용자 소유 `.claude/`뿐임을 확인함
+- 배운 점: 시작 순서의 fetch가 권한으로 중단되면 재시도 전에 실패를 기록하고, 성공 여부를 추정하지 않는다.
+
+### L-20260810-021 — Task 4 RED 준비 중 Tuist 세션 상태 디렉터리 쓰기가 거부됨
+
+- 상태: 해결
+- 발생 태스크: Task 4 — SceneKit 나레이션·탭·가짜 숨기·카메라 발견
+- 재현: `tuist generate --no-open`
+- 관찰: `Fatal error: Error raised at top level: Permission denied: /Users/yang-eunseo/.local/state/tuist/sessions/14A284BC-B6AD-49F5-A6B3-B8BD8A84183D`로 생성이 XCTest 실행 전에 종료됨
+- 영향: 새 Task 4 XCTest가 생성 프로젝트에 반영되지 않아 API 부재 RED를 아직 확인하지 못함
+- 원인/가설: Tuist가 연결 작업 트리 밖의 사용자 세션 상태 경로에 쓰기를 시도하지만 현재 파일 권한 범위에 포함되지 않음
+- 조치: 해당 상태 경로에 접근 가능한 권한으로 같은 생성 명령을 재실행한 뒤, 새 Task 4 focused XCTest를 실행함
+- 검증: 권한 재실행 `tuist generate --no-open`가 `✔ Success`로 완료되어 새 Task 4 XCTest와 소스가 생성 프로젝트에 반영됨
+- 배운 점: Tuist의 새 테스트 반영은 생성물 경로뿐 아니라 사용자 세션 상태 쓰기 권한을 먼저 충족해야 한다.
+
+### L-20260810-022 — Task 4 RED XCTest가 Simulator 서비스 접근 제한으로 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 4 — SceneKit 나레이션·탭·가짜 숨기·카메라 발견
+- 재현: `xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/ClosedWorldEscapeTests -only-testing:PiggyEscapeTests/NarrationOverlaySceneTests test`
+- 관찰: `CoreSimulatorService connection became invalid`와 `Error opening log file ... Operation not permitted`가 발생해 새 API 부재 컴파일 단계 전에 XCTest가 종료됨
+- 영향: Task 4의 의도적인 RED가 환경 제약 때문에 아직 관찰되지 않음
+- 원인/가설: Simulator 기기·로그·DerivedData 상태 경로가 현재 파일 권한 범위 밖에 있음
+- 조치: Simulator 서비스와 Xcode 상태 경로에 접근 가능한 권한으로 같은 focused XCTest를 재실행해, 새 API 부재 RED를 확인함
+- 검증: 권한 재실행에서 `C3ClosedWorld`의 `tapPig`, 내레이션·발견·놀람 API와 검사 상태 부재로 테스트 타깃 컴파일이 실패했으며, 상세는 L-20260810-023에 기록함
+- 배운 점: Simulator 기반 RED는 API 부재와 환경 권한 실패를 분리해야 테스트 의도를 보존할 수 있다.
+
+### L-20260810-023 — Task 4 RED XCTest가 새 가짜 숨기·발견 API 부재로 컴파일 실패함
+
+- 상태: 해결
+- 발생 태스크: Task 4 — SceneKit 나레이션·탭·가짜 숨기·카메라 발견
+- 재현: `xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/ClosedWorldEscapeTests -only-testing:PiggyEscapeTests/NarrationOverlaySceneTests test`
+- 관찰: `C3ClosedWorld`에서 `tapPig`, `completeOpeningNarration`, `finishTreeHideForTesting`, `isDiscoveredAfterCameraRotation`, `performSurpriseReaction` 및 검사 상태 `currentPose`, `lastCaption`, `surprisePeakScale`를 찾지 못해 테스트 타깃 컴파일이 중단됨
+- 영향: 나레이션 게이트·나무 도착 뒤 카메라 발견·놀람 연출의 요구 계약이 아직 앱에 없음
+- 원인/가설: Task 3 어댑터는 섬·돼지·카메라까지만 소유하며 Task 4의 상호작용 API와 SpriteKit 오버레이를 아직 구현하지 않았음
+- 조치: 실제 씬의 `HideTree`를 필수로 요구하는 C3 월드 상태/액션과 C3 스타일 `NarrationOverlayScene`, 제스처 어댑터를 구현할 예정임
+- 검증: 구현 뒤 같은 focused XCTest에서 새 API의 컴파일 및 행위 assertion을 확인하고, 전체 XCTest와 앱 빌드를 실행할 예정임
+- 배운 점: SceneKit 타이밍은 XCTest에 직접 의존시키지 않고, 상태·도착 테스트 훅·발견 판정을 결정론적 API로 노출해야 한다.
+
+### L-20260810-024 — Task 4 구현 패치가 기존 ContentView의 정확한 형식 불일치로 적용되지 않음
+
+- 상태: 해결
+- 발생 태스크: Task 4 — SceneKit 나레이션·탭·가짜 숨기·카메라 발견
+- 재현: Task 4 소스·`ContentView.swift`를 함께 갱신하는 `apply_patch`
+- 관찰: `ContentView`의 기존 `ClosedWorldSceneView()` 호출에 이미 `.ignoresSafeArea()` 체인이 있어, 예상한 한 줄 본문과 일치하지 않아 `apply_patch verification failed`로 전체 패치가 적용되지 않음
+- 영향: 새 C3 나레이션·상호작용 소스는 쓰이지 않았고, RED 상태가 유지됨
+- 원인/가설: 패치의 문맥이 기존 SwiftUI 체인을 완전하게 반영하지 못함
+- 조치: 실제 `ContentView.swift`의 네 줄 본문을 확인했고, 정확한 체인을 기준으로 소스 패치를 다시 적용할 예정임
+- 검증: 실패 직후 `test -e .../NarrationOverlayScene.swift`가 `1`을 반환하고 `git diff -- C3ClosedWorld.swift`가 비어 있어 생산 코드가 부분 적용되지 않았음을 확인함
+- 배운 점: 여러 파일을 한 번에 바꿀 때는 SwiftUI modifier 체인까지 정확한 문맥으로 지정하고, 실패 뒤 부분 적용 여부를 확인한다.
+
+### L-20260810-025 — Task 4 GREEN XCTest가 SceneKit 프러스텀 API 수신자 오류로 컴파일 실패함
+
+- 상태: 해결
+- 발생 태스크: Task 4 — SceneKit 나레이션·탭·가짜 숨기·카메라 발견
+- 재현: `xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/ClosedWorldEscapeTests -only-testing:PiggyEscapeTests/NarrationOverlaySceneTests test`
+- 관찰: `C3ClosedWorld.swift:78:28: error: value of type 'SCNNode' has no member 'isInsideFrustum'`로 앱 타깃 컴파일이 중단됨
+- 영향: 나무 도착 뒤 프러스텀·yaw·한 번만 발견하는 GREEN 동작을 테스트할 수 없음
+- 원인/가설: SceneKit의 프러스텀 판정은 돼지 노드가 아니라 카메라 노드에 호출해 검사 대상 노드를 전달하는 API로 선언된 것으로 보임
+- 조치: 로컬 SceneKit Swift interface에서 메서드 선언을 확인한 뒤, 카메라 노드 수신자로 정확히 교체할 예정임
+- 검증: 수정 후 같은 focused XCTest에서 컴파일·발견 assertion을 다시 확인할 예정임
+- 배운 점: 요구 문장의 개념상 주어와 Swift API의 실제 메서드 수신자는 다를 수 있으므로, SceneKit 선언을 먼저 대조한다.
+
+### L-20260810-026 — Task 4 GREEN XCTest가 탭 조상 순회의 optional shadowing 오류로 컴파일 실패함
+
+- 상태: 해결
+- 발생 태스크: Task 4 — SceneKit 나레이션·탭·가짜 숨기·카메라 발견
+- 재현: `xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/ClosedWorldEscapeTests -only-testing:PiggyEscapeTests/NarrationOverlaySceneTests test`
+- 관찰: `C3ClosedWorldSceneView.swift:110`에서 `current`가 `while let`로 shadow된 상수라 `current = current.parent`를 할 수 없고, optional `parent`도 대입되지 않아 앱 타깃 컴파일이 중단됨
+- 영향: 실제 `EscapePig` 자손만 탭을 허용하는 제스처 경로를 포함한 focused XCTest가 실행되지 않음
+- 원인/가설: optional 순회 변수와 unwrap 상수에 같은 식별자를 사용했음
+- 조치: 순회 optional은 `current`, unwrap 상수는 `candidate`로 분리해 부모를 안전하게 대입할 예정임
+- 검증: 수정 후 같은 focused XCTest에서 탭 게이트·나레이션·발견 assertion을 실행할 예정임
+- 배운 점: SceneKit의 부모 체인을 순회할 때 optional 저장 변수와 현재 노드 상수의 이름을 분리하면 Swift shadowing 오류를 피할 수 있다.
+
+### L-20260810-027 — Task 4 GREEN XCTest에서 프러스텀 판정이 발견을 막음
+
+- 상태: 해결
+- 발생 태스크: Task 4 — SceneKit 나레이션·탭·가짜 숨기·카메라 발견
+- 재현: `xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/ClosedWorldEscapeTests -only-testing:PiggyEscapeTests/NarrationOverlaySceneTests test`
+- 관찰: 6개 focused XCTest 중 나레이션·탭·실제 `HideTree`·놀람·오버레이 5개는 통과했으나, `test_cameraDiscoveryNeedsYawChangeAndVisiblePig`에서 π/2 yaw 뒤 `isDiscoveredAfterCameraRotation()`이 `false`이고 포즈가 `idle`로 남아 2개 assertion이 실패함
+- 영향: 돼지가 나무에 도착한 뒤 충분한 카메라 회전으로 발견되는 Task 4 핵심 흐름을 자동 검증하지 못함
+- 원인/가설: renderer 없는 테스트용 직교 프러스텀 기하 판정에서 카메라 방향/좌표 변환 또는 허용 범위가 실제 SceneKit 렌더러와 다르게 계산된 것으로 보임. 실제 `SCNView.isNode(_:insideFrustumOf:)`는 화면이 연결될 때 별도 사용함
+- 조치: 카메라 공간 돼지 좌표와 constraint 평가를 측정했고, renderer가 실제 프러스텀 결과를 주입하도록 단일 경계를 바꿈
+- 검증: 후속 focused 6/6, 전체 44/44 XCTest, iOS Simulator build 성공. renderer 없는 문제의 진단·해결 근거는 L-20260810-028에 남김
+- 배운 점: renderer 안전 단위 테스트의 프러스텀 대체 판정은 실제 화면 경로와 분리하되, 같은 카메라 변환·투영 경계를 수치로 검증해야 한다.
+
+### L-20260810-028 — renderer 없는 프러스텀 진단이 카메라 LookAt 제약의 미평가를 확인함
+
+- 상태: 해결
+- 발생 태스크: Task 4 — SceneKit 나레이션·탭·가짜 숨기·카메라 발견
+- 재현: `xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/ClosedWorldEscapeTests/test_cameraDiscoveryNeedsYawChangeAndVisiblePig test`
+- 관찰: π/2 회전 뒤 카메라는 `(12.020815, 12.0, -12.020815)`, 돼지는 `(-4.2649684, 0.63528, -1.5202962)`였지만 `cameraEuler`는 `(0, 0, 0)`이었다. 단일 테스트는 같은 발견 assertion 2개로 계속 실패함
+- 영향: SceneKit renderer 없이 `SCNLookAtConstraint` 결과를 전제로 한 카메라 공간 변환은 신뢰할 수 없음
+- 원인/가설: `SCNLookAtConstraint`는 renderer/프레임 평가 중 적용되므로 XCTest의 독립 노드 그래프에서 카메라 방향이 갱신되지 않았음. 실제 화면에서는 `SCNView.isNode(_:insideFrustumOf:)`가 renderer의 프러스텀을 판정할 수 있음
+- 조치: 월드의 발견 판정은 프러스텀 결과를 주입받아 fail-closed로 처리하고, C3 SceneKit view가 실제 `SCNView.isNode(_:insideFrustumOf:)` 결과를 제공하게 함. 단위 테스트는 명시적으로 보이는 상태를 주입해 yaw·도착·한 번만 조건을 결정론적으로 검증함
+- 검증: 진단 `print`를 제거하고, 주입된 visible/actual SCNView 경로를 포함해 focused XCTest를 다시 실행할 예정임
+- 배운 점: 렌더러가 소유하는 constraint·frustum 결과는 순수 상태 테스트에서 재계산하지 말고, 실제 어댑터에서 측정해 주입한다.
+
+### L-20260810-029 — Task 4 전체 XCTest는 통과했지만 기존 Simulator 런타임 경고가 출력됨
+
+- 상태: 보류
+- 발생 태스크: Task 4 — SceneKit 나레이션·탭·가짜 숨기·카메라 발견
+- 재현: `xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test`
+- 관찰: 44개 XCTest와 `** TEST SUCCEEDED **`는 확인했지만, `Metadata extraction skipped. No AppIntents.framework dependency found`, `TBB Global TLS count is not == 1`, `UIFocus` 캐시 제한, `UIAccessibilityLoaderWebShared` 중복 구현 경고가 함께 출력됨
+- 영향: Task 4의 C3 숨기·발견 회귀 assertion은 실패하지 않았지만 XCTest 출력이 경고 없이 깨끗하다는 조건은 충족하지 못함
+- 원인/가설: AppIntents 의존성이 없는 앱 타깃과 iOS Simulator 26.5의 기존 런타임 진단으로, Task 4 소스의 컴파일 또는 XCTest assertion 실패는 없음
+- 조치: Task 4 범위 밖의 기존 앱 타깃·Simulator 런타임을 변경하지 않고, 경고를 보류한 채 focused·전체 XCTest의 통과 결과를 유지함
+- 검증: focused `ClosedWorldEscapeTests`/`NarrationOverlaySceneTests` 6/6과 전체 XCTest 44/44가 통과했으며, 새 C3 프러스텀 경로는 `SCNView.isNode(_:insideFrustumOf:)`로 연결됨
+- 배운 점: SceneKit 상호작용 회귀와 Simulator/AppIntents 런타임 경고를 분리해 기록하고, 태스크 범위 밖 경고를 해결하려고 앱 구조를 바꾸지 않는다.
+
+### L-20260810-030 — Task 4의 실제 손가락 제스처·프러스텀 시각 확인은 자동 빌드로 대체할 수 없음
+
+- 상태: 보류
+- 발생 태스크: Task 4 — SceneKit 나레이션·탭·가짜 숨기·카메라 발견
+- 재현: iPhone 17 Pro Simulator에서 C3 섬을 표시한 뒤, 나레이션 종료 후 돼지 모델 자손을 탭하고 화면 폭의 약 1/2를 팬해 발견 자막·확대를 관찰하는 수동 절차
+- 관찰: 이 작업에서는 focused 6/6, 전체 44/44 XCTest와 iOS Simulator `xcodebuild build` 성공을 확인했지만, 터치 좌표의 실제 hitTest·렌더러 프러스텀·SpriteKit 프레임 완료를 수동 조작으로 촬영하지는 않았음
+- 영향: 자동 검증은 상태·액션 키·카피·실제 `SCNView.isNode(_:insideFrustumOf:)` 연결을 증명하지만, 실제 화면에서 돼지가 나무 뒤에 가려졌다가 팬으로 보이는 연출의 시각 품질은 확정하지 못함
+- 원인/가설: SceneKit constraint·renderer 프러스텀·SpriteKit 액션은 테스트용 독립 노드 그래프와 달리 표시 중인 `SCNView` 프레임에서 평가됨
+- 조치: Task 4 범위의 자동 검증을 완료 근거로 유지하고, 후속 검토 또는 수동 Simulator 세션에서 위 절차를 별도로 확인함. RealityKit·권한 전환은 시작하지 않음
+- 검증: `C3ClosedWorldSceneView`는 실제 뷰의 `isNode(_:insideFrustumOf:)` 결과를 발견 조건에 주입하고, renderer 없는 XCTest는 visible 결과를 명시 주입해 yaw·도착·한 번만 조건을 44개 전체 회귀 안에서 검증함
+- 배운 점: 렌더러 의존 연출은 결정론적 상태 단위 테스트와 실제 화면 수동 확인을 모두 필요로 하며, 전자를 후자로 오인하지 않는다.
+
 ### L-20260810-018 — Task 3 커밋 준비가 연결 작업 트리 index 잠금 권한으로 중단됨
 
 - 상태: 해결

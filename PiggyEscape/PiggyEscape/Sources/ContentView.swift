@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        ClosedWorldSceneView()
+        C3ClosedWorldSceneView()
             .ignoresSafeArea()
     }
 }
