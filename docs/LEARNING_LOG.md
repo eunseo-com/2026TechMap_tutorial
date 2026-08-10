@@ -28,6 +28,42 @@
 
 ## 항목
 
+### L-20260811-087 — worktree 루트에서 XCTest 프로젝트 경로를 찾지 못함
+
+- 상태: 해결
+- 발생 태스크: Task 6 최종 monitor 보수 2차 — 커밋 전 전체 검증
+- 재현: worktree 루트에서 `xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /tmp/piggyescape-task6-monitor-repair2-tests test`를 실행한다.
+- 관찰: XCTest가 시작되기 전에 `xcodebuild: error: 'PiggyEscape.xcodeproj' does not exist.`로 종료했다.
+- 영향: 이 실행은 컴파일·테스트를 수행하지 못했으므로 커밋 전 검증 근거로 사용할 수 없다.
+- 원인/가설: 프로젝트 파일은 worktree 루트가 아니라 `PiggyEscape/PiggyEscape.xcodeproj`에 있으며, 명령의 상대 경로 기준이 한 단계 달랐음이 `rg --files -g 'project.pbxproj' -g '*.xcodeproj' -g 'Project.swift'` 결과로 확인됐다.
+- 조치: 프로젝트 디렉터리 `PiggyEscape`을 명시 workdir로 사용해 같은 scheme·destination·derived data 조건으로 검증을 다시 실행한다.
+- 검증: `PiggyEscape` 디렉터리에서 같은 전체 XCTest가 99/99·0 failures 및 `** TEST SUCCEEDED **`로 끝났고, 같은 destination의 Simulator build도 `** BUILD SUCCEEDED **`로 끝났다.
+- 배운 점: worktree 최상위와 Xcode 프로젝트 최상위를 구분하고, 검증 명령의 상대 경로는 실행 디렉터리와 함께 기록한다.
+
+### L-20260811-086 — invalid reveal 관찰이 직전 visible 안정 frame을 유지함
+
+- 상태: 해결
+- 발생 태스크: Task 6 최종 monitor 보수 2차 — invalid projection 안정성
+- 재현: 최초 block 뒤 임계값을 넘긴 pose에서 valid nonblocking 관찰을 한 번 전달하고, screen-out·camera-behind·중단된 projection을 뜻하는 invalid 관찰 한 번 뒤 같은 pose의 valid nonblocking 관찰을 한 번 전달한다.
+- 관찰: `RealityHideARView.Coordinator.processRevealFrame`의 `guard isObservationValid`가 monitor 호출보다 먼저 return하므로, `RealityRevealMonitor`의 `stableVisibleObservationCount`가 invalid 관찰을 지나도 남는다. 실제 `evaluateReveal`도 projection gate 실패에서 monitor에 아무 신호를 주지 않고 return한다.
+- 영향: 유효 관찰 두 frame이 연속이어야 한다는 계약이 끊긴 projection을 사이에 두고도 충족돼 돼지가 너무 이르게 발견될 수 있다.
+- 원인/가설: invalid을 “monitor 입력 없음”으로 취급해, 기존 blocking pose는 보존해야 하지만 transient visible 안정성만 초기화해야 하는 상태 경계를 모델링하지 않은 것이 원인으로 보인다.
+- 조치: `RealityRevealMonitor.recordInvalidObservation()`이 stable visible count만 0으로 만들고 최초 blocking pose는 보존하게 했다. `processRevealFrame(isObservationValid: false)`와 camera transform·projection gate의 early-return 경로가 이를 명시 호출한다.
+- 검증: RED에서 새 focused 28개 중 이 사례의 두 assertion이 실패했고, 최초 pose latch만 고친 중간 실행에서도 같은 두 failure가 남아 원인을 분리했다. 최종 focused 28/28, 전체 XCTest 99/99·0 failures 및 Simulator build 성공을 확인했다.
+- 배운 점: 관찰을 건너뛰는 것은 상태가 없다는 뜻이 아니다. 연속성 조건이 있으면 invalid frame도 안정성 상태를 명시적으로 갱신해야 한다.
+
+### L-20260811-085 — 계속 가려진 frame이 최초 blocking camera pose를 덮어씀
+
+- 상태: 해결
+- 발생 태스크: Task 6 최종 monitor 보수 2차 — blocking pose cycle 기준
+- 재현: pose A에서 실제 mesh block을 관찰한 뒤, pose B로 0.15m 이상 이동했지만 여전히 block인 frame을 전달하고, B에서 nonblocking 관찰을 두 frame 전달한다.
+- 관찰: 현재 `RealityRevealMonitor.update`는 모든 blocked frame에서 `blockingPose = cameraPose`를 다시 대입한다. 따라서 B가 새 기준이 되어, 사용자가 A→B로 이미 움직였어도 B에서 다시 이동하기 전에는 재발견할 수 없다.
+- 영향: 실제 물체를 따라 움직이며 시야를 찾는 사용자가 가림이 계속되는 동안의 유효한 이동을 잃고 추가 이동을 강요받을 수 있다.
+- 원인/가설: `hasObservedBlockingMesh`가 hide cycle의 최초 block 여부를 표현하지만 `blockingPose` 대입은 이를 guard하지 않아, cycle 시작 기준과 후속 block의 visible 안정성 reset을 한 분기로 처리한 것이 원인으로 보인다.
+- 조치: 최초 실제 block에서만 `blockingPose`를 latch하고 후속 block은 stable visible count만 reset하도록 바꿨다. 새 hide cycle은 기존 `RealityRevealMonitor()` 재생성 경계에서 latch를 비운다.
+- 검증: RED에서 새 focused 28개 중 A block → B block → B visible 두 frame 사례의 assertion 1건이 실패했다. latch만 적용한 중간 실행에서 이 사례는 통과했고 invalid 관찰의 두 failure만 남아 변경 효과를 분리했다. 최종 focused 28/28, 전체 XCTest 99/99·0 failures 및 Simulator build 성공을 확인했다.
+- 배운 점: cycle의 기준 pose와 frame마다 초기화해야 하는 안정성 counter는 별도 상태다. 하나의 block 분기에서 함께 갱신하면 사용자의 이미 수행한 이동을 잃을 수 있다.
+
 ### L-20260811-084 — focused XCTest가 Simulator 서비스 접근 제한으로 시작 전에 중단됨
 
 - 상태: 해결

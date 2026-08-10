@@ -228,8 +228,14 @@ struct RealityHideARView: UIViewRepresentable {
             pigDistance: Float,
             cameraPose: RealityCameraPose
         ) -> Bool {
-            guard isObservationValid,
-                  status == .hidden,
+            guard status == .hidden else {
+                return false
+            }
+            guard isObservationValid else {
+                processInvalidRevealObservation()
+                return false
+            }
+            guard
                   revealMonitor.update(
                     meshDistance: meshDistance,
                     pigDistance: pigDistance,
@@ -427,14 +433,20 @@ struct RealityHideARView: UIViewRepresentable {
 
         private func evaluateReveal(in arView: ARView) {
             let pigPosition = visualController.worldPosition
-            guard let cameraTransform = arView.session.currentFrame?.camera.transform else { return }
+            guard let cameraTransform = arView.session.currentFrame?.camera.transform else {
+                processInvalidRevealObservation()
+                return
+            }
             let screenPoint = arView.project(pigPosition)
             guard RealityProjectionGate.canObserve(
                 projectedPoint: screenPoint,
                 viewportBounds: arView.bounds,
                 pigPosition: pigPosition,
                 cameraTransform: cameraTransform
-            ), let screenPoint else { return }
+            ), let screenPoint else {
+                processInvalidRevealObservation()
+                return
+            }
 
             let cameraPosition = Self.position(from: cameraTransform)
             let cameraForward = -SIMD3(
@@ -457,6 +469,11 @@ struct RealityHideARView: UIViewRepresentable {
                     forward: cameraForward
                 )
             )
+        }
+
+        private func processInvalidRevealObservation() {
+            guard status == .hidden else { return }
+            revealMonitor.recordInvalidObservation()
         }
 
         private static func position(from transform: simd_float4x4) -> SIMD3<Float> {

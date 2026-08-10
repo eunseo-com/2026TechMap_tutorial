@@ -213,4 +213,18 @@ final class RealityHidePlannerTests: XCTestCase {
         XCTAssertFalse(monitor.update(meshDistance: nil, pigDistance: 2, cameraPose: secondMove))
         XCTAssertTrue(monitor.update(meshDistance: nil, pigDistance: 2, cameraPose: secondMove))
     }
+
+    func test_revealMonitorLatchesTheFirstBlockingPoseForItsHideCycle() {
+        var monitor = RealityRevealMonitor()
+        let firstBlockingPose = RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
+        let stillBlockedAfterMoving = RealityCameraPose(
+            position: SIMD3(0.15, 0, 0),
+            forward: SIMD3(0, 0, -1)
+        )
+
+        XCTAssertFalse(monitor.update(meshDistance: 1, pigDistance: 2, cameraPose: firstBlockingPose))
+        XCTAssertFalse(monitor.update(meshDistance: 1, pigDistance: 2, cameraPose: stillBlockedAfterMoving))
+        XCTAssertFalse(monitor.update(meshDistance: nil, pigDistance: 2, cameraPose: stillBlockedAfterMoving))
+        XCTAssertTrue(monitor.update(meshDistance: nil, pigDistance: 2, cameraPose: stillBlockedAfterMoving))
+    }
 }

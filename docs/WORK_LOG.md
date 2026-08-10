@@ -4,13 +4,13 @@
 
 ## 현재 인수인계
 
-- 상태: Task 6 최종 통합 리뷰 보수 완료, 독립 검토 대기
-- 진행 중 범위: 앱 진입점은 `EscapeRootView` 하나다. C3 발견 callback은 놀란 상태를 기록하고 0.70초 페이드가 끝난 뒤에만 카메라 권한을 한 번 요청한다. 허용 시 `RealityHideARView`를 자동으로 열고 스캔 준비·타깃 수락·돼지 도착·재발견·오류 callback을 상태 순서로 연결한다. RealityKit은 첫 `ARMeshAnchor` 또는 분류된 수평 floor anchor를 관찰한 뒤에만 스캔 준비 callback을 한 번 전달한다. 실제 물체 선택에는 회전된 AR floor footprint 안의 동일 XZ를 floor Y로 투영하며, anchor 중심이 아닌 `planeExtent`의 width·height·Y축 회전을 사용한다. 숨은 뒤 재발견은 실제 camera pose가 이전 block 시점에서 0.15m 이상 이동하거나 15° 이상 회전하고 두 frame 연속 nonblocking일 때 한 번만 발생한다. 사용자가 `설정 열기`를 탭해 Settings 복귀 대기를 남긴 경우에만 다음 active가 현재 권한을 한 번 읽고, 허용이면 요청·Settings 재열기 없이 한 번 AR 스캔으로 전환한다. Settings를 열지 않은 active와 대기 소비 뒤의 active는 거부·제한 상태에서도 조회하지 않으며, 두 번째 명시적 Settings 탭은 새 1회 조회를 허용한다. AR 외부 callback은 다음 MainActor turn의 취소 가능한 relay를 거쳐 SwiftUI 생성·갱신 중 루트 상태를 바꾸지 않으며, AR 화면 해제 뒤 예약된 callback은 폐기한다. 현실 재발견에는 `ARView` 컨테이너 1.12→1.0 확대가 추가됐고 실제 AR camera transform은 변경하지 않으며 Reduce Motion에서는 화면 확대를 생략한다. DocC는 같은 흐름을 C3 섬·카메라 발견·권한 전환·실제 메쉬·물리적 재발견의 다섯 장면으로 설명한다.
+- 상태: Task 6 최종 monitor 보수 2차 완료, 독립 검토 대기
+- 진행 중 범위: 앱 진입점은 `EscapeRootView` 하나다. C3 발견 callback은 놀란 상태를 기록하고 0.70초 페이드가 끝난 뒤에만 카메라 권한을 한 번 요청한다. 허용 시 `RealityHideARView`를 자동으로 열고 스캔 준비·타깃 수락·돼지 도착·재발견·오류 callback을 상태 순서로 연결한다. RealityKit은 첫 `ARMeshAnchor` 또는 분류된 수평 floor anchor를 관찰한 뒤에만 스캔 준비 callback을 한 번 전달한다. 실제 물체 선택에는 회전된 AR floor footprint 안의 동일 XZ를 floor Y로 투영하며, anchor 중심이 아닌 `planeExtent`의 width·height·Y축 회전을 사용한다. 숨은 뒤 재발견은 최초로 실제 가림이 확인된 camera pose를 hide cycle 동안 기준으로 삼고, 실제 camera pose가 그 지점에서 0.15m 이상 이동하거나 15° 이상 회전한 뒤 두 frame 연속 nonblocking일 때 한 번만 발생한다. 이후 blocked frame은 visible 안정 count만 초기화하며, camera transform 부재·screen-out·camera-behind 같은 invalid 관찰도 그 count만 초기화하고 최초 pose는 보존한다. 사용자가 `설정 열기`를 탭해 Settings 복귀 대기를 남긴 경우에만 다음 active가 현재 권한을 한 번 읽고, 허용이면 요청·Settings 재열기 없이 한 번 AR 스캔으로 전환한다. Settings를 열지 않은 active와 대기 소비 뒤의 active는 거부·제한 상태에서도 조회하지 않으며, 두 번째 명시적 Settings 탭은 새 1회 조회를 허용한다. AR 외부 callback은 다음 MainActor turn의 취소 가능한 relay를 거쳐 SwiftUI 생성·갱신 중 루트 상태를 바꾸지 않으며, AR 화면 해제 뒤 예약된 callback은 폐기한다. 현실 재발견에는 `ARView` 컨테이너 1.12→1.0 확대가 추가됐고 실제 AR camera transform은 변경하지 않으며 Reduce Motion에서는 화면 확대를 생략한다. DocC는 같은 흐름을 C3 섬·카메라 발견·권한 전환·실제 메쉬·물리적 재발견의 다섯 장면으로 설명한다.
 - 실패 기록: `docs/LEARNING_LOG.md`에 실패·검증 한계의 재현 조건·원인/가설·조치·재발 방지 근거를 기록한다.
-- 마지막 완료 범위: Task 6 최종 통합 리뷰 보수 — AR floor footprint, 실제 camera pose 기반 재발견, 공간 관찰 뒤 scan readiness.
-- 마지막 검증: `xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/RealityHidePlannerTests -only-testing:PiggyEscapeTests/RealityHideARViewCoordinatorTests test`가 focused 26/26, 0 failures 및 `** TEST SUCCEEDED **`; 이어 `-derivedDataPath /tmp/piggyescape-task6-repair-tests test`가 전체 97/97, 0 failures 및 `** TEST SUCCEEDED **`; 같은 destination의 `-derivedDataPath /tmp/piggyescape-task6-repair-build build`가 `** BUILD SUCCEEDED **`로 완료됐다.
+- 마지막 완료 범위: Task 6 최종 monitor 보수 2차 — 최초 blocking pose latch와 invalid 관찰 안정성 reset.
+- 마지막 검증: `cd PiggyEscape && xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/RealityHidePlannerTests -only-testing:PiggyEscapeTests/RealityHideARViewCoordinatorTests test`가 focused 28/28, 0 failures 및 `** TEST SUCCEEDED **`; 이어 `-derivedDataPath /tmp/piggyescape-task6-monitor-repair2-tests test`가 전체 99/99, 0 failures 및 `** TEST SUCCEEDED **`; 같은 destination의 `-derivedDataPath /tmp/piggyescape-task6-monitor-repair2-build build`가 `** BUILD SUCCEEDED **`로 완료됐다. worktree 루트에서 프로젝트 상대 경로를 지정한 재실행 1회는 테스트 시작 전 중단됐고, 올바른 `PiggyEscape` 디렉터리에서 전체 XCTest 99/99와 build를 다시 성공시켰다(L-20260811-087).
 - 다음 시작점: 이 보수를 독립 검토한 뒤 LiDAR 지원 실기기에서 아래 수용 목록을 관찰해 결과·기기·OS를 기록한다.
-- 차단 요소: 실제 카메라 권한 UI·0.70초 전환·Settings 복귀·1.12 화면 확대·LiDAR 메쉬·물리 오클루전은 관찰 전까지 `실기기 대기`다. 실제 floor 분류·planeExtent 회전·메쉬 가림·0.15m/15° 재발견 임계값은 자동 테스트로 계약을 보호하지만 실기기 체감과 센서 동작은 아직 검증하지 않았다. DocC는 새 이미지 에셋을 추가하지 않는 제약 때문에 Chapter Image 경고 1건을 남긴다.
+- 차단 요소: 실제 카메라 권한 UI·0.70초 전환·Settings 복귀·1.12 화면 확대·LiDAR 메쉬·물리 오클루전은 관찰 전까지 `실기기 대기`다. 실제 floor 분류·planeExtent 회전·메쉬 가림·최초 block 기준 0.15m/15° 재발견·시야 이탈 뒤 안정 관찰 reset은 자동 테스트로 계약을 보호하지만 실기기 체감과 센서 동작은 아직 검증하지 않았다. DocC는 새 이미지 에셋을 추가하지 않는 제약 때문에 Chapter Image 경고 1건을 남긴다.
 
 ### 실기기 수용 목록 — 실기기 대기
 
@@ -23,6 +23,8 @@
 - [ ] 실제 물체의 수직 옆면을 탭하면 돼지가 반대편 바닥으로 걸어간다.
 - [ ] 초기 시점에서 실제 물체의 LiDAR 메쉬가 돼지를 가린다.
 - [ ] 사용자가 옆으로 이동해 다시 볼 때 놀란 모델·자막·1.5배 돼지 확대·1.12배 화면 확대가 한 번 실행되고 복귀한다.
+- [ ] 가려진 채로 0.15m 이상 이동하거나 15° 이상 회전한 뒤 돼지가 보이면, 추가 이동 없이 연속된 두 유효 관찰 뒤에만 한 번 발견된다.
+- [ ] 돼지가 화면 밖·카메라 뒤로 잠시 벗어난 뒤 다시 보이면, 그 전후의 유효 관찰을 합쳐 조기 발견하지 않고 복귀 뒤 두 유효 관찰을 새로 요구한다.
 - [ ] LiDAR 미지원, 수평면 탭, 너무 가까운 탭, 바닥 추적 부족, 돼지 에셋 로드 실패 안내와 재시도 경로를 관찰한다.
 
 ### Task 7에서 해결한 항목
@@ -36,11 +38,13 @@
 1. **바닥 footprint** — floor anchor 중심 대신 선택 지점을 local footprint와 비교한다. 큰 바닥의 유효 지점은 수용하고, 중심 근처라도 footprint 밖인 지점은 거절한다. iOS 16 이후 `planeExtent`의 width·height·Y축 회전을 반영하며, 가장자리 2cm만 tracking jitter 여유로 둔다.
 2. **물리적 재발견** — 한 frame의 mesh hit 누락만으로는 발견되지 않는다. 이전 block camera pose에서 0.15m 이동 또는 15° 회전 뒤 두 frame 연속 nonblocking일 때만 한 번 재발견하며, 중간 block은 안정 관찰을 초기화한다.
 3. **스캔 준비 시점** — AR 세션 시작 성공이 아니라 첫 mesh 또는 분류된 수평 floor 관찰을 스캔 준비로 정의했다. readiness callback은 한 번만 전달하고 view stop 시 관찰 subscription을 취소한다.
+4. **재발견 cycle 기준** — 최초 실제 block의 camera pose를 hide cycle 동안 latch한다. 후속 block과 invalid projection은 visible 안정 count만 초기화하므로, 이미 가려진 상태에서 사용자가 한 이동과 최초 block 기준을 잃지 않으면서도 끊긴 frame을 연속 관찰로 세지 않는다.
 
 ## 작업 이력
 
 | 날짜 | 작업 범위 | 결과 | 검증 | 다음 시작점 |
 | --- | --- | --- | --- | --- |
+| 2026-08-11 | Task 6 최종 monitor 보수 2차 — 최초 block pose·invalid 관찰 | 최초 실제 block pose를 cycle 기준으로 latch하고, 후속 block은 visible 안정성만 reset하도록 수정함. camera transform 부재·projection 실패·명시 invalid 관찰도 기준 pose를 보존하면서 안정 count만 초기화함 | RED focused 28개 중 3 assertion failures, latch만 적용한 중간 실행에서 invalid 2 failures만 남는 것을 확인한 뒤 focused 28/28, 전체 XCTest 99/99·0 failures, iPhone 17 Pro Simulator build 성공. worktree 루트의 프로젝트 경로 오류는 테스트 시작 전 중단됐으며, 올바른 디렉터리에서 전체 검증을 다시 성공시킴. L-20260811-085~087 | 독립 검토 후 LiDAR 지원 실기기에서 최초 block 기준 이동·시야 이탈 reset을 포함한 수용 목록 관찰 |
 | 2026-08-11 | Task 6 최종 통합 리뷰 보수 — floor footprint·물리적 재발견·scan readiness | AR floor를 anchor 중심이 아닌 회전된 local footprint로 판정하고 선택 XZ를 floor Y에 투영함. actual camera position/forward 기반으로 0.15m 또는 15° 이동 뒤 두 frame 연속 visible일 때만 재발견하며, 첫 mesh/floor 관찰 뒤에만 스캔 준비를 알림 | 타입 부재 RED와 compiler type-check·Simulator 접근 실패를 학습 기록으로 남긴 뒤 focused 26/26, 전체 XCTest 97/97·0 failures, iPhone 17 Pro Simulator build 성공. L-20260811-080~084 | 독립 검토 후 LiDAR 지원 실기기에서 floor footprint·mesh occlusion·재발견 임계값을 관찰 |
 | 2026-08-11 | Task 7 보수 2차 — 명시적 Settings 복귀 1회 조회 | 기존 `.cameraDenied`만으로 active마다 권한을 조회하던 회귀를 수정함. `설정 열기`의 명시적 탭에서만 1회 복귀 대기를 만들고, 다음 active가 이를 조회 전에 소비한다. Settings 미탭·소비 후 active는 무조회이며, 두 번째 탭은 새 1회 조회를 허용함 | focused RED 16개 중 3 failures 뒤 `EscapeRootCoordinatorTests` focused 16/16, 전체 XCTest 87/87·0 failures, iPhone 17 Pro Simulator build 성공. 원인·기존 잘못된 테스트 기대값·수정 근거는 L-20260811-079 | 보수 2차 독립 검토 후 L-20260811-076 RealityKit readiness 설계 및 실기기 수용 목록 관찰 |
 | 2026-08-11 | Task 7 보수 — Settings 권한 복귀와 AR 외부 callback 수명 | Settings에서 카메라를 허용한 뒤 active로 돌아오면 현재 권한만 다시 읽어 한 번 AR 스캔으로 전환하고, 권한 미변경·제한·이미 AR 상태에서는 요청·Settings 재열기·중복 전환을 하지 않게 함. `UIViewRepresentable`에서 온 모든 AR callback은 다음 MainActor turn의 취소 가능한 relay로 보내고 화면 해제 뒤 stale callback을 버림 | type 부재 RED 뒤 `EscapeRootCoordinatorTests` focused 14/14, 전체 XCTest 85/85·0 failures, iPhone 17 Pro Simulator build 성공. 실패·해결·실제 mesh 준비 한계는 L-20260811-073~076 | 보수 독립 검토 후 L-20260811-076 RealityKit readiness 설계 및 실기기 수용 목록 관찰 |

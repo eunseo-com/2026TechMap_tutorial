@@ -131,7 +131,9 @@ struct RealityRevealMonitor {
         let blocked = meshDistance.map { $0 + 0.03 < pigDistance } ?? false
         if blocked {
             hasObservedBlockingMesh = true
-            blockingPose = cameraPose
+            if blockingPose == nil {
+                blockingPose = cameraPose
+            }
             stableVisibleObservationCount = 0
             return false
         }
@@ -150,6 +152,10 @@ struct RealityRevealMonitor {
         }
         hasReportedReveal = true
         return true
+    }
+
+    mutating func recordInvalidObservation() {
+        stableVisibleObservationCount = 0
     }
 
     private func hasMeaningfulViewpointChange(

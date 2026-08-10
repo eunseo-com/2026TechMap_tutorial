@@ -70,6 +70,22 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
         XCTAssertEqual(visualController.surpriseRestoreScale, 1.0, accuracy: 0.0001)
     }
 
+    func test_invalidRevealObservationResetsVisibleStabilityButKeepsTheBlockingPose() {
+        let coordinator = RealityHideARView.Coordinator(
+            meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
+            visualController: RealityPigVisualController.makeForTesting()
+        )
+        coordinator.acceptHideTarget(destination: SIMD3(0, 0, -2), initialPosition: SIMD3(0, 0, -0.8))
+        let blockingPose = RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
+        let movedPose = RealityCameraPose(position: SIMD3(0.15, 0, 0), forward: SIMD3(0, 0, -1))
+
+        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: true, meshDistance: 1, pigDistance: 2, cameraPose: blockingPose))
+        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: true, meshDistance: nil, pigDistance: 2, cameraPose: movedPose))
+        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: false, meshDistance: nil, pigDistance: 2, cameraPose: movedPose))
+        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: true, meshDistance: nil, pigDistance: 2, cameraPose: movedPose))
+        XCTAssertTrue(coordinator.processRevealFrame(isObservationValid: true, meshDistance: nil, pigDistance: 2, cameraPose: movedPose))
+    }
+
     func test_invalidProjectionDoesNotConsumeVisibleFrameAfterBlock() {
         let coordinator = RealityHideARView.Coordinator(
             meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
