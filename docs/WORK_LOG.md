@@ -4,11 +4,11 @@
 
 ## 현재 인수인계
 
-- 상태: Chapter 1 Task 8 완료
-- 진행 중 범위: Chapter 1 `ClosedWorld` 구현과 DocC 카탈로그(Task 1~8)를 완료했다.
+- 상태: Chapter 1 구현·DocC 카탈로그 완료, Draft PR의 최종 보완 대기
+- 진행 중 범위: Chapter 1 `ClosedWorld` 구현과 DocC 카탈로그(Task 1~8)를 완료했다. 최종 검토에서 확인한 보완 항목을 별도 커밋으로 처리한 뒤 병합 준비를 마친다.
 - 마지막 완료 범위: Task 8 — Chapter 1 DocC 튜토리얼 카탈로그, 5개 현재 소스 스니펫, Tuist 타깃 인식 설정.
 - 마지막 검증: `tuist generate --no-open` 성공. `xcodebuild docbuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /tmp/piggyescape-docbuild`가 `.doccarchive`를 만들고 `** BUILD DOCUMENTATION SUCCEEDED **`로 완료했다.
-- 다음 시작점: Chapter 1 결과물을 검토하거나 다음 챕터의 별도 설계를 시작한다.
+- 다음 시작점: 가짜 소파 바닥 정렬, 실제 장면의 NodeInspector 실행 예시, DocC의 가짜 소파 코드·화면 연결 설명, 공통 인수인계 문서 통합을 보완하고 재검토한다.
 - 차단 요소: 없음.
 
 ### Task 7에서 해결한 항목
@@ -21,6 +21,7 @@
 
 | 날짜 | 작업 범위 | 결과 | 검증 | 다음 시작점 |
 | --- | --- | --- | --- | --- |
+| 2026-08-10 | Chapter 1 최종 검토 | 가짜 소파 바닥 정렬, 실제 노드 구조 탐구 실행, DocC 단계 완결성, 공통 인수인계 문서 통합의 보완 필요를 확인 | 전체 변경·문서·검증 근거 검토 | 보완 커밋과 재검토 |
 | 2026-08-10 | Chapter 1 Task 8 | Chapter 1 DocC 튜토리얼 카탈로그와 현재 구현을 반영한 5개 코드 스니펫을 추가하고 앱 타깃에 등록함 | `tuist generate --no-open` 성공, `xcodebuild docbuild`가 `.doccarchive`를 생성하고 성공으로 완료 | Chapter 1 결과물 검토 또는 다음 챕터 설계 |
 | 2026-08-10 | Chapter 1 Task 7 최종 재검토 | 구현·변환·카메라·인터랙션 회귀 검토를 마침. 생성물 제외 규칙과 테스트 추적 상태를 보완함 | 26/26 테스트 통과 결과와 변경 내용을 재검토 | Task 8 |
 | 2026-08-10 | Chapter 1 Task 7 보정·재검증 | Blender 좌표계 보정으로 바닥·돼지를 방 바닥에 맞추고, 초기 프레임에 돼지를 표시. Task 7 탭 연결 테스트 추가 | `tuist generate --no-open`, `xcodebuild ... build` 성공, `xcodebuild ... test` 26/26 통과, Simulator 장면 확인 | Task 7 최종 재검토·커밋 후 Task 8 |
