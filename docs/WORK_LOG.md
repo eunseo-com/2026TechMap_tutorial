@@ -4,13 +4,13 @@
 
 ## 현재 인수인계
 
-- 상태: Task 8 — C3→RealityKit DocC·공통 인수인계·자동 검증 기록 완료, 실기기 수용 검증 대기
-- 진행 중 범위: 앱 진입점은 `EscapeRootView` 하나다. C3 발견 callback은 놀란 상태를 기록하고 0.70초 페이드가 끝난 뒤에만 카메라 권한을 한 번 요청한다. 허용 시 `RealityHideARView`를 자동으로 열고 스캔 준비·타깃 수락·돼지 도착·재발견·오류 callback을 상태 순서로 연결한다. 현실 재발견에는 `ARView` 컨테이너 1.12→1.0 확대가 추가됐고 실제 AR camera transform은 변경하지 않으며 Reduce Motion에서는 화면 확대를 생략한다. DocC는 같은 흐름을 C3 섬·카메라 발견·권한 전환·실제 메쉬·물리적 재발견의 다섯 장면으로 설명한다.
+- 상태: Task 7 보수 — Settings 권한 복귀와 AR 외부 callback 수명 구현 완료, 독립 검토 대기
+- 진행 중 범위: 앱 진입점은 `EscapeRootView` 하나다. C3 발견 callback은 놀란 상태를 기록하고 0.70초 페이드가 끝난 뒤에만 카메라 권한을 한 번 요청한다. 허용 시 `RealityHideARView`를 자동으로 열고 스캔 준비·타깃 수락·돼지 도착·재발견·오류 callback을 상태 순서로 연결한다. 앱이 Settings에서 active로 복귀할 때는 `.cameraDenied` 상태에서만 현재 권한을 다시 읽고, 허용이면 요청·Settings 재열기 없이 한 번만 AR 스캔으로 전환한다. AR 외부 callback은 다음 MainActor turn의 취소 가능한 relay를 거쳐 SwiftUI 생성·갱신 중 루트 상태를 바꾸지 않으며, AR 화면 해제 뒤 예약된 callback은 폐기한다. 현실 재발견에는 `ARView` 컨테이너 1.12→1.0 확대가 추가됐고 실제 AR camera transform은 변경하지 않으며 Reduce Motion에서는 화면 확대를 생략한다. DocC는 같은 흐름을 C3 섬·카메라 발견·권한 전환·실제 메쉬·물리적 재발견의 다섯 장면으로 설명한다.
 - 실패 기록: `docs/LEARNING_LOG.md`에 실패·검증 한계의 재현 조건·원인/가설·조치·재발 방지 근거를 기록한다.
-- 마지막 완료 범위: Task 8 — C3→RealityKit DocC·프로젝트 컨텍스트·자동 회귀 검증 기록.
-- 마지막 검증: `cd PiggyEscape && tuist generate --no-open` 성공. 이어 명시적인 `xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /tmp/piggyescape-reality-tests test`가 79/79, 0 failures 및 `** TEST SUCCEEDED **`; 같은 destination의 `/tmp/piggyescape-reality-build build`가 `** BUILD SUCCEEDED **`; `/tmp/piggyescape-reality-docc` `docbuild`가 archive 생성과 `** BUILD DOCUMENTATION SUCCEEDED **`로 완료됐다. DocC의 Chapter Image 경고 1건과 환경 재시도는 L-20260811-067~070에 기록했다.
-- 다음 시작점: LiDAR 지원 실기기에서 아래 수용 목록을 관찰해 결과·기기·OS를 기록하고, 그 뒤 전체 변경을 독립 검토한다.
-- 차단 요소: 실제 카메라 권한 UI·0.70초 전환·Settings 복귀·1.12 화면 확대·LiDAR 메쉬·물리 오클루전은 관찰 전까지 `실기기 대기`다. DocC는 새 이미지 에셋을 추가하지 않는 제약 때문에 Chapter Image 경고 1건을 남긴다.
+- 마지막 완료 범위: Task 7 보수 — Settings 권한 복귀와 AR 외부 callback 수명.
+- 마지막 검증: `xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /tmp/piggyescape-task7-repair-green -only-testing:PiggyEscapeTests/EscapeRootCoordinatorTests test`가 14/14, 0 failures 및 `** TEST SUCCEEDED **`; 이어 `/tmp/piggyescape-task7-repair-tests test`가 전체 85/85, 0 failures 및 `** TEST SUCCEEDED **`; 같은 destination의 `/tmp/piggyescape-task7-repair-build build`가 `** BUILD SUCCEEDED **`로 완료됐다.
+- 다음 시작점: 이 보수를 독립 검토한 뒤 LiDAR 지원 실기기에서 아래 수용 목록을 관찰해 결과·기기·OS를 기록한다. AR 세션 시작과 실제 공간 재구성 준비를 구분하는 L-20260811-076은 별도 RealityKit 보수 태스크로 설계한다.
+- 차단 요소: 실제 카메라 권한 UI·0.70초 전환·Settings 복귀·1.12 화면 확대·LiDAR 메쉬·물리 오클루전은 관찰 전까지 `실기기 대기`다. `onScanningReady`는 세션 시작만 뜻하며 실제 mesh/frame 준비 기준은 L-20260811-076으로 보류한다. DocC는 새 이미지 에셋을 추가하지 않는 제약 때문에 Chapter Image 경고 1건을 남긴다.
 
 ### 실기기 수용 목록 — 실기기 대기
 
@@ -35,6 +35,7 @@
 
 | 날짜 | 작업 범위 | 결과 | 검증 | 다음 시작점 |
 | --- | --- | --- | --- | --- |
+| 2026-08-11 | Task 7 보수 — Settings 권한 복귀와 AR 외부 callback 수명 | Settings에서 카메라를 허용한 뒤 active로 돌아오면 현재 권한만 다시 읽어 한 번 AR 스캔으로 전환하고, 권한 미변경·제한·이미 AR 상태에서는 요청·Settings 재열기·중복 전환을 하지 않게 함. `UIViewRepresentable`에서 온 모든 AR callback은 다음 MainActor turn의 취소 가능한 relay로 보내고 화면 해제 뒤 stale callback을 버림 | type 부재 RED 뒤 `EscapeRootCoordinatorTests` focused 14/14, 전체 XCTest 85/85·0 failures, iPhone 17 Pro Simulator build 성공. 실패·해결·실제 mesh 준비 한계는 L-20260811-073~076 | 보수 독립 검토 후 L-20260811-076 RealityKit readiness 설계 및 실기기 수용 목록 관찰 |
 | 2026-08-11 | Task 8 — 전체 회귀·실기기 검증과 DocC·인수인계 | 방·가짜 소파 중심 DocC를 C3 섬·나무 뒤 숨기·카메라 발견·권한 전환·실제 메쉬 오클루전·물리적 재발견의 다섯 장면으로 교체하고, `PROJECT_CONTEXT`·트러블슈팅·실기기 수용 목록을 추가함. 실기기 항목은 관찰하지 않아 모두 `실기기 대기`로 유지함 | `tuist generate --no-open` 성공, 명시적 전체 XCTest 79/79·0 failures, iPhone 17 Pro Simulator build 성공, DocC archive 생성·documentation build 성공. 연결 worktree fetch·Simulator 권한 재시도와 Chapter Image 경고 1건은 L-20260811-067~070 | LiDAR 지원 실기기 수용 목록 관찰 후 전체 독립 검토 |
 | 2026-08-11 | Task 7 — 자동 SceneKit→RealityKit 전환과 C3 스타일 안내 | C3 발견 뒤 0.70초 페이드 완료 시점에만 시스템 카메라 권한을 한 번 요청하고, 허용 시 AR 화면을 자동으로 열어 Task 6의 스캔·선택·도착·재발견·오류 callback을 상태 기계에 연결함. 거부·제한 안내와 명시적 Settings 복구, C3 스타일 material 패널, AR 화면 1.12→1.0 확대와 Reduce Motion 대안을 추가하고 `ContentView`를 새 루트로 교체함 | 루트 전환 TDD RED 뒤 focused 8/8, 명시적 Xcode scheme 전체 XCTest 79/79, iOS Simulator build 성공. 실패·환경·접근성 학습은 L-20260811-058~066, 실제 기기 대기는 L-20260811-065 | Task 7 독립 검토 후 Task 8 |
 | 2026-08-11 | Task 6 독립 리뷰 2차 수정 | running·idle·surprised 에셋 실패를 `Result`로 종결해 대기 또는 숨김 상태로 복구하고 Task 7용 `onError`·고정 한국어 메시지를 추가함. 고정 카메라 전방 시작점 대신 선택 면의 카메라 쪽 0.28m·정확한 바닥 Y에서 시작해 반대편 목적지로 걷도록 함 | 결함별 focused RED 뒤 coordinator 10/10, visual 3/3, 전체 XCTest 71/71 및 iOS Simulator build 성공. 원인·학습은 L-20260811-055~057 | Task 6 재검토 후 Task 7 |

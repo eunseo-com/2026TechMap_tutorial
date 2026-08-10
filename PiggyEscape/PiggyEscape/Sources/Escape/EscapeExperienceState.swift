@@ -26,7 +26,8 @@ struct EscapeExperienceMachine {
         case (.walkingBehindTree, .pigReachedTree): state = .hiddenInClosedWorld
         case (.hiddenInClosedWorld, .closedWorldPigDiscovered): state = .discoveredByCamera
         case (.discoveredByCamera, .closedWorldFadeFinished): state = .requestingCameraPermission
-        case (.requestingCameraPermission, .cameraAuthorized): state = .scanningReality
+        case (.requestingCameraPermission, .cameraAuthorized),
+             (.cameraDenied, .cameraAuthorized): state = .scanningReality
         case (.requestingCameraPermission, .cameraDenied): state = .cameraDenied
         case (.scanningReality, .meshSupported): state = .waitingForRealTarget
         case (.scanningReality, .meshUnsupported): state = .lidarUnavailable

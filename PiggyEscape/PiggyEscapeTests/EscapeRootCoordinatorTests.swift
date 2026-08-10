@@ -76,6 +76,80 @@ final class EscapeRootCoordinatorTests: XCTestCase {
         XCTAssertEqual(settings.openCount, 1)
     }
 
+    func test_activeAfterSettingsGrantStartsRealityOnceWithoutAnotherPrompt() {
+        let authorizer = FakeCameraAuthorizer()
+        let settings = FakeSettingsOpener()
+        let coordinator = makeCoordinator(authorizer: authorizer, settings: settings)
+        reachCameraRequest(coordinator)
+        authorizer.resolve(.denied)
+        coordinator.openSettingsForRecovery()
+
+        authorizer.currentAuthorization = .authorized
+        coordinator.applicationDidBecomeActive()
+
+        XCTAssertEqual(coordinator.machine.state, .scanningReality)
+        XCTAssertTrue(coordinator.showsRealityView)
+        XCTAssertEqual(coordinator.message, RealityAvailabilityMessage.scanFirst)
+        XCTAssertEqual(authorizer.requestCount, 1)
+        XCTAssertEqual(authorizer.authorizationQueryCount, 1)
+        XCTAssertEqual(settings.openCount, 1)
+
+        coordinator.applicationDidBecomeActive()
+        XCTAssertEqual(coordinator.machine.state, .scanningReality)
+        XCTAssertEqual(authorizer.requestCount, 1)
+        XCTAssertEqual(authorizer.authorizationQueryCount, 1)
+    }
+
+    func test_activeAfterClosingSettingsWithoutPermissionChangePreservesDeniedRecovery() {
+        let authorizer = FakeCameraAuthorizer()
+        let settings = FakeSettingsOpener()
+        let coordinator = makeCoordinator(authorizer: authorizer, settings: settings)
+        reachCameraRequest(coordinator)
+        authorizer.resolve(.denied)
+        coordinator.openSettingsForRecovery()
+
+        authorizer.currentAuthorization = .denied
+        coordinator.applicationDidBecomeActive()
+        coordinator.applicationDidBecomeActive()
+
+        XCTAssertEqual(coordinator.machine.state, .cameraDenied)
+        XCTAssertEqual(coordinator.message, EscapeRootMessage.cameraDenied)
+        XCTAssertTrue(coordinator.showsSettingsRecovery)
+        XCTAssertEqual(authorizer.requestCount, 1)
+        XCTAssertEqual(authorizer.authorizationQueryCount, 2)
+        XCTAssertEqual(settings.openCount, 1)
+    }
+
+    func test_activeAfterSettingsRestrictionPreservesRestrictedRecovery() {
+        let authorizer = FakeCameraAuthorizer()
+        let coordinator = makeCoordinator(authorizer: authorizer)
+        reachCameraRequest(coordinator)
+        authorizer.resolve(.denied)
+
+        authorizer.currentAuthorization = .restricted
+        coordinator.applicationDidBecomeActive()
+
+        XCTAssertEqual(coordinator.machine.state, .cameraDenied)
+        XCTAssertEqual(coordinator.message, EscapeRootMessage.cameraRestricted)
+        XCTAssertEqual(authorizer.requestCount, 1)
+        XCTAssertEqual(authorizer.authorizationQueryCount, 1)
+    }
+
+    func test_activeAfterInitialAuthorizationDoesNotReenterRealityOrQueryAgain() {
+        let authorizer = FakeCameraAuthorizer()
+        let coordinator = makeCoordinator(authorizer: authorizer)
+        reachCameraRequest(coordinator)
+        authorizer.resolve(.authorized)
+
+        coordinator.applicationDidBecomeActive()
+        coordinator.applicationDidBecomeActive()
+
+        XCTAssertEqual(coordinator.machine.state, .scanningReality)
+        XCTAssertTrue(coordinator.showsRealityView)
+        XCTAssertEqual(authorizer.requestCount, 1)
+        XCTAssertEqual(authorizer.authorizationQueryCount, 0)
+    }
+
     func test_realityCallbacksAdvanceInPhysicalActionOrderAndRevealOnce() {
         let authorizer = FakeCameraAuthorizer()
         let coordinator = makeCoordinator(authorizer: authorizer)
@@ -132,6 +206,37 @@ final class EscapeRootCoordinatorTests: XCTestCase {
         XCTAssertEqual(EscapeRootMotion.realityPeakScale(reduceMotion: true), 1.0, accuracy: 0.0001)
     }
 
+    func test_realityCallbackRelayDefersExternalCallbackUntilTheNextMainActorTurn() {
+        let deferrer = QueuedMainActorDeferrer()
+        let relay = RealityCallbackRelay(deferrer: deferrer)
+        var deliveryCount = 0
+
+        relay.schedule {
+            deliveryCount += 1
+        }
+
+        XCTAssertEqual(deliveryCount, 0)
+        XCTAssertEqual(deferrer.pendingCount, 1)
+
+        deferrer.runNext()
+        XCTAssertEqual(deliveryCount, 1)
+    }
+
+    func test_realityCallbackRelayDropsCallbackQueuedBeforeItsLifetimeEnds() {
+        let deferrer = QueuedMainActorDeferrer()
+        let relay = RealityCallbackRelay(deferrer: deferrer)
+        var deliveryCount = 0
+
+        relay.schedule {
+            deliveryCount += 1
+        }
+        relay.invalidate()
+        relay.activate()
+        deferrer.runNext()
+
+        XCTAssertEqual(deliveryCount, 0)
+    }
+
     private func makeCoordinator(
         authorizer: FakeCameraAuthorizer,
         settings: FakeSettingsOpener? = nil
@@ -152,7 +257,14 @@ final class EscapeRootCoordinatorTests: XCTestCase {
 @MainActor
 private final class FakeCameraAuthorizer: CameraAuthorizing {
     private(set) var requestCount = 0
+    private(set) var authorizationQueryCount = 0
+    var currentAuthorization: CameraAuthorizationResult = .denied
     private var completion: ((CameraAuthorizationResult) -> Void)?
+
+    func currentVideoAuthorization() -> CameraAuthorizationResult {
+        authorizationQueryCount += 1
+        return currentAuthorization
+    }
 
     func requestVideoAccess(
         _ completion: @escaping @MainActor (CameraAuthorizationResult) -> Void
@@ -162,8 +274,28 @@ private final class FakeCameraAuthorizer: CameraAuthorizing {
     }
 
     func resolve(_ result: CameraAuthorizationResult) {
+        currentAuthorization = result
         completion?(result)
         completion = nil
+    }
+}
+
+@MainActor
+private final class QueuedMainActorDeferrer: MainActorCallbackDeferring {
+    private var pending: [@MainActor () -> Void] = []
+
+    var pendingCount: Int {
+        pending.count
+    }
+
+    func enqueue(_ operation: @escaping @MainActor () -> Void) -> Task<Void, Never> {
+        pending.append(operation)
+        return Task {}
+    }
+
+    func runNext() {
+        guard !pending.isEmpty else { return }
+        pending.removeFirst()()
     }
 }
 

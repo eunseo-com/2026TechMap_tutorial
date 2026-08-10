@@ -28,6 +28,90 @@
 
 ## 항목
 
+### L-20260811-078 — 최종 focused XCTest가 Simulator 서비스 접근 제한으로 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 7 보수 — 권한 복귀와 외부 콜백 수명
+- 재현: `PiggyEscape/`에서 `xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /tmp/piggyescape-task7-repair-green -only-testing:PiggyEscapeTests/EscapeRootCoordinatorTests test` 실행
+- 관찰: `CoreSimulatorService connection became invalid`, `Error opening log file ... Operation not permitted`, `Unable to discover any Simulator runtimes`가 출력돼 XCTest assertion 실행 전에 중단됨
+- 영향: 현재 source 수정 뒤 focused XCTest 결과를 sandbox 안에서 확인할 수 없으므로, 앞선 성공 결과만으로 이 재검증을 대체할 수 없음
+- 원인/가설: Simulator 서비스·로그·runtime 상태 경로가 worktree 밖에 있어 sandbox 접근이 거부된 것으로 보이며 L-20260811-069와 같은 환경 제약이 재발함
+- 조치: 실패 기록 뒤 동일한 명시 명령을 Simulator 서비스에 접근 가능한 권한으로 한 번만 재실행함
+- 검증: 권한 재실행에서 focused XCTest 14/14, 전체 XCTest 85/85·0 failures 및 iPhone 17 Pro Simulator build 성공을 확인함
+- 배운 점: 코드 경로가 아니라 Simulator 초기화에서 멈춘 실행은 새 회귀로 분류하지 말고, 현재 명령을 접근 가능한 환경에서 재검증한 뒤에만 완료 근거로 사용한다.
+
+### L-20260811-077 — worktree 루트에서 Xcode 프로젝트 경로를 찾지 못함
+
+- 상태: 해결
+- 발생 태스크: Task 7 보수 — 권한 복귀와 외부 콜백 수명
+- 재현: worktree 루트에서 `xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /tmp/piggyescape-task7-repair-green -only-testing:PiggyEscapeTests/EscapeRootCoordinatorTests test` 실행
+- 관찰: Simulator 서비스 접근 경고 뒤 `xcodebuild: error: 'PiggyEscape.xcodeproj' does not exist.`로 테스트 실행 전에 종료됨
+- 영향: 앱 소스·테스트 컴파일과 assertion은 시작하지 않았으므로, 이 종료를 제품 회귀나 Simulator 결과로 해석할 수 없음
+- 원인/가설: 생성된 Xcode 프로젝트는 worktree 루트가 아닌 `PiggyEscape/` 하위 디렉터리에 있으며, 검증 명령의 작업 디렉터리를 그 위치로 지정하지 않은 것이 확인된 원인임
+- 조치: 임의 경로 탐색이나 프로젝트 복제 없이, 같은 명령을 `PiggyEscape/` 디렉터리에서 다시 실행함
+- 검증: 수정한 작업 디렉터리에서 focused XCTest 14/14, 전체 XCTest 85/85·0 failures 및 iPhone 17 Pro Simulator build 성공을 확인함
+- 배운 점: worktree 이름과 Xcode 프로젝트 디렉터리를 같다고 가정하지 말고, 검증 전 `Project.swift`·생성 `.xcodeproj`의 실제 위치를 기준으로 작업 디렉터리를 고정한다.
+
+### L-20260811-076 — AR 스캔 준비 안내는 세션 실행 직후이며 실제 재구성 준비 완료를 뜻하지 않음
+
+- 상태: 보류
+- 발생 태스크: Task 7 보수 — 권한 복귀와 외부 콜백 수명
+- 재현: `RealityHideARView.Coordinator.attach(to:)`에서 `arView.session.run(...)`와 `onScanningReady()`의 순서를 대조함
+- 관찰: 현재 callback은 세션 실행 직후 발생하며 첫 AR frame·메쉬 재구성·분류된 바닥을 기다리지 않는다. 이번 보수는 SwiftUI update 중 발행을 막기 위해 루트에서 다음 turn으로 옮길 뿐, callback의 RealityKit 의미는 바꾸지 않는다.
+- 영향: 사용자는 AR 화면이 열리자마자 옆면 선택 안내를 볼 수 있으나 실제 세로 메쉬·바닥이 아직 부족하면 기존 재스캔 안내를 받을 수 있다.
+- 원인/가설: Task 6의 `onScanningReady`가 센서 데이터 가용성 대신 AR 세션 시작을 나타내도록 정의돼 있으며, 실제 재구성 준비 기준은 아직 별도 상태로 모델링되지 않았음
+- 조치: Task 7 범위를 넘는 RealityKit 세션·평면·재발견 로직은 변경하지 않는다. 실제 mesh/frame 준비 기준과 안내 시점의 개선은 다음 RealityKit 보수 태스크에서 독립적으로 설계·테스트한다.
+- 검증: 이번 Task 7 repair는 callback 전달을 다음 MainActor turn으로 지연하고 stale callback을 폐기하는 focused XCTest로만 보호한다. 실제 mesh 준비 기준은 실기기 관찰과 별도 테스트가 필요함.
+- 배운 점: AR 세션 시작과 사용자가 행동할 수 있는 공간 재구성 준비 완료를 같은 readiness 용어로 묶지 말고, 후속 설계에서 각각의 관찰 가능한 기준을 둔다.
+
+### L-20260811-075 — actor 격리된 callback deferrer를 relay 기본 인자에서 생성할 수 없음
+
+- 상태: 해결
+- 발생 태스크: Task 7 보수 — 권한 복귀와 외부 콜백 수명
+- 재현: callback relay·현재 권한 조회의 최소 구현 뒤 `EscapeRootCoordinatorTests` focused XCTest 컴파일
+- 관찰: `RealityCallbackRelay.init(deferrer: any MainActorCallbackDeferring = TaskMainActorCallbackDeferrer())`에서 `Call to main actor-isolated initializer 'init()' in a synchronous nonisolated context`가 발생해 앱 모듈 생성이 중단됨
+- 영향: 권한 복귀·callback relay assertion까지 실행하지 못하며, 이 컴파일 실패를 기능 GREEN으로 해석할 수 없음
+- 원인/가설: `MainActorCallbackDeferring` 적합성으로 시스템 deferrer의 생성도 MainActor에 격리됐지만, relay initializer의 기본 인자 평가 지점은 동기 비격리로 처리된 것이 L-20260811-062와 같은 원인임
+- 조치: 기본 인자 생성식을 없애고 MainActor 무인자 initializer에서 시스템 deferrer를 만들며, 테스트용 주입 initializer는 의존성만 받게 분리함
+- 검증: 기본 인자를 제거한 뒤 `EscapeRootCoordinatorTests` focused XCTest 14/14, 전체 XCTest 85/85·0 failures 및 iPhone 17 Pro Simulator build 성공을 확인했고 같은 actor 격리 컴파일 오류는 다시 출력되지 않음
+- 배운 점: MainActor 의존성을 가진 relay·coordinator도 기본 인자 생성으로 편의화하지 말고, 격리된 무인자 경계와 명시적 주입 경계를 나눈다.
+
+### L-20260811-074 — RealityKit 준비 콜백이 SwiftUI 뷰 생성 중 루트 상태를 동기로 바꿈
+
+- 상태: 해결
+- 발생 태스크: Task 7 보수 — 권한 복귀와 외부 콜백 수명
+- 재현: `RealityHideARView.makeUIView` → `Coordinator.attach(to:)` → `onScanningReady()` 호출과 `EscapeRootView`가 전달한 `coordinator.realityScanningDidBecomeReady`를 따라감
+- 관찰: `attach(to:)`는 `makeUIView`의 동기 호출 경로에서 지원 확인 뒤 `onScanningReady()`를 바로 실행한다. 루트는 이를 `@Published machine` 변경으로 연결하므로 SwiftUI가 UIKit 뷰를 생성·갱신하는 같은 turn에 상태를 발행할 수 있다. 미지원 경로의 `onUnavailable()`도 같은 외부 callback 경계를 가진다.
+- 영향: SwiftUI 갱신 중 상태 발행 경고·재렌더링 순서 불안정·dismantle 뒤 이미 예약된 callback이 새 화면 상태를 덮는 위험이 있다.
+- 원인/가설: Task 7 루트가 `UIViewRepresentable` 외부 callback을 UIKit 생성 경계 밖의 다음 MainActor turn으로 넘기지 않고 coordinator 메서드를 직접 전달한 것이 확인된 원인이다.
+- 조치: `RealityHideARView` 내부의 세션·평면·재발견 로직은 변경하지 않는다. 루트 소유의 취소 가능한 callback relay를 추가해 모든 AR 외부 callback을 다음 MainActor turn으로 지연하고, AR 화면 해제·뷰 사라짐 뒤 세대가 다른 callback을 버리도록 한다.
+- 검증: type 부재로 실패한 RED 뒤 relay의 동기 미발행·다음 turn 전달·해제 뒤 stale callback 폐기를 포함한 `EscapeRootCoordinatorTests` focused XCTest 14/14, 전체 XCTest 85/85·0 failures 및 iPhone 17 Pro Simulator build 성공을 확인함. 실제 mesh 준비 기준은 L-20260811-076으로 분리해 보류함.
+- 배운 점: `UIViewRepresentable.makeUIView`에서 온 callback은 MainActor 위에 있더라도 SwiftUI update 중일 수 있으므로, 상태를 직접 발행하지 말고 수명 가드가 있는 다음 turn으로 넘긴다.
+
+### L-20260811-073 — Settings 복귀 후 카메라 허용 상태를 다시 읽지 못함
+
+- 상태: 해결
+- 발생 태스크: Task 7 보수 — 권한 복귀와 외부 콜백 수명
+- 재현: C3 발견 뒤 권한을 거부하고 `설정 열기`를 눌러 앱 Settings에서 카메라를 허용한 다음 앱을 foreground/active로 복귀함
+- 관찰: `openSettingsForRecovery()`는 Settings URL만 열고, `EscapeRootView`에는 `scenePhase`/foreground 관찰이 없다. `EscapeExperienceMachine`도 `.cameraDenied`에서 `.cameraAuthorized`로 가는 전이가 없어, 현재 권한이 허용으로 바뀌어도 `.cameraDenied` 안내에 머문다.
+- 영향: 사용자가 명시적으로 카메라를 허용해도 AR 화면으로 이어지지 않으며, 다시 권한 요청을 시도하는 임시 우회는 시스템 문구·Settings 재열기 규칙을 어길 수 있다.
+- 원인/가설: 초기 권한 요청의 callback만 상태 기계에 연결하고, Settings 복귀라는 별도 lifecycle 경계의 현재 권한 조회와 합법적인 재진입 전이를 설계하지 않은 것이 확인된 원인이다.
+- 조치: prompt-capable 요청과 현재 상태 조회를 `CameraAuthorizing`에서 분리한다. 앱이 active가 될 때 `.cameraDenied`에서만 현재 상태를 읽고 허용이면 한 번만 `.scanningReality`로 전환하며, 거부·제한이면 현재 차단 안내를 유지한다. 이 경로에서는 권한 요청·Settings 열기를 자동 실행하지 않는다.
+- 검증: type 부재로 실패한 RED 뒤 Settings에서 허용 후 active, 변경 없이 Settings 닫기, 제한 상태, 반복 active, 이미 AR에 진입한 상태를 포함한 `EscapeRootCoordinatorTests` focused XCTest 14/14, 전체 XCTest 85/85·0 failures 및 iPhone 17 Pro Simulator build 성공을 확인함.
+- 배운 점: Settings 복구는 URL을 여는 동작으로 끝나지 않으며, 복귀 lifecycle에서 비침습적인 현재 권한 조회와 중복 없는 상태 재진입을 함께 계약해야 한다.
+
+### L-20260811-072 — 공동 시작 문서가 현재 worktree에 없음
+
+- 상태: 보류
+- 발생 태스크: Task 7 보수 — 권한 복귀와 외부 콜백 수명
+- 재현: 저장소 시작 순서에 따라 `씬킷에서_리얼리티킷으로_컨셉노트.md`를 읽으려 했음
+- 관찰: 현재 worktree 루트에 해당 파일이 없어 `sed: ... No such file or directory`로 종료됨
+- 영향: 별도 컨셉 노트를 보조 근거로 읽을 수 없으므로, 현재 승인 설계와 실행 계획만을 구현 근거로 사용해야 함
+- 원인/가설: `docs/PROJECT_CONTEXT.md`가 이미 허용한 현재 브랜치의 문서 부재 상태이며, 작업 시작 시점에는 파일이 제공되지 않았음
+- 조치: 파일을 새로 만들거나 다른 위치의 대화 기록으로 대체하지 않고, `docs/superpowers/specs/2026-08-10-ch1-reality-escape-design.md`와 실행 계획을 현재 범위의 기준으로 사용함
+- 검증: 이번 보수의 변경 범위는 Task 7 루트·상태 전이·테스트·인수인계·학습 기록에 한정함
+- 배운 점: 공동 시작 문서가 없으면 추정으로 복원하지 말고 승인된 설계 명세를 대체 근거로 명시한다.
+
 ### L-20260811-071 — Task 8 문서 staging이 연결 작업 트리 index 잠금 권한으로 중단됨
 
 - 상태: 해결

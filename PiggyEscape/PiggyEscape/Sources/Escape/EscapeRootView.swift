@@ -6,26 +6,40 @@ enum CameraAuthorizationResult: Equatable {
     case authorized
     case denied
     case restricted
+    case notDetermined
 }
 
 @MainActor
 protocol CameraAuthorizing {
+    func currentVideoAuthorization() -> CameraAuthorizationResult
     func requestVideoAccess(
         _ completion: @escaping @MainActor (CameraAuthorizationResult) -> Void
     )
 }
 
 struct SystemCameraAuthorizer: CameraAuthorizing {
+    func currentVideoAuthorization() -> CameraAuthorizationResult {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            .authorized
+        case .denied:
+            .denied
+        case .restricted:
+            .restricted
+        case .notDetermined:
+            .notDetermined
+        @unknown default:
+            .restricted
+        }
+    }
+
     func requestVideoAccess(
         _ completion: @escaping @MainActor (CameraAuthorizationResult) -> Void
     ) {
-        switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized:
-            completion(.authorized)
-        case .denied:
-            completion(.denied)
-        case .restricted:
-            completion(.restricted)
+        let authorization = currentVideoAuthorization()
+        switch authorization {
+        case .authorized, .denied, .restricted:
+            completion(authorization)
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { granted in
                 let result: CameraAuthorizationResult
@@ -38,9 +52,66 @@ struct SystemCameraAuthorizer: CameraAuthorizing {
                 }
                 Task { @MainActor in completion(result) }
             }
-        @unknown default:
-            completion(.restricted)
         }
+    }
+}
+
+@MainActor
+protocol MainActorCallbackDeferring {
+    @discardableResult
+    func enqueue(_ operation: @escaping @MainActor () -> Void) -> Task<Void, Never>
+}
+
+struct TaskMainActorCallbackDeferrer: MainActorCallbackDeferring {
+    @discardableResult
+    func enqueue(_ operation: @escaping @MainActor () -> Void) -> Task<Void, Never> {
+        Task { @MainActor in
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            operation()
+        }
+    }
+}
+
+@MainActor
+final class RealityCallbackRelay: ObservableObject {
+    private let deferrer: any MainActorCallbackDeferring
+    private var generation = 0
+    private var isActive = true
+    private var pendingTasks: [UUID: Task<Void, Never>] = [:]
+
+    init() {
+        deferrer = TaskMainActorCallbackDeferrer()
+    }
+
+    init(deferrer: any MainActorCallbackDeferring) {
+        self.deferrer = deferrer
+    }
+
+    func activate() {
+        guard !isActive else { return }
+        generation &+= 1
+        isActive = true
+    }
+
+    func invalidate() {
+        generation &+= 1
+        isActive = false
+        pendingTasks.values.forEach { $0.cancel() }
+        pendingTasks.removeAll()
+    }
+
+    func schedule(_ operation: @escaping @MainActor () -> Void) {
+        guard isActive else { return }
+        let callbackGeneration = generation
+        let identifier = UUID()
+        let task = deferrer.enqueue { [weak self] in
+            guard let self else { return }
+            self.pendingTasks[identifier] = nil
+            guard self.isActive, self.generation == callbackGeneration else { return }
+            operation()
+        }
+        pendingTasks[identifier] = task
     }
 }
 
@@ -174,6 +245,23 @@ final class EscapeRootCoordinator: ObservableObject {
         settingsOpener.openAppSettings()
     }
 
+    func applicationDidBecomeActive() {
+        guard machine.state == .cameraDenied else { return }
+        let result = cameraAuthorizer.currentVideoAuthorization()
+        cameraAuthorizationResult = result
+        switch result {
+        case .authorized:
+            guard machine.send(.cameraAuthorized) else { return }
+            message = RealityAvailabilityMessage.scanFirst
+        case .denied:
+            message = EscapeRootMessage.cameraDenied
+        case .restricted:
+            message = EscapeRootMessage.cameraRestricted
+        case .notDetermined:
+            message = EscapeRootMessage.cameraDenied
+        }
+    }
+
     private func synchronizeClosedWorldProgress() {
         if machine.state == .openingNarration {
             _ = machine.send(.narrationFinished)
@@ -199,13 +287,17 @@ final class EscapeRootCoordinator: ObservableObject {
         case .restricted:
             guard machine.send(.cameraDenied) else { return }
             message = EscapeRootMessage.cameraRestricted
+        case .notDetermined:
+            return
         }
     }
 }
 
 struct EscapeRootView: View {
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var coordinator: EscapeRootCoordinator
+    @StateObject private var realityCallbacks: RealityCallbackRelay
     @State private var fadeTask: Task<Void, Never>?
     @State private var realityScaleTask: Task<Void, Never>?
     @State private var realityScreenScale: CGFloat = 1
@@ -213,6 +305,7 @@ struct EscapeRootView: View {
     @MainActor
     init() {
         _coordinator = StateObject(wrappedValue: EscapeRootCoordinator())
+        _realityCallbacks = StateObject(wrappedValue: RealityCallbackRelay())
     }
 
     @MainActor
@@ -224,6 +317,7 @@ struct EscapeRootView: View {
             cameraAuthorizer: cameraAuthorizer,
             settingsOpener: settingsOpener
         ))
+        _realityCallbacks = StateObject(wrappedValue: RealityCallbackRelay())
     }
 
     var body: some View {
@@ -251,13 +345,27 @@ struct EscapeRootView: View {
 
             if coordinator.showsRealityView {
                 RealityHideARView(
-                    onScanningReady: coordinator.realityScanningDidBecomeReady,
-                    onTargetAccepted: coordinator.realityTargetDidBecomeAccepted,
-                    onPigReachedTarget: coordinator.realityPigDidReachTarget,
-                    onRevealed: coordinator.realityPigDidBecomeRevealed,
-                    onError: coordinator.realityErrorDidOccur,
-                    onUnavailable: coordinator.realityMeshDidBecomeUnavailable,
-                    onMessage: coordinator.realityMessageDidChange
+                    onScanningReady: {
+                        scheduleRealityCallback { $0.realityScanningDidBecomeReady() }
+                    },
+                    onTargetAccepted: {
+                        scheduleRealityCallback { $0.realityTargetDidBecomeAccepted() }
+                    },
+                    onPigReachedTarget: {
+                        scheduleRealityCallback { $0.realityPigDidReachTarget() }
+                    },
+                    onRevealed: {
+                        scheduleRealityCallback { $0.realityPigDidBecomeRevealed() }
+                    },
+                    onError: {
+                        scheduleRealityCallback { $0.realityErrorDidOccur() }
+                    },
+                    onUnavailable: {
+                        scheduleRealityCallback { $0.realityMeshDidBecomeUnavailable() }
+                    },
+                    onMessage: { message in
+                        scheduleRealityCallback { $0.realityMessageDidChange(message) }
+                    }
                 )
                 .scaleEffect(realityScreenScale)
                 .clipped()
@@ -271,9 +379,24 @@ struct EscapeRootView: View {
             guard sequence > 0 else { return }
             performRealitySurprise()
         }
+        .onChange(of: coordinator.showsRealityView) { _, showsRealityView in
+            if showsRealityView {
+                realityCallbacks.activate()
+            } else {
+                realityCallbacks.invalidate()
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            coordinator.applicationDidBecomeActive()
+        }
+        .onAppear {
+            realityCallbacks.activate()
+        }
         .onDisappear {
             fadeTask?.cancel()
             realityScaleTask?.cancel()
+            realityCallbacks.invalidate()
         }
     }
 
@@ -349,6 +472,15 @@ struct EscapeRootView: View {
             withAnimation(.easeInOut(duration: EscapeRootMotion.surpriseRestoreDuration)) {
                 realityScreenScale = 1
             }
+        }
+    }
+
+    private func scheduleRealityCallback(
+        _ operation: @escaping @MainActor (EscapeRootCoordinator) -> Void
+    ) {
+        realityCallbacks.schedule { [weak coordinator] in
+            guard let coordinator else { return }
+            operation(coordinator)
         }
     }
 }
