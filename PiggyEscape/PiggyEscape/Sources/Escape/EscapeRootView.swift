@@ -170,6 +170,7 @@ final class EscapeRootCoordinator: ObservableObject {
     private let cameraAuthorizer: any CameraAuthorizing
     private let settingsOpener: any AppSettingsOpening
     private var hasRequestedCamera = false
+    private var awaitingSettingsReturn = false
 
     init() {
         cameraAuthorizer = SystemCameraAuthorizer()
@@ -242,11 +243,14 @@ final class EscapeRootCoordinator: ObservableObject {
 
     func openSettingsForRecovery() {
         guard showsSettingsRecovery else { return }
+        awaitingSettingsReturn = true
         settingsOpener.openAppSettings()
     }
 
     func applicationDidBecomeActive() {
-        guard machine.state == .cameraDenied else { return }
+        guard machine.state == .cameraDenied,
+              awaitingSettingsReturn else { return }
+        awaitingSettingsReturn = false
         let result = cameraAuthorizer.currentVideoAuthorization()
         cameraAuthorizationResult = result
         switch result {

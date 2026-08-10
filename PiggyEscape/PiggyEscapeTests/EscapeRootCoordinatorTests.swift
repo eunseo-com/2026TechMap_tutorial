@@ -116,23 +116,65 @@ final class EscapeRootCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.message, EscapeRootMessage.cameraDenied)
         XCTAssertTrue(coordinator.showsSettingsRecovery)
         XCTAssertEqual(authorizer.requestCount, 1)
-        XCTAssertEqual(authorizer.authorizationQueryCount, 2)
+        XCTAssertEqual(authorizer.authorizationQueryCount, 1)
         XCTAssertEqual(settings.openCount, 1)
     }
 
-    func test_activeAfterSettingsRestrictionPreservesRestrictedRecovery() {
+    func test_activeWithoutSettingsRecoveryTapDoesNotQueryCurrentAuthorization() {
         let authorizer = FakeCameraAuthorizer()
         let coordinator = makeCoordinator(authorizer: authorizer)
         reachCameraRequest(coordinator)
         authorizer.resolve(.denied)
 
+        coordinator.applicationDidBecomeActive()
+        coordinator.applicationDidBecomeActive()
+
+        XCTAssertEqual(coordinator.machine.state, .cameraDenied)
+        XCTAssertEqual(coordinator.message, EscapeRootMessage.cameraDenied)
+        XCTAssertEqual(authorizer.requestCount, 1)
+        XCTAssertEqual(authorizer.authorizationQueryCount, 0)
+    }
+
+    func test_activeAfterSettingsRestrictionConsumesOneRecoveryAttempt() {
+        let authorizer = FakeCameraAuthorizer()
+        let settings = FakeSettingsOpener()
+        let coordinator = makeCoordinator(authorizer: authorizer, settings: settings)
+        reachCameraRequest(coordinator)
+        authorizer.resolve(.denied)
+
+        coordinator.openSettingsForRecovery()
         authorizer.currentAuthorization = .restricted
+        coordinator.applicationDidBecomeActive()
         coordinator.applicationDidBecomeActive()
 
         XCTAssertEqual(coordinator.machine.state, .cameraDenied)
         XCTAssertEqual(coordinator.message, EscapeRootMessage.cameraRestricted)
         XCTAssertEqual(authorizer.requestCount, 1)
         XCTAssertEqual(authorizer.authorizationQueryCount, 1)
+        XCTAssertEqual(settings.openCount, 1)
+    }
+
+    func test_secondSettingsRecoveryTapAllowsOneNewAuthorizationQuery() {
+        let authorizer = FakeCameraAuthorizer()
+        let settings = FakeSettingsOpener()
+        let coordinator = makeCoordinator(authorizer: authorizer, settings: settings)
+        reachCameraRequest(coordinator)
+        authorizer.resolve(.denied)
+
+        coordinator.openSettingsForRecovery()
+        coordinator.applicationDidBecomeActive()
+        XCTAssertEqual(authorizer.authorizationQueryCount, 1)
+
+        coordinator.openSettingsForRecovery()
+        authorizer.currentAuthorization = .authorized
+        coordinator.applicationDidBecomeActive()
+        coordinator.applicationDidBecomeActive()
+
+        XCTAssertEqual(coordinator.machine.state, .scanningReality)
+        XCTAssertTrue(coordinator.showsRealityView)
+        XCTAssertEqual(authorizer.requestCount, 1)
+        XCTAssertEqual(authorizer.authorizationQueryCount, 2)
+        XCTAssertEqual(settings.openCount, 2)
     }
 
     func test_activeAfterInitialAuthorizationDoesNotReenterRealityOrQueryAgain() {

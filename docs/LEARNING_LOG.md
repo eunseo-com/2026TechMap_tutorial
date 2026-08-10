@@ -28,6 +28,18 @@
 
 ## 항목
 
+### L-20260811-079 — 카메라 거부 상태를 Settings 복귀 신호로 잘못 해석해 일반 active마다 권한을 조회함
+
+- 상태: 해결
+- 발생 태스크: Task 7 보수 2차 — 명시적 Settings 복귀 1회 조회
+- 재현: 카메라를 거부해 `.cameraDenied`가 된 뒤 `설정 열기`를 탭하지 않고 앱 lifecycle의 active 알림을 두 번 전달함. 이어 `설정 열기`를 한 번 탭한 뒤 active를 두 번 전달함.
+- 관찰: 기존 `applicationDidBecomeActive()`는 `.cameraDenied`만 확인하고 매번 `currentVideoAuthorization()`을 호출한다. 이에 따라 Settings를 열지 않은 active에도 조회가 발생하고, Settings를 닫고 권한을 바꾸지 않은 뒤 반복 active에서는 두 번 조회한다. 이전 테스트도 이 두 번째 관찰을 기대값 `2`로 고정해 잘못된 계약을 강화했다.
+- 영향: 사용자가 Settings 복구를 선택하지 않았어도 lifecycle 변화가 권한 상태를 읽으며, Settings 복귀 후에도 재시도 경계가 한 번으로 제한되지 않는다.
+- 원인/가설: `.cameraDenied` 상태가 Settings를 실제로 열었다는 사용자 의도를 보존하지 못하는데도 그것만 lifecycle guard로 사용한 것이 확인된 원인이다.
+- 조치: `openSettingsForRecovery()`의 명시적 사용자 동작에서만 1회 복귀 대기 상태를 설정한다. 다음 active는 이를 권한 조회 전에 소비하고, 이후 active는 거부·제한 상태를 유지하되 조회하지 않는다. 두 번째 명시적 Settings 탭은 새 1회 조회를 허용한다.
+- 검증: `EscapeRootCoordinatorTests` focused XCTest는 기존 구현에서 Settings 미탭·반복 active의 조회 횟수 assertion 3건이 실패해 16개 중 3 failures로 RED를 확인했다. 최소 플래그 적용 뒤 focused 16/16, 전체 XCTest 87/87·0 failures 및 iPhone 17 Pro Simulator build 성공을 확인했다.
+- 배운 점: lifecycle event 자체를 사용자 의도로 취급하지 말고, 외부 앱 전환을 시작한 명시적 UI action과 복귀 소비 횟수를 별도로 모델링한다.
+
 ### L-20260811-078 — 최종 focused XCTest가 Simulator 서비스 접근 제한으로 중단됨
 
 - 상태: 해결
@@ -96,8 +108,8 @@
 - 관찰: `openSettingsForRecovery()`는 Settings URL만 열고, `EscapeRootView`에는 `scenePhase`/foreground 관찰이 없다. `EscapeExperienceMachine`도 `.cameraDenied`에서 `.cameraAuthorized`로 가는 전이가 없어, 현재 권한이 허용으로 바뀌어도 `.cameraDenied` 안내에 머문다.
 - 영향: 사용자가 명시적으로 카메라를 허용해도 AR 화면으로 이어지지 않으며, 다시 권한 요청을 시도하는 임시 우회는 시스템 문구·Settings 재열기 규칙을 어길 수 있다.
 - 원인/가설: 초기 권한 요청의 callback만 상태 기계에 연결하고, Settings 복귀라는 별도 lifecycle 경계의 현재 권한 조회와 합법적인 재진입 전이를 설계하지 않은 것이 확인된 원인이다.
-- 조치: prompt-capable 요청과 현재 상태 조회를 `CameraAuthorizing`에서 분리한다. 앱이 active가 될 때 `.cameraDenied`에서만 현재 상태를 읽고 허용이면 한 번만 `.scanningReality`로 전환하며, 거부·제한이면 현재 차단 안내를 유지한다. 이 경로에서는 권한 요청·Settings 열기를 자동 실행하지 않는다.
-- 검증: type 부재로 실패한 RED 뒤 Settings에서 허용 후 active, 변경 없이 Settings 닫기, 제한 상태, 반복 active, 이미 AR에 진입한 상태를 포함한 `EscapeRootCoordinatorTests` focused XCTest 14/14, 전체 XCTest 85/85·0 failures 및 iPhone 17 Pro Simulator build 성공을 확인함.
+- 조치: prompt-capable 요청과 현재 상태 조회를 `CameraAuthorizing`에서 분리한다. `설정 열기`의 명시적 탭이 1회 복귀 대기를 남긴 경우에만 앱 active에서 현재 상태를 읽고, 허용이면 한 번 `.scanningReality`로 전환한다. 거부·제한이면 현재 차단 안내를 유지하며, 대기는 조회 전에 소비한다. 이 경로에서는 권한 요청·Settings 열기를 자동 실행하지 않는다.
+- 검증: 1차 보수 뒤 일반 active마다 조회하던 회귀를 L-20260811-079로 확인했다. Settings 미탭 active, Settings에서 허용 후 active, 변경 없이 Settings 닫기, 제한 상태, 반복 active, 두 번째 Settings 탭, 이미 AR에 진입한 상태를 포함한 `EscapeRootCoordinatorTests` focused XCTest 16/16, 전체 XCTest 87/87·0 failures 및 iPhone 17 Pro Simulator build 성공을 확인함.
 - 배운 점: Settings 복구는 URL을 여는 동작으로 끝나지 않으며, 복귀 lifecycle에서 비침습적인 현재 권한 조회와 중복 없는 상태 재진입을 함께 계약해야 한다.
 
 ### L-20260811-072 — 공동 시작 문서가 현재 worktree에 없음
