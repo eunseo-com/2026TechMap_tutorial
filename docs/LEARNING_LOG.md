@@ -28,6 +28,126 @@
 
 ## 항목
 
+### L-20260810-048 — Task 6 staging이 연결 작업 트리 index lock 권한으로 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 6 — RealityKit 돼지 포즈와 실제 메쉬 뒤 숨기
+- 재현: Task 6 소스·테스트·`WORK_LOG`·`LEARNING_LOG`의 명시 경로만 지정한 `git add`
+- 관찰: `fatal: Unable to create '.../.git/worktrees/ch1-reality-escape/index.lock': Operation not permitted`로 어떤 파일도 staging되지 않음
+- 영향: 검증된 Task 6 변경을 아직 커밋할 수 없음
+- 원인/가설: 연결 작업 트리의 Git index 메타데이터가 현재 파일 권한 범위 밖의 공용 `.git/worktrees/...`에 있어 lock 파일 생성이 거부됨
+- 조치: 동일한 명시 파일 목록을 공용 Git 메타데이터에 접근 가능한 권한으로 한 번 재실행했으며 `.claude/`와 생성물은 포함하지 않음
+- 검증: 권한 재실행 `git add`가 오류 없이 완료됐고, 후속 cached diff와 상태 검사로 정확한 staging 범위를 확인함
+- 배운 점: 연결 작업 트리의 작업 파일 쓰기와 Git index lock 쓰기는 별도 권한 경계이므로, staging 실패 뒤 일부 반영을 가정하지 않는다.
+
+### L-20260810-046 — Task 6 focused XCTest는 통과했지만 기존 Simulator 런타임 경고가 출력됨
+
+- 상태: 보류
+- 발생 태스크: Task 6 — RealityKit 돼지 포즈와 실제 메쉬 뒤 숨기
+- 재현: Task 6 Reality visual/coordinator focused XCTest 5개 실행
+- 관찰: 5/5와 `** TEST SUCCEEDED **`를 확인했지만 `Metadata extraction skipped. No AppIntents.framework dependency found`, `TBB Global TLS count is not == 1`, `UIFocus` 캐시 제한 경고가 함께 출력됨
+- 영향: Task 6 assertion은 실패하지 않았지만 테스트 출력이 경고 없이 깨끗하다는 조건은 충족하지 못함
+- 원인/가설: 앞선 태스크에서도 반복된 앱 타깃·iOS Simulator 런타임 진단이며, 이번 RealityKit 소스의 컴파일 오류나 assertion 실패는 아님
+- 조치: Task 6 범위 밖의 AppIntents/Simulator 런타임 설정은 변경하지 않고 focused·전체 테스트 결과와 분리해 보류함
+- 검증: focused `RealityPigVisualControllerTests` 2개와 `RealityHideARViewCoordinatorTests` 3개가 모두 통과함
+- 배운 점: RealityKit 로직 회귀와 반복되는 Simulator 런타임 경고를 같은 성공 신호로 합치지 않는다.
+
+### L-20260810-047 — Task 6 실제 LiDAR 메쉬 탭·물리 오클루전·재발견은 실기기 대기
+
+- 상태: 실기기 대기
+- 발생 태스크: Task 6 — RealityKit 돼지 포즈와 실제 메쉬 뒤 숨기
+- 재현: LiDAR 지원 iPhone/iPad에서 카메라 권한 허용 후 공간을 스캔하고 실제 물체 세로 면을 탭한 뒤 물체 반대편으로 이동해 돼지의 가림과 재발견을 관찰하는 절차
+- 관찰: 이 환경에서는 Fake capability와 수치형 mesh/pig 거리 입력으로 지원 분기·1회 재발견 계약만 자동 검증했으며, 실제 ARFrame의 mesh hit·floor classification·깊이 오클루전은 실행하지 못함
+- 영향: `sceneReconstruction`, scene-understanding 옵션, 실제 세로 면 법선, 분류된 바닥, 물리적 카메라 이동에 따른 가림 해제의 현장 동작은 아직 확정할 수 없음
+- 원인/가설: Simulator가 LiDAR 센서와 실제 공간 재구성 메쉬를 제공하지 않는 하드웨어 검증 경계임
+- 조치: actual AR session 경로는 `SystemRealityMeshSupport` guard 뒤에서만 시작하도록 두고, 실기기 절차는 Task 8의 수동 검증으로 넘김
+- 검증: 현재 자동 근거는 미지원 세션 차단, 거절 메시지, blocked→visible 1회 재발견, 놀란 포즈·1.5→1.0 확대이며 실제 기기 결과는 기록하지 않음
+- 배운 점: ARView가 빌드되고 수치 테스트가 통과해도 실제 메쉬가 돼지를 가린다는 결론은 LiDAR 실기기 관찰 전에는 내리지 않는다.
+
+### L-20260810-045 — RealityKit animation·scene subscription의 실제 SDK 타입 계약이 초안과 달랐음
+
+- 상태: 해결
+- 발생 태스크: Task 6 — RealityKit 돼지 포즈와 실제 메쉬 뒤 숨기
+- 재현: Foundation import 보완 뒤 같은 focused RealityKit XCTest 재실행
+- 관찰: `AnimationResource`에는 `repeatingForever()`가 없고, `Scene.subscribe` 반환값 `any Cancellable`을 `AnyCancellable` 프로퍼티에 직접 대입할 수 없어 앱 컴파일이 중단됨
+- 영향: 걷기 애니메이션 반복과 frame update subscription 소유 구현이 실제 iOS 17 SDK 계약에 맞지 않음
+- 원인/가설: SDK 선언 대조 결과 `repeatingForever()`는 `AnimationDefinition`의 메서드이고, iOS 17 호환 `AnimationResource` 반복 API는 ``repeat(duration:)``임. 또한 `Scene.subscribe`는 구체 `AnyCancellable`이 아니라 `any Combine.Cancellable`을 반환함
+- 조치: 애니메이션에는 ``resource.repeat()``을 사용하고 subscription 저장 타입은 `any Cancellable` existential로 좁게 변경함
+- 검증: 동일 focused XCTest가 앱·테스트 타깃을 컴파일한 뒤 5/5와 `** TEST SUCCEEDED **`로 완료됨
+- 배운 점: 같은 이름의 RealityKit animation 타입이라도 resource와 definition의 반복 API가 다르며, SDK 26에서 iOS 17 배포 계약의 반환 타입을 실제 선언으로 확인해야 한다.
+
+### L-20260810-043 — Task 6 첫 GREEN 컴파일이 Dispatch 타입 import 누락으로 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 6 — RealityKit 돼지 포즈와 실제 메쉬 뒤 숨기
+- 재현: Task 6 production 타입 추가 뒤 focused RealityKit XCTest 실행
+- 관찰: `RealityPigVisualController.swift:19:37: error: cannot find type 'DispatchWorkItem' in scope`로 앱 모듈 생성이 중단됨
+- 영향: 새 RealityKit 소스의 나머지 컴파일과 focused assertion을 아직 실행하지 못함
+- 원인/가설: 새 파일이 `Combine`, `RealityKit`, `simd`만 import한 상태에서 `DispatchWorkItem`, `DispatchQueue`, `TimeInterval`을 직접 사용하며, 해당 타입을 선언하는 모듈을 파일이 import하지 않은 것이 원인으로 보임
+- 조치: 기존 변경 중 해당 파일의 import 목록과 Dispatch 타입 사용 위치를 대조했고, 한 개의 명시적 `Foundation` import만 추가함
+- 검증: 동일 focused XCTest 재실행에서 `DispatchWorkItem` 오류가 사라지고 다음 실제 SDK API 계약 오류까지 컴파일이 진행됨
+- 배운 점: Swift 파일은 프레임워크의 우연한 재노출에 기대지 말고 직접 사용하는 Foundation/Dispatch 타입의 모듈을 명시한다.
+
+### L-20260810-044 — SDK Dispatch 선언 검색에서 존재를 가정한 glob 실패가 재발함
+
+- 상태: 해결
+- 발생 태스크: Task 6 — RealityKit 돼지 포즈와 실제 메쉬 뒤 숨기
+- 재현: 두 후보 SDK 경로의 `Dispatch.swiftmodule/*.swiftinterface`를 zsh glob으로 넘긴 선언 검색
+- 관찰: 두 번째 후보 경로가 존재하지 않아 `zsh: no matches found`가 발생했고 뒤따른 diff 출력이 실행되지 않음
+- 영향: Dispatch 선언 파일 자체의 경로 확인은 중단됐지만, 컴파일 오류 위치와 현재 파일의 import/사용 대조에는 영향이 없음
+- 원인/가설: L-20260810-040과 같이 파일 존재를 먼저 확인하지 않고 복수 glob을 직접 명령 인자로 사용했음
+- 조치: SDK 내부 선언 경로 탐색을 중단하고 컴파일러 진단과 소스의 직접 import 경계를 근거로 삼음
+- 검증: `rg`에서 Task 6 소스 내 `DispatchWorkItem` 사용과 명시 import 부재를 확인함
+- 배운 점: 동일한 glob 실패를 반복하지 않도록 선택적 SDK 경로는 `find` 결과를 먼저 확보한 경우에만 검색한다.
+
+### L-20260810-042 — Task 6 RED가 RealityKit visual/coordinator API 부재를 확인함
+
+- 상태: 해결
+- 발생 태스크: Task 6 — RealityKit 돼지 포즈와 실제 메쉬 뒤 숨기
+- 재현: 권한이 확보된 환경에서 `xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/RealityPigVisualControllerTests -only-testing:PiggyEscapeTests/RealityHideARViewCoordinatorTests test`
+- 관찰: `RealityPigVisualController`와 `RealityHideARView`를 찾지 못해 테스트 타깃 컴파일이 실패하고 `** TEST FAILED **`로 종료됨
+- 영향: 안정적인 RealityKit 돼지 엔티티, 놀람 확대, 메쉬 세션 지원 분기, 숨김 후 재발견 연결이 아직 구현되지 않았음을 확인함
+- 원인/가설: Task 5는 순수 위치 계획·지원 판정만 제공했고 Task 6의 RealityKit 어댑터 타입은 아직 없음
+- 조치: 실제 에셋 비동기 로딩을 소유하는 visual controller와 수동 AR 세션·실제 메쉬 탭·재발견 update를 소유하는 ARView coordinator를 최소 구현할 예정임
+- 검증: 구현 후 같은 focused XCTest의 통과와 전체 XCTest·Simulator build를 새로 실행할 예정임
+- 배운 점: 센서 입력을 직접 자동화할 수 없어도 안정 엔티티·분기·메시지·재발견 소비 경계는 먼저 실패하는 단위 테스트로 고정할 수 있다.
+
+### L-20260810-041 — Task 6 RED XCTest가 Simulator 서비스 접근 제한으로 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 6 — RealityKit 돼지 포즈와 실제 메쉬 뒤 숨기
+- 재현: `xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/RealityPigVisualControllerTests -only-testing:PiggyEscapeTests/RealityHideARViewCoordinatorTests test`
+- 관찰: `CoreSimulatorService connection became invalid`, `Error opening log file ... Operation not permitted`, `Unable to discover any Simulator runtimes`가 발생해 새 타입 부재 컴파일 단계 전에 XCTest가 종료됨
+- 영향: RealityKit visual/coordinator의 의도적인 RED를 아직 관찰하지 못함
+- 원인/가설: Simulator 기기·로그·DerivedData 경로가 현재 파일 권한 범위 밖이어서 이전 태스크와 같은 환경 제약이 재발함
+- 조치: Simulator 서비스와 Xcode 상태 경로에 접근 가능한 권한으로 같은 focused XCTest를 한 번 재실행함
+- 검증: 권한 재실행이 새 타입 부재까지 도달해 의도적인 RED를 확인했으며 상세는 L-20260810-042에 기록함
+- 배운 점: 새 RealityKit 테스트의 RED도 환경 권한 실패와 요구 API 부재 실패를 분리해 기록해야 한다.
+
+### L-20260810-039 — Task 6 RED 준비의 Tuist 생성이 세션 상태 디렉터리 권한으로 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 6 — RealityKit 돼지 포즈와 실제 메쉬 뒤 숨기
+- 재현: `cd PiggyEscape && tuist generate --no-open`
+- 관찰: `Fatal error: Error raised at top level: Permission denied: /Users/yang-eunseo/.local/state/tuist/sessions/333F03BD-9BEA-4EA1-9A39-5C2A7A53EF26`로 새 XCTest 파일을 생성 프로젝트에 반영하기 전에 종료됨
+- 영향: 새 RealityKit visual/coordinator 테스트의 의도적인 타입 부재 RED를 아직 실행할 수 없음
+- 원인/가설: 이전 태스크와 같이 Tuist가 연결 작업 트리 밖 사용자 세션 상태 경로에 쓰기를 시도하지만 현재 권한 범위에 포함되지 않음
+- 조치: 해당 상태 경로에 접근 가능한 권한으로 같은 생성 명령을 한 번 재실행함
+- 검증: 권한 재실행 `tuist generate --no-open`가 `✔ Success`로 완료됐고, 이후 focused XCTest가 새 테스트 파일을 컴파일하며 API 부재 RED까지 도달함
+- 배운 점: 새 Task 6 테스트 파일도 생성 프로젝트에 반영하려면 Tuist 사용자 세션 상태 쓰기 권한이 필요하다.
+
+### L-20260810-040 — SDK 선언 검색의 ARKit glob이 일치 파일 부재로 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 6 — RealityKit 돼지 포즈와 실제 메쉬 뒤 숨기
+- 재현: Simulator SDK의 `ARKit.framework/Modules/ARKit.swiftmodule/*.swiftinterface`를 zsh glob으로 넘긴 `rg` 검색
+- 관찰: `zsh: no matches found: .../ARKit.swiftmodule/*.swiftinterface`가 출력되어 해당 검색 구간이 실행되지 않음
+- 영향: `ARPlaneAnchor` 선언 위치를 첫 검색에서 확인하지 못했지만 RealityKit의 `project`, scene-understanding `hitTest`, `CollisionCastHit.normal` 계약 확인에는 영향이 없음
+- 원인/가설: 현재 Simulator SDK의 ARKit 모듈은 검색한 경로에 일반 `.swiftinterface` 파일을 노출하지 않음
+- 조치: 확인이 필요한 ARKit 타입은 컴파일러 검증과 공개 헤더/모듈 선언을 기준으로 확인하고, 존재를 가정한 glob은 사용하지 않음
+- 검증: RealityKit 및 RealityFoundation의 실제 `.swiftinterface`에서 `ARView.project`, scene-understanding `hitTest`, `CollisionCastHit.position/normal` 선언을 확인함
+- 배운 점: SDK 내부 선언 탐색은 먼저 `find`로 실제 파일 형식을 확인한 뒤 검색하며, 특정 모듈이 Swift interface를 반드시 제공한다고 가정하지 않는다.
+
 ### L-20260810-032 — Task 5 시작 전 원격 fetch가 연결 작업 트리 메타데이터 권한으로 중단됨
 
 - 상태: 해결
