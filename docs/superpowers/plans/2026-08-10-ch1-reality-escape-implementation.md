@@ -20,6 +20,7 @@
 - 실제 숨기는 `ARWorldTrackingConfiguration.supportsSceneReconstruction(.meshWithClassification)`이 참인 LiDAR 지원 실기기에서만 시작한다. 시뮬레이터의 빌드/단위 테스트는 ARKit 실제 오클루전 검증을 대체하지 않는다.
 - `ARView.environment.sceneUnderstanding.options`는 `[.occlusion, .collision, .physics, .receivesLighting]`로 설정한다. `.occlusion`은 실제 재구성 메쉬 뒤의 가상 돼지를 렌더링하지 않게 하고, `.collision`은 실제 메쉬 탭·가림 판정 raycast에 사용한다. [Apple 문서](https://developer.apple.com/documentation/realitykit/arview/environment-swift.struct/sceneunderstanding-swift.struct/options-swift.struct)
 - 생성된 `.xcodeproj`, `.build`, DerivedData, `.claude/` 활동 로그는 추적하지 않는다. 기존 또는 새로 발견한 추적되지 않은 파일은 명시 요청 없이 이동·삭제·스테이징하지 않는다.
+- 실패한 테스트·빌드·실행·API/에셋 실험·실기기 검증은 재시도 또는 보류 결정 전에 `docs/LEARNING_LOG.md`에 재현 조건, 실제 관찰값, 원인/가설, 조치, 검증, 배운 점을 기록한다. 자동 테스트가 대신할 수 없는 실기기 확인은 `실기기 대기`로 남긴다.
 - 각 태스크는 해당 XCTest/빌드 증거와 `docs/WORK_LOG.md` 갱신을 같은 커밋에 포함한다. 커밋·PR에는 작업자·도구·모델 표기와 `Co-Authored-By` 트레일러를 넣지 않는다.
 
 ## File Structure
@@ -42,6 +43,7 @@
 | `PiggyEscape/PiggyEscapeTests/*` | 순수 상태/수학, C3 노드, AR 계획·코디네이터 계약 회귀 테스트 |
 | `PiggyEscape/PiggyEscape/Tutorials/SceneKitToRealityKit.docc/*` | C3 월드→실제 오클루전 흐름을 설명하는 Chapter 1 튜토리얼 |
 | `docs/PROJECT_CONTEXT.md`, `docs/WORK_LOG.md`, `docs/TROUBLESHOOTING.md` | 공통 인수인계, 실제 검증 결과, ARKit 제한과 출처 |
+| `docs/LEARNING_LOG.md` | 실패·검증 한계의 재현 조건, 원인/가설, 조치, 재발 방지 근거 |
 
 ---
 
@@ -61,13 +63,16 @@
 - Create: `PiggyEscape/PiggyEscape/Resources/Coin_Color.usdc`
 - Create: `PiggyEscape/PiggyEscape/Resources/Warehouse_Color.usdc`
 - Modify: `PiggyEscape/PiggyEscapeTests/AssetLoaderTests.swift`
+- Create: `docs/LEARNING_LOG.md`
 - Modify: `docs/WORK_LOG.md`
 
 **Interfaces:**
 - Produces: `Bundle.main`에서 `Piggy`, `Piggy_running`, `Piggy_surprised`, 두 `Cylinder_Tree`와 섬 장식 에셋을 확장자 없이 찾을 수 있는 리소스 집합.
 - Produces: 앱 빌드 산출물 Info.plist의 `NSCameraUsageDescription` 문자열.
 
-- [ ] **Step 1: 실패하는 C3 모델 로드 테스트를 추가한다.**
+- [ ] **Step 1: 실패·학습 기록을 만들고 실패 테스트를 추가한다.**
+
+Create `docs/LEARNING_LOG.md` with the repository's fixed entry format before running the first intentional failing test. Every failure in this task must add an entry before the next retry.
 
 `PiggyEscape/PiggyEscapeTests/AssetLoaderTests.swift`에 다음 테스트를 추가한다.
 
@@ -148,7 +153,7 @@ Expected: `AssetLoaderTests` pass and `plutil` prints `피기가 현실의 물�
 
 ```bash
 git add PiggyEscape/Project.swift PiggyEscape/PiggyEscape/Resources \
-  PiggyEscape/PiggyEscapeTests/AssetLoaderTests.swift docs/WORK_LOG.md
+  PiggyEscape/PiggyEscapeTests/AssetLoaderTests.swift docs/LEARNING_LOG.md docs/WORK_LOG.md
 git commit -m "Add C3 escape assets and camera permission"
 ```
 
