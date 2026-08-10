@@ -4,13 +4,13 @@
 
 ## 현재 인수인계
 
-- 상태: C3 월드 기반 SceneKit → RealityKit 재설계 승인, 구현 계획 작성 완료
-- 진행 중 범위: Draft PR의 Chapter 1 결과물을 기준선으로 두고, C3_Piggy의 3D 월드와 실제 공간 숨기 흐름을 결합하는 별도 브랜치 설계를 시작했다.
+- 상태: Task 1 — C3 에셋과 카메라 권한 등록 완료
+- 진행 중 범위: C3_Piggy의 11개 3D 원본 에셋을 앱 번들에 등록하고, 실제 공간 숨기 전환에 필요한 카메라 권한 목적 문구를 설정했다.
 - 실패 기록: `docs/LEARNING_LOG.md`에 실패·검증 한계의 재현 조건·원인/가설·조치·재발 방지 근거를 기록한다.
-- 마지막 완료 범위: Task 8 — Chapter 1 DocC 튜토리얼 카탈로그, 5개 현재 소스 스니펫, Tuist 타깃 인식 설정.
-- 마지막 검증: `tuist generate --no-open` 성공. `xcodebuild docbuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /tmp/piggyescape-docbuild`가 `.doccarchive`를 만들고 `** BUILD DOCUMENTATION SUCCEEDED **`로 완료했다.
-- 다음 시작점: `docs/superpowers/plans/2026-08-10-ch1-reality-escape-implementation.md`의 Task 1부터 태스크별 테스트·검토·커밋 순서로 구현한다.
-- 차단 요소: 없음.
+- 마지막 완료 범위: Task 1 — C3 에셋과 카메라 권한 등록.
+- 마지막 검증: `tuist generate --no-open` 성공. `xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /tmp/piggyescape-build -only-testing:PiggyEscapeTests/AssetLoaderTests test`가 5개 테스트를 통과했고, 생성된 앱 Info.plist에서 `피기가 현실의 물체 뒤에 숨을 수 있도록 카메라를 사용합니다.`를 확인했다. 11개 C3 원본과 앱 리소스의 바이트도 각각 `cmp -s`로 일치함을 확인했다.
+- 다음 시작점: `docs/superpowers/plans/2026-08-10-ch1-reality-escape-implementation.md`의 Task 2 — 경험 상태와 숨기 좌표 순수 로직.
+- 차단 요소: 원격 `git fetch`의 공용 Git 메타데이터 쓰기 권한과 시작 순서의 누락 문서는 `docs/LEARNING_LOG.md`에 보류 항목으로 기록했다.
 
 ### Task 7에서 해결한 항목
 
@@ -22,6 +22,7 @@
 
 | 날짜 | 작업 범위 | 결과 | 검증 | 다음 시작점 |
 | --- | --- | --- | --- | --- |
+| 2026-08-10 | Task 1 — C3 에셋과 카메라 권한 | C3 원본 11개를 바이트 변경 없이 앱 리소스에 등록하고, 고정 카메라 목적 문구와 실제 앱 번들 로딩 회귀 테스트를 추가함 | RED에서 새 에셋 8개가 누락되어 16개 assertion 실패 확인 후, `AssetLoaderTests` 5/5 통과·11개 `cmp -s` 일치·생성 Info.plist 목적 문구 확인 | Task 2 — 경험 상태와 숨기 좌표 순수 로직 |
 | 2026-08-10 | 실패·학습 기록 운영 | 실패한 테스트·빌드·실행·실기기 검증 한계를 재현 가능한 항목으로 남기는 별도 기록을 추가함 | 기록 형식·상태·필수 근거를 설계 문서와 대조 | Task 1 실행 |
 | 2026-08-10 | Chapter 1 C3 월드→RealityKit 구현 계획 | C3 에셋·상태 기계·섬 어댑터·가짜 숨기·LiDAR 실제 숨기·자동 전환·DocC/실기기 검증을 8개 독립 태스크로 분해함 | 설계 명세·C3 원본 코드·현재 프로젝트/테스트 구조·Apple ARKit/RealityKit 공식 API 대조 | 실행 방식 선택 후 Task 1 |
 | 2026-08-10 | Chapter 1 C3 월드·현실 숨기 재설계 | C3 SceneKit 월드에서 나무 뒤로 숨었다가 카메라 회전에 들키면 놀란 돼지 모델·자막·강한 확대 반응을 보이고, RealityKit의 실제 메쉬 뒤에서 다시 들킬 때는 같은 반응과 화면 확대를 보이는 흐름을 설계함. 금융·저장·Watch 범위는 제외 | 설계 문서 검토 대기 | 구현 계획 작성 |
