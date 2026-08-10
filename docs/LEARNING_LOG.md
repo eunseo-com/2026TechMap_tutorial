@@ -28,6 +28,66 @@
 
 ## 항목
 
+### L-20260811-084 — focused XCTest가 Simulator 서비스 접근 제한으로 시작 전에 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 6 최종 통합 리뷰 보수 — floor·reveal·readiness 검증
+- 재현: `cd PiggyEscape && xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/RealityHidePlannerTests -only-testing:PiggyEscapeTests/RealityHideARViewCoordinatorTests test`
+- 관찰: `CoreSimulatorService connection became invalid`, `Error opening log file ... Operation not permitted`, `Unable to discover any Simulator runtimes`가 출력돼 XCTest 컴파일·assertion 전에 중단됨
+- 영향: source 수정의 focused 검증 결과를 sandbox 실행만으로 확정할 수 없음
+- 원인/가설: Simulator 서비스·runtime·로그 경로가 worktree 밖에 있어 현재 sandbox 접근이 거부된 것으로 보이며, L-20260811-078·069와 같은 환경 제약이 재발함
+- 조치: 같은 명시 명령만 Simulator 서비스에 접근 가능한 권한으로 한 번 재실행했다.
+- 검증: 권한 재실행에서 `RealityHidePlannerTests` 15개와 `RealityHideARViewCoordinatorTests` 11개, 합계 26개가 0 failures 및 `** TEST SUCCEEDED **`로 끝났다. 이어 전체 XCTest 97/97·0 failures와 Simulator build `** BUILD SUCCEEDED **`를 확인했다.
+- 배운 점: Simulator 초기화 실패는 source 회귀와 구분하고, 접근 가능한 동일 명령의 현재 실행 결과로만 검증 근거를 갱신한다.
+
+### L-20260811-083 — AR plane 변환 체인이 Swift 컴파일러 type-check 한계를 초과함
+
+- 상태: 해결
+- 발생 태스크: Task 6 최종 통합 리뷰 보수 — floor footprint 구현
+- 재현: `cd PiggyEscape && xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/RealityHidePlannerTests -only-testing:PiggyEscapeTests/RealityHideARViewCoordinatorTests test`
+- 관찰: `RealityHideARView.nearestFloor`의 `anchors → compactMap → filter → compactMap → min` 단일 식에서 `the compiler is unable to type-check this expression in reasonable time`가 발생해 XCTest 컴파일 전에 중단됨
+- 영향: footprint 동작을 검증할 focused XCTest 자체를 실행할 수 없음
+- 원인/가설: ARKit anchor downcast와 두 closure의 추론·`RealityFloorPlane` 생성·최솟값 비교를 하나의 generic chain에 결합해 Swift type checker가 과도한 추론을 해야 했음
+- 조치: plane anchor 수집, footprint 포함 floor 생성, 높이 기준 선택을 명시적 지역 값으로 분리했다. iOS 16 이후 API에서는 `planeExtent`의 width·height·Y축 회전을 사용하고, 회전된 extent도 pure footprint 검사로 처리한다.
+- 검증: 같은 focused XCTest는 `RealityHidePlannerTests` 15개와 `RealityHideARViewCoordinatorTests` 11개, 합계 26개를 0 failures로 통과했으며 Swift type-check 오류와 `extent` 사용 중단 경고는 다시 출력되지 않았다. 전체 XCTest 97/97·0 failures 및 Simulator build 성공을 추가 확인했다.
+- 배운 점: ARKit anchor 변환처럼 타입이 많은 pipeline은 짧은 체인보다 단계별 지역 값이 컴파일 진단과 유지보수에 안전하다.
+
+### L-20260811-082 — AR 스캔 준비 콜백이 실제 공간 관찰보다 먼저 발생함
+
+- 상태: 해결
+- 발생 태스크: Task 6 최종 통합 리뷰 보수 — 스캔 준비 시점
+- 재현: `RealityHideARView.Coordinator.attach(to:)`에서 AR 세션 실행·anchor 연결·`onScanningReady` 호출 순서를 추적하고, frame anchor 관찰 전후 callback 수를 확인하는 seam을 준비함
+- 관찰: 현재 구현은 세션 시작 직후 `onScanningReady()`를 호출하며, 첫 `ARMeshAnchor` 또는 분류된 수평 floor anchor가 생겼는지 확인하지 않음
+- 영향: 상위 화면은 실제로 “숨을 물체의 옆면을 탭해줘.”라고 안내할 준비가 되지 않았는데도 target 선택 상태로 넘어갈 수 있어 `scanFirst` 안내와 실제 공간 상태가 어긋남
+- 원인/가설: 세션을 시작할 수 있다는 capability와 공간에서 의미 있는 floor/mesh 관찰을 마쳤다는 readiness를 같은 사건으로 취급한 것이 확인된 원인임
+- 조치: 세션 시작 직후 callback을 제거하고, 첫 `ARMeshAnchor` 또는 분류된 수평 floor anchor를 관찰했을 때 한 번만 readiness를 내보내는 상태를 추가했다. 관찰 뒤에는 subscription을 취소하고 `stop()`도 이를 취소한다.
+- 검증: production 변경 전 focused coordinator XCTest는 새 seam 부재로 컴파일에 실패하는 RED를 보였다. 변경 뒤 mesh/floor 전에는 callback이 없고 첫 관찰 뒤 한 번만 발생하는 assertion을 포함한 focused 26/26, 전체 XCTest 97/97·0 failures 및 Simulator build 성공을 확인했다.
+- 배운 점: AR 세션 실행 성공은 센서 데이터가 사용자 선택을 지원할 만큼 준비되었다는 신호가 아니다.
+
+### L-20260811-081 — 한 번의 mesh hit 누락이 카메라 정지 상태에서도 재발견을 발생시킴
+
+- 상태: 해결
+- 발생 태스크: Task 6 최종 통합 리뷰 보수 — 물리적 재발견 gate
+- 재현: `RealityRevealMonitor`에 blocked mesh 관찰 뒤 동일한 camera pose와 `meshDistance: nil`을 전달하는 수치 입력을 추적함
+- 관찰: 현재 monitor는 blocked 여부만 저장한 뒤 다음 nonblocking 입력 하나에서 `true`를 반환하며, camera pose·방향·연속 관찰 수를 받지 않음
+- 영향: 공간 메쉬 갱신이나 hit jitter만으로 돼지가 “들켰다” 상태가 될 수 있어 사용자가 실제로 카메라를 움직여 찾아낸다는 경험 계약을 깨뜨림
+- 원인/가설: 재발견 data-flow가 `ARView`의 mesh 거리만 전달하고, 같은 frame에서 이미 읽을 수 있는 AR camera transform을 monitor 경계에 전달하지 않은 것이 확인된 원인임
+- 조치: `RealityRevealMonitor` 입력에 실제 `ARFrame.camera.transform`에서 얻은 position·forward pose를 추가했다. 이전 blocking pose에서 0.15m 이상 이동하거나 15° 이상 회전한 뒤 연속된 두 nonblocking 관찰이 있어야 한 번만 재발견한다. 다시 block되면 안정 관찰 수를 초기화한다.
+- 검증: production 변경 전 focused planner XCTest는 camera pose API 부재로 컴파일에 실패하는 RED를 보였다. 정지/null, 0.149m·15° 미만, 정확히 0.15m·15°, interrupted visibility, one-time 사례를 포함한 focused 26/26, 전체 XCTest 97/97·0 failures 및 Simulator build 성공을 확인했다.
+- 배운 점: 센서의 가시성 변화는 사용자 시점 변화와 구분해야 하며, 한 frame의 null 결과만으로 경험 상태를 전이하면 안 된다.
+
+### L-20260811-080 — floor 선택이 평면 발자국 대신 anchor 중심 거리를 사용함
+
+- 상태: 해결
+- 발생 태스크: Task 6 최종 통합 리뷰 보수 — 선택 물체 아래 바닥 판정
+- 재현: `RealityHideARView.nearestFloor`가 각 `ARPlaneAnchor`를 transform된 center 하나의 `RealityFloor`로 바꾸는 흐름과 Task 5의 1.2m XZ 검사를 대조함
+- 관찰: 큰 floor plane 안의 선택 점이 center에서 1.2m 넘게 떨어지면 실제 바닥이 있어도 거절될 수 있고, center 근처지만 footprint 밖인 점은 바닥으로 잘못 받아들일 수 있음
+- 영향: 돼지가 사용자가 선택한 실제 물체 아래 바닥이 아닌 anchor 중심 기준으로 숨기 좌표를 계산하거나 유효한 넓은 바닥을 불필요하게 거절할 수 있음
+- 원인/가설: ARPlaneAnchor의 local `center`·`extent`·`transform`을 사용해 선택 world point의 footprint 포함을 판정하지 않은 것이 확인된 원인임
+- 조치: world point를 anchor local 좌표로 변환해 center·width·height·Y축 extent 회전이 만든 footprint 안인지 검사하고, 같은 local XZ를 floor Y로 투영한다. 2cm만 가장자리 jitter 여유로 허용한다. 1.2m 제한은 anchor 중심과 무관한 selected-point/floor XZ 안전 경계로 문서화해 유지했다.
+- 검증: production 변경 전 focused XCTest는 `RealityFloorPlane` 타입 부재로 컴파일에 실패하는 RED를 보였다. 회전된 큰 plane 안이지만 중심에서 1.2m 넘는 점의 수용, 가까운 중심 밖 점의 거절, 2cm 경계와 extent 회전을 포함한 focused 26/26, 전체 XCTest 97/97·0 failures 및 Simulator build 성공을 확인했다.
+- 배운 점: AR 평면의 중심은 발자국 전체를 대표하지 않으므로, 실제 선택 좌표는 local footprint로 판정해야 한다.
+
 ### L-20260811-079 — 카메라 거부 상태를 Settings 복귀 신호로 잘못 해석해 일반 active마다 권한을 조회함
 
 - 상태: 해결

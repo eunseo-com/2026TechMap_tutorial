@@ -9,6 +9,54 @@ struct RealityFloor: Equatable {
     let point: SIMD3<Float>
 }
 
+struct RealityFloorPlane {
+    /// AR plane edges can jitter by a few centimeters while scanning, so only a 2 cm footprint margin is accepted.
+    static let footprintTolerance: Float = 0.02
+
+    let transform: simd_float4x4
+    let center: SIMD3<Float>
+    let extent: SIMD2<Float>
+    let rotationOnYAxis: Float
+
+    init(
+        transform: simd_float4x4,
+        center: SIMD3<Float>,
+        extent: SIMD2<Float>,
+        rotationOnYAxis: Float = 0
+    ) {
+        self.transform = transform
+        self.center = center
+        self.extent = extent
+        self.rotationOnYAxis = rotationOnYAxis
+    }
+
+    func floor(containing worldPoint: SIMD3<Float>) -> RealityFloor? {
+        guard extent.x.isFinite,
+              extent.y.isFinite,
+              extent.x > 0,
+              extent.y > 0 else {
+            return nil
+        }
+
+        let localPoint = SIMD4(worldPoint.x, worldPoint.y, worldPoint.z, 1)
+        let local = simd_inverse(transform) * localPoint
+        let relativeX = local.x - center.x
+        let relativeZ = local.z - center.z
+        let cosine = cos(rotationOnYAxis)
+        let sine = sin(rotationOnYAxis)
+        let xOffset = abs(cosine * relativeX - sine * relativeZ)
+        let zOffset = abs(sine * relativeX + cosine * relativeZ)
+        guard xOffset <= extent.x / 2 + Self.footprintTolerance,
+              zOffset <= extent.y / 2 + Self.footprintTolerance else {
+            return nil
+        }
+
+        let floorLocal = SIMD4(local.x, center.y, local.z, 1)
+        let floorWorld = transform * floorLocal
+        return RealityFloor(point: SIMD3(floorWorld.x, floorWorld.y, floorWorld.z))
+    }
+}
+
 enum RealityHideRejection: Equatable {
     case selectVerticalSide
     case moveFartherAway
@@ -24,6 +72,8 @@ enum RealityHidePlanner {
     static let verticalNormalMaximumY: Float = 0.35
     static let minimumCameraDistance: Float = 0.45
     static let objectClearance: Float = 0.28
+    /// Keeps direct callers from pairing a selected surface with an unrelated floor point.
+    /// AR plane footprint projection supplies the selected point's local XZ, never an anchor center.
     static let maximumFloorDistance: Float = 1.2
 
     static func plan(
@@ -56,17 +106,66 @@ enum RealityHidePlanner {
     }
 }
 
+struct RealityCameraPose: Equatable {
+    let position: SIMD3<Float>
+    let forward: SIMD3<Float>
+}
+
 struct RealityRevealMonitor {
+    /// 15 cm exceeds ordinary hand tremor while still representing a small physical step around an object.
+    static let minimumTranslation: Float = 0.15
+    /// 15° is a deliberate device reframe; mesh visibility must still remain stable before revealing.
+    static let minimumRotation: Float = .pi / 12
+    static let requiredStableVisibleObservations = 2
+
     private var hasObservedBlockingMesh = false
     private var hasReportedReveal = false
+    private var blockingPose: RealityCameraPose?
+    private var stableVisibleObservationCount = 0
 
-    mutating func update(meshDistance: Float?, pigDistance: Float) -> Bool {
+    mutating func update(
+        meshDistance: Float?,
+        pigDistance: Float,
+        cameraPose: RealityCameraPose
+    ) -> Bool {
         let blocked = meshDistance.map { $0 + 0.03 < pigDistance } ?? false
-        hasObservedBlockingMesh = hasObservedBlockingMesh || blocked
-        guard hasObservedBlockingMesh, !blocked, !hasReportedReveal else {
+        if blocked {
+            hasObservedBlockingMesh = true
+            blockingPose = cameraPose
+            stableVisibleObservationCount = 0
+            return false
+        }
+
+        guard hasObservedBlockingMesh,
+              !hasReportedReveal,
+              let blockingPose,
+              hasMeaningfulViewpointChange(from: blockingPose, to: cameraPose) else {
+            stableVisibleObservationCount = 0
+            return false
+        }
+
+        stableVisibleObservationCount += 1
+        guard stableVisibleObservationCount >= Self.requiredStableVisibleObservations else {
             return false
         }
         hasReportedReveal = true
         return true
+    }
+
+    private func hasMeaningfulViewpointChange(
+        from blockedPose: RealityCameraPose,
+        to currentPose: RealityCameraPose
+    ) -> Bool {
+        let translation = simd_distance(blockedPose.position, currentPose.position)
+        guard translation.isFinite else { return false }
+        if translation >= Self.minimumTranslation {
+            return true
+        }
+
+        let blockedLength = simd_length(blockedPose.forward)
+        let currentLength = simd_length(currentPose.forward)
+        guard blockedLength > 0.0001, currentLength > 0.0001 else { return false }
+        let directionsDot = simd_dot(blockedPose.forward / blockedLength, currentPose.forward / currentLength)
+        return directionsDot <= cos(Self.minimumRotation) + 0.000_001
     }
 }

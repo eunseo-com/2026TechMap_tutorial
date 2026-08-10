@@ -148,6 +148,8 @@ struct RealityHideARView: UIViewRepresentable {
         private weak var arView: ARView?
         private var revealMonitor = RealityRevealMonitor()
         private var revealSubscription: (any Cancellable)?
+        private var scanningReadiness = RealityScanningReadiness()
+        private var scanningSubscription: (any Cancellable)?
         private var pigAnchor: AnchorEntity?
 
         private(set) var didStartMeshSession = false
@@ -195,7 +197,7 @@ struct RealityHideARView: UIViewRepresentable {
             let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
             tap.numberOfTouchesRequired = 1
             arView.addGestureRecognizer(tap)
-            onScanningReady()
+            beginScanningReadiness(in: arView)
         }
 
         @discardableResult
@@ -223,11 +225,16 @@ struct RealityHideARView: UIViewRepresentable {
         func processRevealFrame(
             isObservationValid: Bool,
             meshDistance: Float?,
-            pigDistance: Float
+            pigDistance: Float,
+            cameraPose: RealityCameraPose
         ) -> Bool {
             guard isObservationValid,
                   status == .hidden,
-                  revealMonitor.update(meshDistance: meshDistance, pigDistance: pigDistance) else {
+                  revealMonitor.update(
+                    meshDistance: meshDistance,
+                    pigDistance: pigDistance,
+                    cameraPose: cameraPose
+                  ) else {
                 return false
             }
 
@@ -245,6 +252,17 @@ struct RealityHideARView: UIViewRepresentable {
                     self.reportVisualFailure(recoveringTo: .hidden)
                 }
             }
+            return true
+        }
+
+        @discardableResult
+        func processScanningObservation(hasMesh: Bool, hasFloor: Bool) -> Bool {
+            guard scanningReadiness.observe(hasMesh: hasMesh, hasFloor: hasFloor) else {
+                return false
+            }
+            scanningSubscription?.cancel()
+            scanningSubscription = nil
+            onScanningReady()
             return true
         }
 
@@ -272,6 +290,8 @@ struct RealityHideARView: UIViewRepresentable {
         func stop() {
             revealSubscription?.cancel()
             revealSubscription = nil
+            scanningSubscription?.cancel()
+            scanningSubscription = nil
             arView?.session.pause()
             didStartMeshSession = false
         }
@@ -361,19 +381,39 @@ struct RealityHideARView: UIViewRepresentable {
         }
 
         private func nearestFloor(in frame: ARFrame, to surfacePoint: SIMD3<Float>) -> RealityFloor? {
-            frame.anchors
-                .compactMap { $0 as? ARPlaneAnchor }
-                .filter { $0.alignment == .horizontal && $0.classification == .floor }
-                .map { anchor in
-                    let center = SIMD4<Float>(anchor.center.x, anchor.center.y, anchor.center.z, 1)
-                    let world = anchor.transform * center
-                    return RealityFloor(point: SIMD3(world.x, world.y, world.z))
+            let planeAnchors = frame.anchors.compactMap { $0 as? ARPlaneAnchor }
+            let containingFloors = planeAnchors.compactMap { anchor -> RealityFloor? in
+                guard anchor.alignment == .horizontal,
+                      anchor.classification == .floor else {
+                    return nil
                 }
-                .min { lhs, rhs in
-                    let lhsOffset = SIMD2(lhs.point.x - surfacePoint.x, lhs.point.z - surfacePoint.z)
-                    let rhsOffset = SIMD2(rhs.point.x - surfacePoint.x, rhs.point.z - surfacePoint.z)
-                    return simd_length_squared(lhsOffset) < simd_length_squared(rhsOffset)
+
+                let footprint = RealityFloorPlane(
+                    transform: anchor.transform,
+                    center: anchor.center,
+                    extent: SIMD2(anchor.planeExtent.width, anchor.planeExtent.height),
+                    rotationOnYAxis: anchor.planeExtent.rotationOnYAxis
+                )
+                return footprint.floor(containing: surfacePoint)
+            }
+
+            return containingFloors.min { lhs, rhs in
+                abs(lhs.point.y - surfacePoint.y) < abs(rhs.point.y - surfacePoint.y)
+            }
+        }
+
+        private func beginScanningReadiness(in arView: ARView) {
+            scanningSubscription?.cancel()
+            scanningSubscription = arView.scene.subscribe(to: SceneEvents.Update.self) { [weak self, weak arView] _ in
+                guard let self,
+                      let frame = arView?.session.currentFrame else { return }
+                let hasMesh = frame.anchors.contains { $0 is ARMeshAnchor }
+                let hasFloor = frame.anchors.contains { anchor in
+                    guard let plane = anchor as? ARPlaneAnchor else { return false }
+                    return plane.alignment == .horizontal && plane.classification == .floor
                 }
+                self.processScanningObservation(hasMesh: hasMesh, hasFloor: hasFloor)
+            }
         }
 
         private func beginRevealMonitoring(in arView: ARView) {
@@ -397,6 +437,11 @@ struct RealityHideARView: UIViewRepresentable {
             ), let screenPoint else { return }
 
             let cameraPosition = Self.position(from: cameraTransform)
+            let cameraForward = -SIMD3(
+                cameraTransform.columns.2.x,
+                cameraTransform.columns.2.y,
+                cameraTransform.columns.2.z
+            )
             let meshDistance = arView.hitTest(
                 screenPoint,
                 query: .nearest,
@@ -406,12 +451,26 @@ struct RealityHideARView: UIViewRepresentable {
             processRevealFrame(
                 isObservationValid: true,
                 meshDistance: meshDistance,
-                pigDistance: pigDistance
+                pigDistance: pigDistance,
+                cameraPose: RealityCameraPose(
+                    position: cameraPosition,
+                    forward: cameraForward
+                )
             )
         }
 
         private static func position(from transform: simd_float4x4) -> SIMD3<Float> {
             SIMD3(transform.columns.3.x, transform.columns.3.y, transform.columns.3.z)
         }
+    }
+}
+
+private struct RealityScanningReadiness {
+    private var hasReported = false
+
+    mutating func observe(hasMesh: Bool, hasFloor: Bool) -> Bool {
+        guard !hasReported, hasMesh || hasFloor else { return false }
+        hasReported = true
+        return true
     }
 }
