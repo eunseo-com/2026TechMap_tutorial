@@ -11,37 +11,9 @@ enum PigPlacement {
         let model = AssetLoader.object(named: "Piggy") {
             AssetLoader.voxelBox(width: 0.4, height: 0.4, length: 0.6, color: .systemPink)
         }
-        normalize(model, toHeight: standardHeight)
+        SceneKitGeometry.normalize(model, toHeight: standardHeight)
         model.name = "Piggy"
         model.position = hardcodedPosition
         return model
-    }
-
-    @MainActor
-    private static func normalize(_ node: SCNNode, toHeight targetHeight: Float) {
-        let (lo, hi) = boundingBox(of: node)
-        let height = hi.y - lo.y
-        guard height > 0.0001 else { return }
-        let scale = targetHeight / height
-        node.scale = SCNVector3(scale, scale, scale)
-    }
-
-    private static func boundingBox(of node: SCNNode) -> (SCNVector3, SCNVector3) {
-        var lo = SCNVector3(Float.greatestFiniteMagnitude, .greatestFiniteMagnitude, .greatestFiniteMagnitude)
-        var hi = SCNVector3(-Float.greatestFiniteMagnitude, -.greatestFiniteMagnitude, -.greatestFiniteMagnitude)
-        node.enumerateHierarchy { child, _ in
-            guard let geometry = child.geometry else { return }
-            let (minB, maxB) = geometry.boundingBox
-            for x in [minB.x, maxB.x] {
-                for y in [minB.y, maxB.y] {
-                    for z in [minB.z, maxB.z] {
-                        let p = child.convertPosition(SCNVector3(x, y, z), to: node)
-                        lo = SCNVector3(min(lo.x, p.x), min(lo.y, p.y), min(lo.z, p.z))
-                        hi = SCNVector3(max(hi.x, p.x), max(hi.y, p.y), max(hi.z, p.z))
-                    }
-                }
-            }
-        }
-        return (lo, hi)
     }
 }
