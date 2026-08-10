@@ -1,2 +1,15 @@
-.worktrees/
+# Local agent state; durable project context belongs in docs/ and is committed.
+.claude/
+
+# Local reference materials downloaded for study. Keep distilled decisions in Git,
+# not large vendor snapshots or browser captures.
+BringingYourSceneKitProjectsToRealityKit/
+(Example)_ARKit으로 얼굴 인식하기 Tutorials _ Documentation_.html
+(Example)_ARKit으로 얼굴 인식하기 Tutorials _ Documentation__files/
+씬킷에서 리얼리티 킷으로.png
+
+# macOS metadata
 .DS_Store
+
+# Local git worktrees used for isolated feature work
+.worktrees/
