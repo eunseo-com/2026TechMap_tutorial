@@ -28,8 +28,10 @@ final class RealityPigVisualControllerTests: XCTestCase {
         }
         var completed = false
 
-        controller.showSurprised {
-            completed = true
+        controller.showSurprised { result in
+            if case .success = result {
+                completed = true
+            }
         }
 
         XCTAssertEqual(requestedAsset, "Piggy_surprised")
@@ -48,8 +50,10 @@ final class RealityPigVisualControllerTests: XCTestCase {
         let destination = SIMD3<Float>(0.7, 0.2, -1.4)
         var completed = false
 
-        controller.walk(to: destination) {
-            completed = true
+        controller.walk(to: destination) { result in
+            if case .success = result {
+                completed = true
+            }
         }
 
         XCTAssertTrue(controller.outerEntity === outerEntity)

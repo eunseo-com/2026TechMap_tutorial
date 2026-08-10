@@ -28,6 +28,42 @@
 
 ## 항목
 
+### L-20260811-057 — 테스트 기본 RealityKit 로더의 actor 격리 계약이 누락됨
+
+- 상태: 해결
+- 발생 태스크: Task 6 독립 리뷰 수정 2차 — 포즈 실패 테스트 경계
+- 재현: 포즈 실패 처리 구현 후 coordinator focused XCTest를 컴파일함
+- 관찰: 테스트 기본 loader closure 안의 `Entity()` 생성에 `call to main actor-isolated initializer ... in a synchronous nonisolated context` 경고가 출력됨
+- 영향: 현재 Swift 5 모드에서는 테스트가 통과하지만 더 엄격한 동시성 검사에서는 오류가 될 수 있고, RealityKit 엔티티 loader가 어느 actor에서 실행되는지 타입 계약이 불명확했음
+- 원인/가설: visual controller 클래스는 `@MainActor`였지만 저장한 `EntityLoader` 함수 타입에는 actor 격리가 표현되지 않은 것이 원인임
+- 조치: `EntityLoader` 타입 자체를 `@MainActor` closure로 선언해 production과 deterministic fake가 같은 실행 경계를 사용하도록 함
+- 검증: 변경 후 visual controller focused XCTest 3/3이 통과했고 해당 actor 경고가 다시 출력되지 않음
+- 배운 점: actor-isolated 소유자 안의 closure 프로퍼티도 함수 타입에 격리를 명시해야 생성·콜백의 동시성 계약이 보존된다.
+
+### L-20260811-056 — 고정 전방 0.8m 시작점이 선택한 가까운 표면 뒤에 놓일 수 있음
+
+- 상태: 해결
+- 발생 태스크: Task 6 독립 리뷰 수정 2차 — 선택 표면 기반 시작 배치
+- 재현: 카메라 `(0, 1.5, 0)`, 선택 면 점 `(0, 1, -0.5)`, 법선 `(0, 0, 1)`, 계획 목적지 약 `(0, 0, -0.78)`을 기존 `RealityInitialPigPlacement`에 대입함
+- 관찰: 기존 규칙은 선택 면과 무관하게 카메라 전방 0.8m인 z=-0.8을 반환해 선택 면 z=-0.5보다 뒤에서 시작하며, 돼지가 이미 물체 뒤에 나타난 뒤 거의 움직이지 않는 경로가 됨
+- 영향: Task 5가 허용하는 0.45m 근거리 표면에서 “카메라에 보이는 쪽에서 물체 뒤로 걸어감” 연출이 깨짐
+- 원인/가설: 시작 위치 data-flow에 실제 hit 점·법선·계획 목적지가 전달되지 않고 카메라 transform과 바닥 Y만 사용한 것이 확인된 원인임
+- 조치: 근거리·원거리 표면 모두에서 바닥 Y, 카메라 쪽 반공간, 목적지 반대편 조건을 고정하는 순수 배치 RED 테스트를 추가하고, 실제 hit 점·법선·계획 목적지를 배치 함수에 전달해 표면의 카메라 쪽 0.28m에서 시작하도록 수정함
+- 검증: 기존 `cameraForward` API 때문에 발생한 focused 컴파일 RED를 확인한 뒤 coordinator focused XCTest 10/10을 통과함. 재현 사례는 z=-0.22에서 시작해 z=-0.78로 이동하며, 원거리 사례도 선택 면 카메라 쪽 0.28m를 유지함
+- 배운 점: 실제 물체를 기준으로 하는 이동의 시작·끝은 같은 hit 좌표계에서 계산해야 하며 고정 카메라 거리로 대체할 수 없다.
+
+### L-20260811-055 — 포즈 에셋 로드 실패가 walking·revealing 상태를 영구 정지시킴
+
+- 상태: 해결
+- 발생 태스크: Task 6 독립 리뷰 수정 2차 — RealityKit 포즈 실패 종결
+- 재현: 수동으로 `Result.failure`를 방출하는 entity loader를 running, 도착 후 idle, surprised 요청에 각각 주입하고 coordinator 상태·콜백·표시 여부를 관찰함
+- 관찰: `setPose`가 failure를 버리므로 running/idle 실패에는 walk completion이 없고, surprised 실패에는 reveal completion이 없어 subscription을 취소한 `.revealing` 상태로 남음
+- 영향: 사용자에게 원인을 알리지 않은 채 탭 재시도와 재발견이 영구 중단될 수 있고, 상위 Task 7 화면도 오류 상태를 받을 공개 신호가 없음
+- 원인/가설: 비동기 로더의 성공만 completion으로 모델링하고 실패 data-flow를 visual controller→coordinator→UI callback으로 전달하지 않은 것이 확인된 원인임
+- 조치: 세 포즈 failure의 안전 상태·발견 미발행·고정 한국어 메시지·오류 callback 계약을 각각 focused RED 테스트로 추가함. pose completion을 `Result`로 바꾸고 running/idle 실패는 비활성 `.waitingForTarget`, surprised 실패는 재감시 가능한 `.hidden`으로 복구하며 `onError`와 `"돼지를 불러오지 못했어. 잠시 후 다시 시도해줘."`를 전달함
+- 검증: `onError`, 공개 status, 실패 문자열 부재를 보여 준 focused 컴파일 RED를 확인한 뒤 coordinator focused XCTest 10/10과 visual focused XCTest 3/3을 통과함. surprised failure에서는 `onRevealed`가 0이며 다음 blocked→visible 재시도가 다시 시작됨
+- 배운 점: 비동기 에셋 작업의 completion은 성공 전용 closure가 아니라 성공과 실패를 모두 종결하는 결과여야 한다.
+
 ### L-20260811-054 — AR 진입 직후 돼지가 월드 원점에 활성화되는 배치 계약이 없음
 
 - 상태: 해결

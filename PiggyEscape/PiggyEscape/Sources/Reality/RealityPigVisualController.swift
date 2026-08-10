@@ -3,9 +3,14 @@ import Foundation
 import RealityKit
 import simd
 
+enum RealityPigVisualError: Error, Equatable {
+    case assetLoadFailed(C3PigPose)
+}
+
 @MainActor
 final class RealityPigVisualController {
-    typealias EntityLoader = (String, @escaping (Result<Entity, Error>) -> Void) -> AnyCancellable?
+    typealias EntityLoader = @MainActor (String, @escaping (Result<Entity, Error>) -> Void) -> AnyCancellable?
+    typealias PoseResult = Result<Void, RealityPigVisualError>
 
     let outerEntity: Entity
 
@@ -21,6 +26,7 @@ final class RealityPigVisualController {
     private let entityLoader: EntityLoader
     private var modelLoad: AnyCancellable?
     private var movementCompletion: DispatchWorkItem?
+    private var requestedPose: C3PigPose?
 
     init() {
         outerEntity = Entity()
@@ -49,14 +55,18 @@ final class RealityPigVisualController {
         RealityPigVisualController(testing: true, entityLoader: entityLoader)
     }
 
-    func loadIdlePig() {
-        setPose(.idle)
+    func loadIdlePig(completion: @escaping (PoseResult) -> Void = { _ in }) {
+        setPose(.idle, completion: completion)
     }
 
-    func walk(to destination: SIMD3<Float>, completion: @escaping () -> Void) {
+    func walk(to destination: SIMD3<Float>, completion: @escaping (PoseResult) -> Void) {
         movementCompletion?.cancel()
-        setPose(.running) { [weak self] in
+        setPose(.running) { [weak self] result in
             guard let self else { return }
+            guard case .success = result else {
+                completion(result)
+                return
+            }
             if self.skipsAssetLoadingAndTiming {
                 self.outerEntity.setPosition(destination, relativeTo: nil)
                 self.setPose(.idle, completion: completion)
@@ -85,7 +95,7 @@ final class RealityPigVisualController {
         }
     }
 
-    func showSurprised(completion: @escaping () -> Void = {}) {
+    func showSurprised(completion: @escaping (PoseResult) -> Void = { _ in }) {
         movementCompletion?.cancel()
         setPose(.surprised, completion: completion)
     }
@@ -123,14 +133,20 @@ final class RealityPigVisualController {
         }
     }
 
-    private func setPose(_ pose: C3PigPose, completion: (() -> Void)? = nil) {
-        currentPose = pose
+    private func setPose(_ pose: C3PigPose, completion: @escaping (PoseResult) -> Void) {
+        requestedPose = pose
         modelLoad?.cancel()
         modelLoad = entityLoader(assetName(for: pose)) { [weak self] result in
-            guard let self, self.currentPose == pose else { return }
-            guard case let .success(entity) = result else { return }
-            self.install(entity, for: pose)
-            completion?()
+            guard let self, self.requestedPose == pose else { return }
+            self.requestedPose = nil
+            switch result {
+            case let .success(entity):
+                self.install(entity, for: pose)
+                self.currentPose = pose
+                completion(.success(()))
+            case .failure:
+                completion(.failure(.assetLoadFailed(pose)))
+            }
         }
     }
 

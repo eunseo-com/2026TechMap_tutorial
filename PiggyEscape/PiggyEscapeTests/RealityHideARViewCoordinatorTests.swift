@@ -1,3 +1,4 @@
+import Combine
 import RealityKit
 import XCTest
 import simd
@@ -143,9 +144,11 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
     }
 
     func test_initialPlacementUsesFloorAndCameraForwardOnlyWhenDefensible() {
+        let nearHit = RealitySurfaceHit(point: SIMD3(0, 1, -0.5), normal: SIMD3(0, 0, 1))
         let position = RealityInitialPigPlacement.position(
             cameraPosition: SIMD3(0, 1.5, 0),
-            cameraForward: SIMD3(0, 0, -1),
+            hit: nearHit,
+            destination: SIMD3(0, 0, -0.78),
             floorY: 0
         )
 
@@ -154,20 +157,129 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
         }
         XCTAssertEqual(position.x, 0, accuracy: 0.0001)
         XCTAssertEqual(position.y, 0, accuracy: 0.0001)
-        XCTAssertEqual(position.z, -0.8, accuracy: 0.0001)
+        XCTAssertGreaterThan(position.z, nearHit.point.z)
+        XCTAssertEqual(position.z, -0.22, accuracy: 0.0001)
+
+        let farHit = RealitySurfaceHit(point: SIMD3(0, 0.8, -2), normal: SIMD3(0, 0, 1))
+        let farPosition = RealityInitialPigPlacement.position(
+            cameraPosition: SIMD3(0, 1.5, 0),
+            hit: farHit,
+            destination: SIMD3(0, 0, -2.28),
+            floorY: 0
+        )
+        XCTAssertEqual(farPosition?.z, -1.72)
         XCTAssertNil(RealityInitialPigPlacement.position(
             cameraPosition: SIMD3(0, 1.5, 0),
-            cameraForward: SIMD3(0, 1, 0),
+            hit: nearHit,
+            destination: SIMD3(0, 0, -0.22),
             floorY: 0
         ))
         XCTAssertNil(RealityInitialPigPlacement.position(
             cameraPosition: SIMD3(0, 1.5, 0),
-            cameraForward: SIMD3(0, 0, -1),
+            hit: nearHit,
+            destination: SIMD3(0, 1.5, -0.78),
             floorY: 1.5
         ))
+    }
+
+    func test_runningLoadFailureReturnsToRetryableWaitingStateAndReportsError() {
+        let loader = ControlledRealityEntityLoader()
+        let visualController = RealityPigVisualController.makeForTesting(entityLoader: loader.load)
+        var errorCount = 0
+        var messages: [String] = []
+        let coordinator = RealityHideARView.Coordinator(
+            meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
+            visualController: visualController,
+            onError: { errorCount += 1 },
+            onMessage: { messages.append($0) }
+        )
+
+        coordinator.acceptHideTarget(destination: SIMD3(0, 0, -1), initialPosition: SIMD3(0, 0, -0.2))
+        XCTAssertEqual(coordinator.status, .walking)
+        loader.failNext()
+
+        XCTAssertEqual(coordinator.status, .waitingForTarget)
+        XCTAssertFalse(visualController.outerEntity.isEnabled)
+        XCTAssertEqual(errorCount, 1)
+        XCTAssertEqual(messages, [RealityAvailabilityMessage.pigAssetLoadFailed])
+        XCTAssertEqual(RealityAvailabilityMessage.pigAssetLoadFailed, "돼지를 불러오지 못했어. 잠시 후 다시 시도해줘.")
+    }
+
+    func test_idleLoadFailureAfterMovementReturnsToRetryableWaitingState() {
+        let loader = ControlledRealityEntityLoader()
+        let visualController = RealityPigVisualController.makeForTesting(entityLoader: loader.load)
+        var errorCount = 0
+        var reachedCount = 0
+        let coordinator = RealityHideARView.Coordinator(
+            meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
+            visualController: visualController,
+            onPigReachedTarget: { reachedCount += 1 },
+            onError: { errorCount += 1 }
+        )
+
+        coordinator.acceptHideTarget(destination: SIMD3(0, 0, -1), initialPosition: SIMD3(0, 0, -0.2))
+        loader.succeedNext()
+        XCTAssertEqual(coordinator.status, .walking)
+        loader.failNext()
+
+        XCTAssertEqual(coordinator.status, .waitingForTarget)
+        XCTAssertFalse(visualController.outerEntity.isEnabled)
+        XCTAssertEqual(reachedCount, 0)
+        XCTAssertEqual(errorCount, 1)
+    }
+
+    func test_surprisedLoadFailureRestoresHiddenStateWithoutReportingReveal() {
+        let loader = ControlledRealityEntityLoader()
+        let visualController = RealityPigVisualController.makeForTesting(entityLoader: loader.load)
+        var errorCount = 0
+        var revealCount = 0
+        let coordinator = RealityHideARView.Coordinator(
+            meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
+            visualController: visualController,
+            onRevealed: { revealCount += 1 },
+            onError: { errorCount += 1 }
+        )
+        coordinator.acceptHideTarget(destination: SIMD3(0, 0, -1), initialPosition: SIMD3(0, 0, -0.2))
+        loader.succeedNext()
+        loader.succeedNext()
+        XCTAssertEqual(coordinator.status, .hidden)
+
+        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: true, meshDistance: 0.5, pigDistance: 2))
+        XCTAssertTrue(coordinator.processRevealFrame(isObservationValid: true, meshDistance: nil, pigDistance: 2))
+        XCTAssertEqual(coordinator.status, .revealing)
+        loader.failNext()
+
+        XCTAssertEqual(coordinator.status, .hidden)
+        XCTAssertTrue(visualController.outerEntity.isEnabled)
+        XCTAssertEqual(revealCount, 0)
+        XCTAssertEqual(errorCount, 1)
+        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: true, meshDistance: 0.5, pigDistance: 2))
+        XCTAssertTrue(coordinator.processRevealFrame(isObservationValid: true, meshDistance: nil, pigDistance: 2))
     }
 }
 
 private struct FakeRealityMeshSupport: RealityMeshSupporting {
     let supportsMeshWithClassification: Bool
 }
+
+@MainActor
+private final class ControlledRealityEntityLoader {
+    typealias Completion = (Result<Entity, Error>) -> Void
+
+    private var pending: [Completion] = []
+
+    func load(_ asset: String, completion: @escaping Completion) -> AnyCancellable? {
+        pending.append(completion)
+        return nil
+    }
+
+    func succeedNext() {
+        pending.removeFirst()(.success(Entity()))
+    }
+
+    func failNext() {
+        pending.removeFirst()(.failure(TestRealityEntityLoadError()))
+    }
+}
+
+private struct TestRealityEntityLoadError: Error {}

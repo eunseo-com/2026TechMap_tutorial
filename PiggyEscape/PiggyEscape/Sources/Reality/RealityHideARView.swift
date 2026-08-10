@@ -33,30 +33,52 @@ enum RealityProjectionGate {
 enum RealityInitialPigPlacement {
     static func position(
         cameraPosition: SIMD3<Float>,
-        cameraForward: SIMD3<Float>,
+        hit: RealitySurfaceHit,
+        destination: SIMD3<Float>,
         floorY: Float
     ) -> SIMD3<Float>? {
         guard cameraPosition.x.isFinite,
               cameraPosition.y.isFinite,
               cameraPosition.z.isFinite,
-              cameraForward.x.isFinite,
-              cameraForward.y.isFinite,
-              cameraForward.z.isFinite,
+              hit.point.x.isFinite,
+              hit.point.y.isFinite,
+              hit.point.z.isFinite,
+              hit.normal.x.isFinite,
+              hit.normal.y.isFinite,
+              hit.normal.z.isFinite,
+              destination.x.isFinite,
+              destination.y.isFinite,
+              destination.z.isFinite,
               floorY.isFinite,
               floorY < cameraPosition.y - 0.2 else {
             return nil
         }
 
-        let horizontalForward = SIMD3(cameraForward.x, 0, cameraForward.z)
-        let length = simd_length(horizontalForward)
-        guard length > 0.0001 else { return nil }
-        let direction = horizontalForward / length
+        let horizontalNormal = SIMD3(hit.normal.x, 0, hit.normal.z)
+        guard simd_length_squared(horizontalNormal) > 0.0001 else { return nil }
+        let normal = simd_normalize(horizontalNormal)
+        let cameraOffset = cameraPosition - hit.point
+        let towardCamera = simd_dot(normal, cameraOffset) >= 0 ? normal : -normal
+        let destinationOffset = destination - hit.point
+        guard simd_dot(towardCamera, cameraOffset) > 0,
+              simd_dot(towardCamera, destinationOffset) < 0 else {
+            return nil
+        }
+
         return SIMD3(
-            cameraPosition.x + direction.x * 0.8,
+            hit.point.x + towardCamera.x * RealityHidePlanner.objectClearance,
             floorY,
-            cameraPosition.z + direction.z * 0.8
+            hit.point.z + towardCamera.z * RealityHidePlanner.objectClearance
         )
     }
+}
+
+enum RealityHideARStatus: Equatable {
+    case waitingForTarget
+    case walking
+    case hidden
+    case revealing
+    case revealed
 }
 
 struct RealityHideARView: UIViewRepresentable {
@@ -64,6 +86,7 @@ struct RealityHideARView: UIViewRepresentable {
     let onTargetAccepted: () -> Void
     let onPigReachedTarget: () -> Void
     let onRevealed: () -> Void
+    let onError: () -> Void
     let onUnavailable: () -> Void
     let onMessage: (String) -> Void
 
@@ -72,6 +95,7 @@ struct RealityHideARView: UIViewRepresentable {
         onTargetAccepted: @escaping () -> Void,
         onPigReachedTarget: @escaping () -> Void,
         onRevealed: @escaping () -> Void,
+        onError: @escaping () -> Void,
         onUnavailable: @escaping () -> Void,
         onMessage: @escaping (String) -> Void
     ) {
@@ -79,6 +103,7 @@ struct RealityHideARView: UIViewRepresentable {
         self.onTargetAccepted = onTargetAccepted
         self.onPigReachedTarget = onPigReachedTarget
         self.onRevealed = onRevealed
+        self.onError = onError
         self.onUnavailable = onUnavailable
         self.onMessage = onMessage
     }
@@ -90,6 +115,7 @@ struct RealityHideARView: UIViewRepresentable {
             onTargetAccepted: onTargetAccepted,
             onPigReachedTarget: onPigReachedTarget,
             onRevealed: onRevealed,
+            onError: onError,
             onUnavailable: onUnavailable,
             onMessage: onMessage
         )
@@ -109,30 +135,23 @@ struct RealityHideARView: UIViewRepresentable {
 
     @MainActor
     final class Coordinator: NSObject {
-        private enum HideState {
-            case waitingForTarget
-            case walking
-            case hidden
-            case revealing
-            case revealed
-        }
-
         private let meshSupport: any RealityMeshSupporting
         private let visualController: RealityPigVisualController
         private let onScanningReady: () -> Void
         private let onTargetAccepted: () -> Void
         private let onPigReachedTarget: () -> Void
         private let onRevealed: () -> Void
+        private let onError: () -> Void
         private let onUnavailable: () -> Void
         private let onMessage: (String) -> Void
 
         private weak var arView: ARView?
         private var revealMonitor = RealityRevealMonitor()
         private var revealSubscription: (any Cancellable)?
-        private var hideState = HideState.waitingForTarget
         private var pigAnchor: AnchorEntity?
 
         private(set) var didStartMeshSession = false
+        private(set) var status = RealityHideARStatus.waitingForTarget
 
         var canStartMeshSession: Bool {
             meshSupport.supportsMeshWithClassification
@@ -145,6 +164,7 @@ struct RealityHideARView: UIViewRepresentable {
             onTargetAccepted: @escaping () -> Void = {},
             onPigReachedTarget: @escaping () -> Void = {},
             onRevealed: @escaping () -> Void = {},
+            onError: @escaping () -> Void = {},
             onUnavailable: @escaping () -> Void = {},
             onMessage: @escaping (String) -> Void = { _ in }
         ) {
@@ -154,6 +174,7 @@ struct RealityHideARView: UIViewRepresentable {
             self.onTargetAccepted = onTargetAccepted
             self.onPigReachedTarget = onPigReachedTarget
             self.onRevealed = onRevealed
+            self.onError = onError
             self.onUnavailable = onUnavailable
             self.onMessage = onMessage
         }
@@ -166,7 +187,10 @@ struct RealityHideARView: UIViewRepresentable {
             anchor.addChild(visualController.outerEntity)
             arView.scene.addAnchor(anchor)
             pigAnchor = anchor
-            visualController.loadIdlePig()
+            visualController.loadIdlePig { [weak self] result in
+                guard case .failure = result else { return }
+                self?.reportVisualFailure(recoveringTo: .waitingForTarget)
+            }
 
             let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
             tap.numberOfTouchesRequired = 1
@@ -202,35 +226,45 @@ struct RealityHideARView: UIViewRepresentable {
             pigDistance: Float
         ) -> Bool {
             guard isObservationValid,
-                  hideState == .hidden,
+                  status == .hidden,
                   revealMonitor.update(meshDistance: meshDistance, pigDistance: pigDistance) else {
                 return false
             }
 
-            hideState = .revealing
+            status = .revealing
             revealSubscription?.cancel()
             revealSubscription = nil
-            visualController.showSurprised { [weak self] in
-                guard let self, self.hideState == .revealing else { return }
-                self.visualController.playSurpriseScale()
-                self.hideState = .revealed
-                self.onRevealed()
+            visualController.showSurprised { [weak self] result in
+                guard let self, self.status == .revealing else { return }
+                switch result {
+                case .success:
+                    self.visualController.playSurpriseScale()
+                    self.status = .revealed
+                    self.onRevealed()
+                case .failure:
+                    self.reportVisualFailure(recoveringTo: .hidden)
+                }
             }
             return true
         }
 
         func acceptHideTarget(destination: SIMD3<Float>, initialPosition: SIMD3<Float>) {
-            guard hideState == .waitingForTarget else { return }
-            hideState = .walking
+            guard status == .waitingForTarget else { return }
+            status = .walking
             visualController.outerEntity.setPosition(initialPosition, relativeTo: nil)
             visualController.outerEntity.isEnabled = true
             onTargetAccepted()
-            visualController.walk(to: destination) { [weak self] in
+            visualController.walk(to: destination) { [weak self] result in
                 guard let self else { return }
-                self.hideState = .hidden
-                self.onPigReachedTarget()
-                if let arView = self.arView {
-                    self.beginRevealMonitoring(in: arView)
+                switch result {
+                case .success:
+                    self.status = .hidden
+                    self.onPigReachedTarget()
+                    if let arView = self.arView {
+                        self.beginRevealMonitoring(in: arView)
+                    }
+                case .failure:
+                    self.reportVisualFailure(recoveringTo: .waitingForTarget)
                 }
             }
         }
@@ -271,7 +305,7 @@ struct RealityHideARView: UIViewRepresentable {
         @objc
         private func handleTap(_ recognizer: UITapGestureRecognizer) {
             guard recognizer.state == .ended,
-                  hideState == .waitingForTarget,
+                  status == .waitingForTarget,
                   let arView,
                   let frame = arView.session.currentFrame else { return }
 
@@ -287,8 +321,9 @@ struct RealityHideARView: UIViewRepresentable {
 
             let cameraPosition = Self.position(from: frame.camera.transform)
             let floor = nearestFloor(in: frame, to: hit.position)
+            let surfaceHit = RealitySurfaceHit(point: hit.position, normal: hit.normal)
             let result = RealityHidePlanner.plan(
-                hit: RealitySurfaceHit(point: hit.position, normal: hit.normal),
+                hit: surfaceHit,
                 cameraPosition: cameraPosition,
                 floor: floor
             )
@@ -297,14 +332,10 @@ struct RealityHideARView: UIViewRepresentable {
             case let .rejected(rejection):
                 onMessage(message(for: rejection))
             case let .accepted(destination):
-                let cameraForward = -SIMD3(
-                    frame.camera.transform.columns.2.x,
-                    frame.camera.transform.columns.2.y,
-                    frame.camera.transform.columns.2.z
-                )
                 guard let initialPosition = RealityInitialPigPlacement.position(
                     cameraPosition: cameraPosition,
-                    cameraForward: cameraForward,
+                    hit: surfaceHit,
+                    destination: destination,
                     floorY: destination.y
                 ) else {
                     onMessage(RealityAvailabilityMessage.scanFirst)
@@ -312,6 +343,21 @@ struct RealityHideARView: UIViewRepresentable {
                 }
                 acceptHideTarget(destination: destination, initialPosition: initialPosition)
             }
+        }
+
+        private func reportVisualFailure(recoveringTo recoveryStatus: RealityHideARStatus) {
+            status = recoveryStatus
+            revealMonitor = RealityRevealMonitor()
+            if recoveryStatus == .waitingForTarget {
+                visualController.outerEntity.isEnabled = false
+            } else if recoveryStatus == .hidden {
+                visualController.outerEntity.isEnabled = true
+                if let arView {
+                    beginRevealMonitoring(in: arView)
+                }
+            }
+            onError()
+            onMessage(RealityAvailabilityMessage.pigAssetLoadFailed)
         }
 
         private func nearestFloor(in frame: ARFrame, to surfacePoint: SIMD3<Float>) -> RealityFloor? {
