@@ -61,16 +61,13 @@ func test_treeArrivalAutomaticallyDiscoversWithoutCameraRotationOnlyOnce() {
     XCTAssertFalse(world.automaticallyDiscoverAfterTreeHide())
 }
 
-func test_autoAdvanceDelayIsFourTenthsOfASecond() {
-    XCTAssertEqual(C3AutoAdvance.treeArrivalDelay, 0.40, accuracy: 0.0001)
-}
 ```
 
 - [ ] **Step 2: Verify RED**
 
 Run `cd PiggyEscape && xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/ClosedWorldEscapeTests test`.
 
-Expected: compile fails because the callback, automatic discovery method, and delay constant do not exist.
+Expected: compile fails because the callback and automatic discovery method do not exist.
 
 - [ ] **Step 3: Add the minimum implementation**
 
