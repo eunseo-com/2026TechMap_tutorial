@@ -51,6 +51,10 @@ struct C3ClosedWorldSceneView: UIViewRepresentable {
 
     func updateUIView(_ uiView: SCNView, context: Context) {}
 
+    static func dismantleUIView(_ uiView: SCNView, coordinator: Coordinator) {
+        coordinator.cancelAutomaticDiscovery()
+    }
+
     func makeCoordinator() -> Coordinator {
         Coordinator(onDiscovered: onDiscovered)
     }
@@ -62,20 +66,39 @@ struct C3ClosedWorldSceneView: UIViewRepresentable {
         weak var scnView: SCNView?
 
         private let onDiscovered: () -> Void
+        private var autoDiscoveryTask: Task<Void, Never>?
 
         init(onDiscovered: @escaping () -> Void) {
             self.onDiscovered = onDiscovered
         }
 
+        deinit {
+            autoDiscoveryTask?.cancel()
+        }
+
         func installCallbacks() {
-            world.isPigInCameraFrustum = { [weak self] in
-                guard let self, let scnView else { return false }
-                return scnView.isNode(world.pigContainer, insideFrustumOf: world.cameraNode)
+            world.onTreeHideFinished = { [weak self] in
+                self?.scheduleAutomaticDiscovery()
             }
             world.onSurpriseCaption = { [weak self, weak overlay] caption in
                 guard caption == "아, 들켰네… 제대로 숨고 싶은데." else { return }
                 overlay?.showSurpriseCaption()
                 self?.onDiscovered()
+            }
+        }
+
+        func cancelAutomaticDiscovery() {
+            autoDiscoveryTask?.cancel()
+            autoDiscoveryTask = nil
+        }
+
+        private func scheduleAutomaticDiscovery() {
+            cancelAutomaticDiscovery()
+            autoDiscoveryTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(C3AutoAdvance.treeArrivalDelay * 1_000_000_000))
+                guard !Task.isCancelled, let self else { return }
+                _ = self.world.automaticallyDiscoverAfterTreeHide()
+                self.autoDiscoveryTask = nil
             }
         }
 
@@ -93,7 +116,6 @@ struct C3ClosedWorldSceneView: UIViewRepresentable {
             let translation = gesture.translation(in: scnView)
             let yawDelta = -Float(translation.x / scnView.bounds.width) * .pi
             world.rotateCamera(byYaw: yawDelta)
-            _ = world.isDiscoveredAfterCameraRotation()
             gesture.setTranslation(.zero, in: scnView)
         }
 

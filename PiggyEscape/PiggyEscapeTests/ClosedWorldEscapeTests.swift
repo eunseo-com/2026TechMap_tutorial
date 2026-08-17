@@ -13,18 +13,16 @@ final class ClosedWorldEscapeTests: XCTestCase {
         XCTAssertEqual(world.currentPose, .running)
     }
 
-    func test_cameraDiscoveryNeedsYawChangeAndVisiblePig() {
+    func test_treeArrivalNotifiesTheAutomaticProgressBoundaryOnce() {
         let world = C3ClosedWorld()
-        world.isPigInCameraFrustum = { true }
+        var count = 0
+        world.onTreeHideFinished = { count += 1 }
         world.completeOpeningNarration()
         XCTAssertTrue(world.tapPig())
         world.finishTreeHideForTesting()
+        world.finishTreeHideForTesting()
 
-        XCTAssertFalse(world.isDiscoveredAfterCameraRotation())
-        world.rotateCamera(byYaw: .pi / 2)
-
-        XCTAssertTrue(world.isDiscoveredAfterCameraRotation())
-        XCTAssertEqual(world.currentPose, .surprised)
+        XCTAssertEqual(count, 1)
     }
 
     func test_surpriseCaptionAndScaleReactionStartTogether() {
@@ -52,54 +50,25 @@ final class ClosedWorldEscapeTests: XCTestCase {
         XCTAssertTrue(scaleActionWasInstalled)
     }
 
-    func test_discoveryDoesNotRunBeforePigReachesTree() {
+    func test_automaticDiscoveryDoesNotRunBeforePigReachesTree() {
         let world = C3ClosedWorld()
-        world.isPigInCameraFrustum = { true }
         world.completeOpeningNarration()
         XCTAssertTrue(world.tapPig())
-        world.rotateCamera(byYaw: .pi)
 
-        XCTAssertFalse(world.isDiscoveredAfterCameraRotation())
+        XCTAssertFalse(world.automaticallyDiscoverAfterTreeHide())
         XCTAssertEqual(world.currentPose, .running)
     }
 
-    func test_discoveryRequiresVisiblePigAfterTreeArrival() {
+    func test_treeArrivalAutomaticallyDiscoversWithoutCameraRotationOnlyOnce() {
         let world = C3ClosedWorld()
-        world.isPigInCameraFrustum = { false }
         world.completeOpeningNarration()
         XCTAssertTrue(world.tapPig())
         world.finishTreeHideForTesting()
-        world.rotateCamera(byYaw: .pi / 2)
 
-        XCTAssertFalse(world.isDiscoveredAfterCameraRotation())
-        XCTAssertEqual(world.currentPose, .idle)
-    }
-
-    func test_discoveryUsesWrappedYawThreshold() {
-        let world = C3ClosedWorld()
-        world.isPigInCameraFrustum = { true }
-        world.completeOpeningNarration()
-        XCTAssertTrue(world.tapPig())
-        world.finishTreeHideForTesting()
-        world.rotateCamera(byYaw: 2 * .pi - 0.69)
-
-        XCTAssertFalse(world.isDiscoveredAfterCameraRotation())
-        world.rotateCamera(byYaw: -0.02)
-
-        XCTAssertTrue(world.isDiscoveredAfterCameraRotation())
-    }
-
-    func test_discoveryRunsOnlyOnce() {
-        let world = C3ClosedWorld()
-        world.isPigInCameraFrustum = { true }
-        world.completeOpeningNarration()
-        XCTAssertTrue(world.tapPig())
-        world.finishTreeHideForTesting()
-        world.rotateCamera(byYaw: .pi / 2)
-        XCTAssertTrue(world.isDiscoveredAfterCameraRotation())
-        world.rotateCamera(byYaw: .pi / 2)
-
-        XCTAssertFalse(world.isDiscoveredAfterCameraRotation())
+        XCTAssertTrue(world.automaticallyDiscoverAfterTreeHide())
+        XCTAssertEqual(world.currentPose, .surprised)
+        XCTAssertEqual(world.lastCaption, "아, 들켰네… 제대로 숨고 싶은데.")
+        XCTAssertFalse(world.automaticallyDiscoverAfterTreeHide())
     }
 
     func test_hidingUsesTheActualInSceneHideTree() {

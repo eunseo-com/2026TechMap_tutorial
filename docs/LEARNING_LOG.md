@@ -28,6 +28,18 @@
 
 ## 항목
 
+### L-20260818-089 — 자동 진행 RED XCTest가 Simulator 서비스 접근 제한으로 중단됨
+
+- 상태: 해결
+- 발생 태스크: C3 자동 진행 Task 1 — 나무 도착 뒤 자동 발견
+- 재현: `cd PiggyEscape && xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/ClosedWorldEscapeTests test`
+- 관찰: 새 callback·자동 발견 API 부재를 확인해야 하는 컴파일 단계 전에 `CoreSimulatorService connection became invalid`, `Unable to discover any Simulator runtimes`, Xcode 로그 경로 `Operation not permitted`로 종료됨.
+- 영향: 추가한 C3 자동 진행 테스트의 예상 RED 컴파일 오류를 아직 확인하지 못했고, source 회귀 여부도 이 실행으로 판단할 수 없음.
+- 원인/가설: Simulator 서비스·runtime·로그 경로가 작업 트리 밖에 있어 현재 실행 환경에서 접근이 거부된 것으로 보이며, L-20260811-084와 같은 검증 환경 제약이 재발함.
+- 조치: 실패를 먼저 기록하고, 동일한 명시 명령을 Simulator 서비스에 접근 가능한 환경에서 한 번 재실행해 예상 RED를 확인한다.
+- 검증: 재실행에서 `onTreeHideFinished`와 `automaticallyDiscoverAfterTreeHide()`가 없다는 4개 컴파일 오류로 예상 RED를 확인했다. 구현 뒤 같은 focused XCTest 7/7, 전체 XCTest 97/97·0 failures 및 iPhone 17 Pro Simulator build가 성공했다.
+- 배운 점: 새 행동 테스트의 RED도 컴파일 실패와 Simulator 초기화 실패를 구분해야 하며, 환경 중단 결과를 제품 코드의 실패 근거로 기록하지 않는다.
+
 ### L-20260811-088 — 최종 인수인계 커밋이 worktree Git index 잠금 권한으로 중단됨
 
 - 상태: 해결

@@ -1,6 +1,10 @@
 import SceneKit
 import UIKit
 
+enum C3AutoAdvance {
+    static let treeArrivalDelay: TimeInterval = 0.40
+}
+
 @MainActor
 final class C3ClosedWorld {
     let scene = SCNScene()
@@ -13,7 +17,7 @@ final class C3ClosedWorld {
     private(set) var surprisePeakScale: CGFloat = 1
 
     var onSurpriseCaption: ((String) -> Void)?
-    var isPigInCameraFrustum: () -> Bool = { false }
+    var onTreeHideFinished: (() -> Void)?
 
     private let orbitRadius: Float = 17
     private let orbitHeight: Float = 12
@@ -21,7 +25,6 @@ final class C3ClosedWorld {
     private let directionalLightNode = SCNNode()
     private var experience = EscapeExperienceMachine()
     private var treeHideDestination: SCNVector3?
-    private var hideStartYaw: Float?
     private var hasDiscovered = false
 
     init() {
@@ -71,12 +74,10 @@ final class C3ClosedWorld {
         finishTreeHide()
     }
 
-    func isDiscoveredAfterCameraRotation() -> Bool {
+    @discardableResult
+    func automaticallyDiscoverAfterTreeHide() -> Bool {
         guard experience.state == .hiddenInClosedWorld,
               !hasDiscovered,
-              let hideStartYaw,
-              abs(wrappedYawDelta(cameraYaw - hideStartYaw)) >= 0.70,
-              isPigVisibleToCamera(),
               experience.send(.closedWorldPigDiscovered) else {
             return false
         }
@@ -133,7 +134,7 @@ final class C3ClosedWorld {
             pigContainer.position = treeHideDestination
         }
         setPose(.idle)
-        hideStartYaw = cameraYaw
+        onTreeHideFinished?()
     }
 
     private func hideDestination() -> SCNVector3 {
@@ -196,14 +197,6 @@ final class C3ClosedWorld {
         let dy = lhs.y - rhs.y
         let dz = lhs.z - rhs.z
         return sqrt(dx * dx + dy * dy + dz * dz)
-    }
-
-    private func wrappedYawDelta(_ yaw: Float) -> Float {
-        atan2(sin(yaw), cos(yaw))
-    }
-
-    private func isPigVisibleToCamera() -> Bool {
-        isPigInCameraFrustum()
     }
 
     private func setupLighting() {
