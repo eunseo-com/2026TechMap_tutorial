@@ -28,6 +28,162 @@
 
 ## 항목
 
+### L-20260818-103 — 저장소 내부 경로에서 activity logging skill을 찾지 못함
+
+- 상태: 해결
+- 발생 태스크: C3 자동 진행 최종 보수 — 완료 기록
+- 재현: 저장소의 `.agents/skills/logging-activity/SKILL.md`를 읽으려 한다.
+- 관찰: `No such file or directory`로 skill instruction을 읽지 못했다.
+- 영향: 로컬 activity 기록 절차를 이 경로로는 확인할 수 없다. Git 추적 인수인계·학습 기록과 최종 커밋은 이미 완료됐다.
+- 원인/가설: 사용 가능한 skill은 저장소 내부가 아니라 사용자 공용 skill directory에 설치되어 있다.
+- 조치: 공용 skill 절대 경로를 읽어 적절한 완료 activity를 남긴다.
+- 검증: `/Users/yang-eunseo/.agents/skills/logging-activity/SKILL.md`에서 공용 skill instruction을 읽었고, 해당 helper로 로컬 activity 기록을 남겼다.
+- 배운 점: skills catalog가 명시한 절대 source locator를 우선 사용하고, repository 내부 복사본을 가정하지 않는다.
+
+### L-20260818-102 — 최종 보수 파일의 Git index 잠금 생성이 권한으로 중단됨
+
+- 상태: 해결
+- 발생 태스크: C3 자동 진행 최종 보수 — 커밋 준비
+- 재현: 연결 worktree에서 최종 source·test·DocC·인수인계 파일만 명시한 `git add`를 실행한다.
+- 관찰: `Unable to create '.../.git/worktrees/ch1-reality-escape/index.lock': Operation not permitted`로 스테이징 전에 종료했다. `.claude/`를 포함한 미추적 파일은 stage되지 않았다.
+- 영향: 검증된 보수를 Git 추적 커밋으로 공유할 수 없다.
+- 원인/가설: L-20260811-088과 동일하게 연결 worktree의 공용 Git metadata에 현재 권한으로 index lock을 만들 수 없다.
+- 조치: 이 실패를 먼저 기록한 뒤, 같은 명시 파일 목록만 공용 Git metadata 쓰기 권한이 있는 실행으로 한 번 재시도한다.
+- 검증: 같은 명시 파일 목록으로 재실행해 cached diff check를 통과했고, `.claude/`는 여전히 미추적·미스테이징 상태임을 확인했다.
+- 배운 점: 연결 worktree의 index 잠금 실패는 코드·문서 변경과 구분해 기록하고, 재시도 때에도 명시 파일 목록으로 사용자의 미추적 파일을 보호한다.
+
+### L-20260818-098 — worktree 루트에서 DocC 검증 프로젝트 경로를 찾지 못함
+
+- 상태: 해결
+- 발생 태스크: C3 자동 진행 최종 보수 — DocC 검증
+- 재현: worktree 루트에서 `xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /tmp/piggyescape-auto-progress-final-docc docbuild`를 실행한다.
+- 관찰: Simulator service 접근 경고 뒤 `xcodebuild: error: 'PiggyEscape.xcodeproj' does not exist.`로 종료했다. DocC 컴파일은 시작하지 않았다.
+- 영향: 갱신한 tutorial·resource snippet의 DocC 검증 근거가 아직 없다.
+- 원인/가설: Xcode project는 worktree 루트가 아니라 `PiggyEscape/PiggyEscape.xcodeproj`에 있다. L-20260811-087과 같은 상대 경로 기준 오류가 재발했다.
+- 조치: 프로젝트 디렉터리를 명시 workdir로 사용해 동일 scheme·destination·derived data 조건으로 한 번 재실행한다.
+- 검증: `PiggyEscape` 디렉터리에서 project를 찾는 것을 확인했고, 최종적으로 macOS arm64 destination의 `CODE_SIGNING_ALLOWED=NO docbuild`가 `** BUILD DOCUMENTATION SUCCEEDED **`로 끝났다.
+- 배운 점: Xcode 검증 명령은 worktree 기준이 아니라 `.xcodeproj`가 있는 디렉터리 기준으로 실행 경로까지 함께 기록한다.
+
+### L-20260818-099 — Simulator service가 DocC 검증 대상 기기를 열거하지 못함
+
+- 상태: 해결
+- 발생 태스크: C3 자동 진행 최종 보수 — DocC 검증
+- 재현: `PiggyEscape` 디렉터리에서 iPhone 17 Pro Simulator destination으로 `docbuild`를 실행한다.
+- 관찰: 프로젝트 경로는 찾았지만 `CoreSimulatorService connection became invalid` 뒤 `Unable to find a device matching ... iPhone 17 Pro`로 종료했다. Simulator runtime을 열거하지 못해 DocC 컴파일은 시작하지 않았다.
+- 영향: iPhone Simulator destination의 DocC 검증을 이 실행으로 완료할 수 없다.
+- 원인/가설: source 또는 DocC 오류가 아니라 현재 process가 CoreSimulatorService와 연결되지 않아 실제 iPhone Simulator 목록을 읽지 못하는 환경 제약이다.
+- 조치: DocC가 target source를 컴파일하는지 별도로 확인할 수 있도록, Xcode가 제공한 Designed for iPad/iPhone on My Mac destination으로 동일 `docbuild`를 한 번 실행한다. iPhone Simulator build 성공 기록은 별도로 유지한다.
+- 검증: iPhone 17 Pro Simulator destination의 기존 XCTest 101/101·0 failures와 Simulator build 성공은 유지한다. DocC는 runtime 열거와 분리해 macOS arm64 destination, `CODE_SIGNING_ALLOWED=NO`에서 `** BUILD DOCUMENTATION SUCCEEDED **`를 확인했다.
+- 배운 점: 문서 컴파일 검증과 iOS Simulator runtime 검증은 독립 근거다. runtime을 열거할 수 없을 때는 지원되는 동일 scheme destination으로 문서 컴파일만 분리해 확인한다.
+
+### L-20260818-100 — macOS destination의 variant 값이 xcodebuild 인자로 분리됨
+
+- 상태: 해결
+- 발생 태스크: C3 자동 진행 최종 보수 — DocC 검증
+- 재현: `-destination 'platform=macOS,arch=arm64,variant=Designed for [iPad,iPhone]'`으로 `docbuild`를 실행한다.
+- 관찰: `xcodebuild: error: unreadable input 'iPhone]' at end of value for option 'Destination'`로 argument parser가 종료했다. build는 시작하지 않았다.
+- 영향: macOS destination을 이용한 DocC 검증도 아직 수행되지 않았다.
+- 원인/가설: destination specifier의 comma가 variant value의 일부로 해석되지 않고 specifier 항목 경계로 처리됐다. 이 scheme에서는 platform·architecture만으로 이미 My Mac destination을 고를 수 있다.
+- 조치: `platform=macOS,arch=arm64`만 지정해 같은 `docbuild`를 한 번 실행한다.
+- 검증: `platform=macOS,arch=arm64` destination은 Xcode project를 정상 선택했고, 이어 `CODE_SIGNING_ALLOWED=NO`를 지정한 `docbuild`가 `** BUILD DOCUMENTATION SUCCEEDED **`로 끝났다.
+- 배운 점: destination value 자체에 comma를 포함할 때는 전체 string quoting만으로 충분한지 먼저 Xcode parser를 확인하고, 유일한 destination이면 불필요한 variant를 제거한다.
+
+### L-20260818-101 — DocC build가 로컬 signing team 부재로 source 컴파일 전에 중단됨
+
+- 상태: 해결
+- 발생 태스크: C3 자동 진행 최종 보수 — DocC 검증
+- 재현: `-destination 'platform=macOS,arch=arm64'`으로 `docbuild`를 실행한다.
+- 관찰: project와 DocC toolchain은 인식됐지만 `Signing for "PiggyEscape" requires a development team` 오류로 `** BUILD DOCUMENTATION FAILED **`가 출력됐다.
+- 영향: 갱신한 DocC catalog의 compile 결과를 signing 설정과 분리해 확인하지 못했다.
+- 원인/가설: scheme의 iOS app target이 local development team 없이 signing을 요구한다. 문서 source 오류가 아니라 target signing configuration이 build를 막은 것으로 진단됐다.
+- 조치: 문서·Swift compile 검증만 수행하도록 동일 command에 `CODE_SIGNING_ALLOWED=NO`를 지정해 한 번 재실행한다. 이 값은 배포용 signing 검증을 대체하지 않는다.
+- 검증: `CODE_SIGNING_ALLOWED=NO`를 지정한 macOS arm64 `docbuild`가 `** BUILD DOCUMENTATION SUCCEEDED **`로 끝났다. 이 검증은 signing 설정이 아닌 DocC·source 컴파일만 확인한다.
+- 배운 점: DocC build에서 signing 오류가 먼저 나면 catalog 검증 결과로 해석하지 말고, code signing을 끈 문서 컴파일 실행을 별도 근거로 남긴다.
+
+### L-20260818-097 — 단위 테스트의 연결되지 않은 pan recognizer가 translation을 전달하지 않음
+
+- 상태: 해결
+- 발생 태스크: C3 자동 진행 최종 보수 — 팬이 진행을 일으키지 않는 회귀 test
+- 재현: `SCNView`에 연결하지 않은 새 `UIPanGestureRecognizer`에 `setTranslation`을 호출한 뒤 실제 `Coordinator.handlePan(_:)`을 호출하고 yaw 변화를 assertion한다.
+- 관찰: focused test에서 `cameraYaw`가 초기값과 같아 `XCTAssertNotEqual` 한 건이 실패했다. 나머지 예약 지연·한 번 큐잉·dismantle 취소 test와 world test는 통과했다.
+- 영향: 이 assertion은 pan recognizer test fixture가 실제 gesture state·translation을 전달했는지 검사하려 했지만, 자동 발견이 팬으로 발생하지 않는 계약 자체를 직접 검증하지 못한다.
+- 원인/가설: recognizer를 view에 연결하거나 active gesture state로 전이하지 않아 `translation(in:)`이 0을 반환한 것으로 보인다. Coordinator의 자동 발견 경로는 pan handler에 없으므로, yaw 변화 assertion은 이 회귀의 필수 관찰값이 아니다.
+- 조치: 실제 `handlePan(_:)` 호출은 유지하되 yaw 변화 assertion을 제거하고, controlled scheduler 예약 수와 discovery callback이 변하지 않는 행동을 검사한다.
+- 검증: 실제 `handlePan(_:)` 뒤 controlled scheduler의 예약 수가 증가하지 않고 discovery callback도 0인 assertion을 포함해 focused C3 XCTest 12/12·0 failures, 전체 XCTest 101/101·0 failures, iPhone 17 Pro Simulator build 성공을 확인했다.
+- 배운 점: 제스처 recognizer의 private state를 단위 테스트에서 인위적으로 만들기보다, 해당 handler 호출 뒤 사용자 계약에 직접 영향을 주는 callback·상태가 변하지 않는지 검증한다.
+
+### L-20260818-096 — MainActor protocol conformance가 scheduler 기본 생성자의 격리를 유지함
+
+- 상태: 해결
+- 발생 태스크: C3 자동 진행 최종 보수 — scheduler 기본 생성
+- 재현: L-20260818-095의 cancel 경계를 actor 독립으로 바꾼 뒤 동일 focused XCTest를 컴파일한다.
+- 관찰: `C3TaskAutoDiscoveryScheduler`가 MainActor scheduler protocol을 준수하므로 class initializer도 actor 격리를 추론한다. 기본 인자 `= C3TaskAutoDiscoveryScheduler()`는 계속 nonisolated context에서 해당 initializer를 호출해 같은 격리 컴파일 오류가 남는다.
+- 영향: cancellation 경계 보정만으로는 기본 production scheduler를 생성하지 못해 focused test가 실행되지 않는다.
+- 원인/가설: protocol conformance가 type initializer의 actor 격리를 추론한다는 compiler note가 확인됐고, 문제 위치는 default argument evaluation 자체임이 분리됐다.
+- 조치: default argument에서 scheduler를 만들지 않고 optional injection을 받는다. `Coordinator`의 MainActor initializer body에서 nil일 때 기본 scheduler를 생성한다.
+- 검증: optional injection으로 바꾼 뒤 focused C3 XCTest 12/12·0 failures, 전체 XCTest 101/101·0 failures, iPhone 17 Pro Simulator build 성공을 확인했다.
+- 배운 점: actor protocol의 기본 implementation을 optional dependency injection의 default expression으로 만들지 말고, actor-isolated initializer body에서 해소한다.
+
+### L-20260818-095 — MainActor scheduler 기본 인자와 deinit 취소가 동기 격리 경계를 넘음
+
+- 상태: 해결
+- 발생 태스크: C3 자동 진행 최종 보수 — 예약 scheduler 주입
+- 재현: scheduler protocol·기본 scheduler 구현을 추가한 뒤 focused C3 XCTest를 컴파일한다.
+- 관찰: `Coordinator`의 기본 인자 `C3TaskAutoDiscoveryScheduler()`와 `deinit`의 `autoDiscoveryTask?.cancel()`에서 각각 `call to main actor-isolated ... in a synchronous nonisolated context` 컴파일 오류가 발생했다.
+- 영향: controlled scheduler를 통한 실제 Coordinator lifecycle 테스트를 실행할 수 없고, 새 예약 경계가 앱 타깃에 빌드되지 않는다.
+- 원인/가설: Swift에서 기본 인자 평가와 `deinit`은 `Coordinator` 클래스 선언의 MainActor 격리와 별개인 동기 nonisolated context라서 MainActor protocol initializer·method를 직접 호출할 수 없는 것이 compiler 진단으로 확인됐다.
+- 조치: scheduler 자체의 cancel·생성을 MainActor에 묶지 않고, operation 실행만 MainActor task로 전환하는 최소 경계로 조정한다. Coordinator의 world 접근은 기존 MainActor closure 안에서만 유지한다.
+- 검증: cancellation handle을 actor 독립으로 만들고 operation만 MainActor에서 실행하도록 조정한 뒤 focused C3 XCTest 12/12·0 failures, 전체 XCTest 101/101·0 failures, iPhone 17 Pro Simulator build 성공을 확인했다.
+- 배운 점: actor 격리된 타입의 기본 인자와 deinit 수명 정리는 actor class 내부라도 별도 동기 context로 type-check되므로, cancellation handle은 actor 독립 경계로 설계해야 한다.
+
+### L-20260818-094 — DocC 최상위 tutorial을 Tutorials 하위로 잘못 지정함
+
+- 상태: 해결
+- 발생 태스크: C3 자동 진행 최종 보수 — 교육 문서 대조
+- 재현: `sed -n '1,300p' PiggyEscape/PiggyEscape/Tutorials/SceneKitToRealityKit.docc/Tutorials/SceneKitToRealityKit.tutorial`를 실행한다.
+- 관찰: `No such file or directory`로 문서 읽기가 중단됐다.
+- 영향: 해당 실행에서는 DocC 최상위 tutorial의 이전 카메라 발견 설명을 검토하지 못했다.
+- 원인/가설: 파일은 `Tutorials/` 하위가 아니라 `.docc` 루트에 있어 경로를 한 단계 깊게 지정한 것이 확인된 원인이다.
+- 조치: 실패를 기록한 뒤 `rg --files PiggyEscape/PiggyEscape/Tutorials/SceneKitToRealityKit.docc`로 실제 위치를 확인하고, 루트 파일을 명시해 대조한다.
+- 검증: 파일 목록에서 `SceneKitToRealityKit.docc/SceneKitToRealityKit.tutorial`의 실제 위치를 확인했다.
+- 배운 점: DocC catalog의 최상위 tutorial과 section tutorial은 같은 디렉터리 깊이에 있다고 가정하지 말고, resource 목록으로 위치를 먼저 확인한다.
+
+### L-20260818-091 — 자동 진행 뒤 교육 문서가 제거된 카메라 발견 계약을 유지함
+
+- 상태: 해결
+- 발생 태스크: C3 자동 진행 최종 보수 — 문서 계약 정합성
+- 재현: `docs/WORK_LOG.md`의 나무 도착 0.40초 자동 진행 설명을 `docs/PROJECT_CONTEXT.md`, `SceneKitToRealityKit.tutorial`, `01-ClosedWorld.tutorial`, `01-ClosedWorld-03-01.swift`와 대조한다.
+- 관찰: 인수인계는 카메라 조작과 무관한 자동 발견을 기록하지만, 시작 문서와 DocC는 yaw·프러스텀·0.70 rad 회전 뒤 발견이라는 이전 계약을 설명한다.
+- 영향: 다음 작업자와 학습자가 구현·실기기 수용 기준을 잘못 해석할 수 있으며, 현재 앱 동작과 튜토리얼이 달라진다.
+- 원인/가설: 자동 진행 변경이 source·unit test·인수인계에만 적용되고, DocC resource snippet과 프로젝트 컨텍스트의 이전 설명은 같은 변경 단위에 포함되지 않은 것이 확인된 원인이다.
+- 조치: 최신 2026-08-18 자동 진행 설계·실행 계획을 프로젝트 컨텍스트의 우선 기준으로 지정하고, DocC 본문·section·snippet을 나무 도착 뒤 0.40초 자동 발견 흐름으로 교체한다.
+- 검증: PROJECT_CONTEXT와 DocC catalog를 대상으로 `yaw|frustum|0.70 rad|카메라를 돌리면|카메라에 의한 발견` 검색 결과가 없음을 확인했다. macOS arm64 destination에서 `CODE_SIGNING_ALLOWED=NO docbuild`가 `** BUILD DOCUMENTATION SUCCEEDED **`로 끝났다.
+- 배운 점: 사용자 경험의 진행 조건을 바꾸면 코드·테스트·인수인계뿐 아니라 시작 문서와 교육용 code listing을 같은 커밋에서 함께 대조한다.
+
+### L-20260818-092 — Coordinator의 자동 진행 예약·취소가 실제 lifecycle 경로에서 검증되지 않음
+
+- 상태: 해결
+- 발생 태스크: C3 자동 진행 최종 보수 — 예약 수명 회귀 테스트
+- 재현: 실제 `C3ClosedWorldSceneView.Coordinator`에서 callback 설치 뒤 world의 나무 도착을 발생시키고, 지연 전·발화 뒤·`dismantleUIView` 뒤의 발견 callback을 결정론적으로 검사한다.
+- 관찰: 현재 test는 `C3ClosedWorld`의 한 번 callback과 자동 발견 상태만 검사한다. Coordinator는 `Task.sleep`을 직접 만들므로 지연·한 번 큐잉·해제 취소를 wall-clock sleep 없이 관찰할 수 없다.
+- 영향: 장면 해제 뒤 늦은 자동 발견이 전환을 재시작하거나, 예약이 즉시 또는 중복 발화하는 회귀를 자동 테스트가 막지 못한다.
+- 원인/가설: 시간 의존성을 주입 가능한 경계로 분리하지 않았고, test가 실제 Coordinator의 `installCallbacks()`와 `dismantleUIView` lifecycle을 거치지 않은 것이 확인된 원인이다.
+- 조치: production 기본 delay와 controlled test scheduler를 같은 최소 protocol 경계에 연결하고, 실제 coordinator callback·dismantle을 호출하는 회귀 test를 추가한다.
+- 검증: scheduler seam 부재의 RED 컴파일 오류를 확인했다. 이후 실제 Coordinator callback·controlled scheduler 발화·dismantle 취소·팬 비진행을 포함한 focused C3 XCTest 12/12·0 failures, 전체 XCTest 101/101·0 failures, iPhone 17 Pro Simulator build 성공을 확인했다.
+- 배운 점: 수명에 묶인 비동기 예약은 상태 기계만 테스트하지 말고, 실제 lifecycle 소유자의 예약·취소 경로를 시간 제어 seam으로 검증한다.
+
+### L-20260818-093 — 시작 순서의 컨셉 노트가 현재 작업 트리에 없음
+
+- 상태: 보류
+- 발생 태스크: C3 자동 진행 최종 보수
+- 재현: worktree 루트에서 `sed -n '1,240p' 씬킷에서_리얼리티킷으로_컨셉노트.md`를 실행한다.
+- 관찰: `No such file or directory`로 문서를 읽지 못했다.
+- 영향: 지정된 시작 순서의 컨셉 노트를 현재 브랜치에서 검토할 수 없다.
+- 원인/가설: 현재 브랜치에 해당 문서가 포함되지 않은 것으로 보이며, `docs/PROJECT_CONTEXT.md`가 지정한 부재 처리와 같다.
+- 조치: 이 태스크는 승인된 2026-08-18 설계·실행 계획, 현재 인수인계와 최종 검토 findings를 대체 근거로 사용한다.
+- 검증: `rg --files`로 경로 부재와 관련 설계·계획 경로 존재를 확인할 예정이다.
+- 배운 점: 시작 문서가 브랜치에 없으면 현재 코드와 상충하지 않는 승인된 명세를 대체 근거로 명시하고, 경로를 임의로 만들거나 범위를 확장하지 않는다.
+
 ### L-20260818-089 — 자동 진행 RED XCTest가 Simulator 서비스 접근 제한으로 중단됨
 
 - 상태: 해결

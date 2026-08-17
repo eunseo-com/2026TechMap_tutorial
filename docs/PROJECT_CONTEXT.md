@@ -13,11 +13,11 @@
 
 1. SceneKit의 C3 섬에서 돼지가 “아, 나 좀 그만 쳐다보지. 나 숨고 싶어…”라고 말한다.
 2. 나레이션이 끝난 뒤 돼지를 탭하면 `Piggy_running`으로 기존 `Cylinder_Tree` 뒤를 향해 걷는다.
-3. 카메라 yaw 변화와 실제 프러스텀 조건이 함께 충족되면 `Piggy_surprised`·“아, 들켰네… 제대로 숨고 싶은데.”·1.5배 후 1.0배 복귀가 한 번 실행된다.
-4. 0.70초 페이드 뒤에만 시스템 카메라 권한을 요청한다. 허용되면 RealityKit AR 화면으로 자동 전환한다.
+3. 기존 나무 도착 뒤 0.40초를 유지하면 카메라 조작과 무관하게 `Piggy_surprised`·“아, 들켰네… 제대로 숨고 싶은데.”·1.5배 후 1.0배 복귀가 한 번 실행된다. 궤도 카메라 팬은 섬을 둘러보는 시각 조작만 맡는다.
+4. 이 자동 발견 뒤 0.70초 페이드가 끝났을 때만 시스템 카메라 권한을 요청한다. 허용되면 RealityKit AR 화면으로 자동 전환한다.
 5. LiDAR 지원 기기에서 사용자가 실제 물체의 수직 옆면을 탭하면 돼지는 카메라 반대편 바닥으로 이동한다. 실제 재구성 메쉬가 돼지를 가리고, 사용자가 물리적으로 이동해 다시 볼 때 같은 놀람 반응과 화면 1.12배 후 1.0배 복귀가 한 번 실행된다.
 
-정확한 상태 전이·수치·에셋 경계는 [설계 명세](superpowers/specs/2026-08-10-ch1-reality-escape-design.md)와 [실행 계획](superpowers/plans/2026-08-10-ch1-reality-escape-implementation.md)을 우선한다.
+정확한 상태 전이·수치·에셋 경계는 [C3 자동 진행 설계](superpowers/specs/2026-08-18-ch1-auto-advance-after-tree-hide-design.md)와 [C3 자동 진행 실행 계획](superpowers/plans/2026-08-18-ch1-auto-advance-after-tree-hide-implementation.md)을 우선한다. 이 두 문서는 2026-08-10 Reality escape 설계·실행 계획의 C3 발견 조건을 대체하며, RealityKit 실제 물체·메쉬 계약은 기존 문서를 유지한다.
 
 ## 시작 순서와 협업 규칙
 
@@ -35,7 +35,7 @@
 ## 검증 상태
 
 - 자동 검증: Task 8에서 명시적인 `xcodebuild` 전체 XCTest, Simulator build, DocC build를 새로 실행해 `docs/WORK_LOG.md`에 실제 결과를 기록한다.
-- 실기기 검증: 카메라 권한 문구·허용/거부·Settings 복구, C3 탭/카메라 발견, LiDAR 메쉬 오클루전, 실제 이동 재발견, 1.5배 돼지·1.12배 화면 반응은 관찰 전까지 `실기기 대기`다. 자동 테스트나 Simulator 결과로 대체하지 않는다.
+- 실기기 검증: 카메라 권한 문구·허용/거부·Settings 복구, C3 탭/나무 도착 뒤 자동 발견, LiDAR 메쉬 오클루전, 실제 이동 재발견, 1.5배 돼지·1.12배 화면 반응은 관찰 전까지 `실기기 대기`다. 자동 테스트나 Simulator 결과로 대체하지 않는다.
 
 ## C3 참고 원본
 

@@ -2,6 +2,50 @@ import SceneKit
 import SpriteKit
 import SwiftUI
 
+protocol C3AutoDiscoveryCancellable: AnyObject {
+    func cancel()
+}
+
+@MainActor
+protocol C3AutoDiscoveryScheduling {
+    @discardableResult
+    func schedule(
+        after delay: TimeInterval,
+        operation: @escaping @MainActor () -> Void
+    ) -> C3AutoDiscoveryCancellable
+}
+
+final class C3TaskAutoDiscoveryScheduler: C3AutoDiscoveryScheduling {
+    func schedule(
+        after delay: TimeInterval,
+        operation: @escaping @MainActor () -> Void
+    ) -> C3AutoDiscoveryCancellable {
+        C3TaskAutoDiscoveryCancellable(
+            task: Task { @MainActor in
+                do {
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled else { return }
+                operation()
+            }
+        )
+    }
+}
+
+private final class C3TaskAutoDiscoveryCancellable: C3AutoDiscoveryCancellable {
+    private let task: Task<Void, Never>
+
+    init(task: Task<Void, Never>) {
+        self.task = task
+    }
+
+    func cancel() {
+        task.cancel()
+    }
+}
+
 struct C3ClosedWorldSceneView: UIViewRepresentable {
     private let onNarrationFinished: () -> Void
     private let onDiscovered: () -> Void
@@ -66,10 +110,15 @@ struct C3ClosedWorldSceneView: UIViewRepresentable {
         weak var scnView: SCNView?
 
         private let onDiscovered: () -> Void
-        private var autoDiscoveryTask: Task<Void, Never>?
+        private let autoDiscoveryScheduler: C3AutoDiscoveryScheduling
+        private var autoDiscoveryTask: C3AutoDiscoveryCancellable?
 
-        init(onDiscovered: @escaping () -> Void) {
+        init(
+            onDiscovered: @escaping () -> Void,
+            autoDiscoveryScheduler: C3AutoDiscoveryScheduling? = nil
+        ) {
             self.onDiscovered = onDiscovered
+            self.autoDiscoveryScheduler = autoDiscoveryScheduler ?? C3TaskAutoDiscoveryScheduler()
         }
 
         deinit {
@@ -94,9 +143,10 @@ struct C3ClosedWorldSceneView: UIViewRepresentable {
 
         private func scheduleAutomaticDiscovery() {
             cancelAutomaticDiscovery()
-            autoDiscoveryTask = Task { @MainActor [weak self] in
-                try? await Task.sleep(nanoseconds: UInt64(C3AutoAdvance.treeArrivalDelay * 1_000_000_000))
-                guard !Task.isCancelled, let self else { return }
+            autoDiscoveryTask = autoDiscoveryScheduler.schedule(
+                after: C3AutoAdvance.treeArrivalDelay
+            ) { [weak self] in
+                guard let self else { return }
                 _ = self.world.automaticallyDiscoverAfterTreeHide()
                 self.autoDiscoveryTask = nil
             }
