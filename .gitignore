@@ -13,3 +13,6 @@ BringingYourSceneKitProjectsToRealityKit/
 
 # Local git worktrees used for isolated feature work
 .worktrees/
+
+# Locally generated static DocC archive
+build/
