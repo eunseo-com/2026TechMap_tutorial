@@ -68,6 +68,42 @@ enum RealityHidePlanResult: Equatable {
     case rejected(RealityHideRejection)
 }
 
+struct RealityHideAttempt: Equatable {
+    let destination: SIMD3<Float>
+    let retreatDirection: SIMD3<Float>
+    let retryCount: Int
+}
+
+enum RealityHideVerificationDecision: Equatable {
+    case hidden
+    case retry(RealityHideAttempt)
+    case selectAnotherTarget
+}
+
+enum RealityHideVerificationPolicy {
+    static let meshSafetyMargin: Float = 0.03
+    static let retryDistance: Float = 0.18
+    static let maximumRetries = 2
+
+    static func decide(
+        meshDistance: Float?,
+        pigDistance: Float,
+        attempt: RealityHideAttempt
+    ) -> RealityHideVerificationDecision {
+        if let meshDistance, meshDistance + meshSafetyMargin < pigDistance {
+            return .hidden
+        }
+        guard attempt.retryCount < maximumRetries else {
+            return .selectAnotherTarget
+        }
+        return .retry(RealityHideAttempt(
+            destination: attempt.destination + attempt.retreatDirection * retryDistance,
+            retreatDirection: attempt.retreatDirection,
+            retryCount: attempt.retryCount + 1
+        ))
+    }
+}
+
 enum RealityHidePlanner {
     static let verticalNormalMaximumY: Float = 0.35
     static let minimumCameraDistance: Float = 0.45

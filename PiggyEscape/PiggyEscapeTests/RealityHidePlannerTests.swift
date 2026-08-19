@@ -227,4 +227,59 @@ final class RealityHidePlannerTests: XCTestCase {
         XCTAssertFalse(monitor.update(meshDistance: nil, pigDistance: 2, cameraPose: stillBlockedAfterMoving))
         XCTAssertTrue(monitor.update(meshDistance: nil, pigDistance: 2, cameraPose: stillBlockedAfterMoving))
     }
+
+    func test_verifiedMeshOcclusionCompletesTheHideAttempt() {
+        let attempt = RealityHideAttempt(
+            destination: SIMD3<Float>(0, 0, -1),
+            retreatDirection: SIMD3<Float>(0, 0, -1),
+            retryCount: 0
+        )
+
+        XCTAssertEqual(
+            RealityHideVerificationPolicy.decide(
+                meshDistance: 0.7,
+                pigDistance: 1.0,
+                attempt: attempt
+            ),
+            .hidden
+        )
+    }
+
+    func test_unoccludedPigRetriesOnlyTowardTheObjectBackSide() {
+        let attempt = RealityHideAttempt(
+            destination: SIMD3<Float>(0, 0, -1),
+            retreatDirection: SIMD3<Float>(0, 0, -1),
+            retryCount: 0
+        )
+
+        guard case let .retry(nextAttempt) = RealityHideVerificationPolicy.decide(
+            meshDistance: nil,
+            pigDistance: 1.0,
+            attempt: attempt
+        ) else {
+            return XCTFail("expected one deeper hide attempt")
+        }
+        XCTAssertEqual(nextAttempt.destination.x, 0, accuracy: 0.0001)
+        XCTAssertEqual(nextAttempt.destination.y, 0, accuracy: 0.0001)
+        XCTAssertEqual(nextAttempt.destination.z, -1.18, accuracy: 0.0001)
+        XCTAssertEqual(nextAttempt.retreatDirection, SIMD3<Float>(0, 0, -1))
+        XCTAssertEqual(nextAttempt.retryCount, 1)
+    }
+
+    func test_unoccludedPigRequiresNewTargetAfterTheBoundedRetries() {
+        let finalAttempt = RealityHideAttempt(
+            destination: SIMD3<Float>(0, 0, -1.36),
+            retreatDirection: SIMD3<Float>(0, 0, -1),
+            retryCount: 2
+        )
+
+        XCTAssertEqual(
+            RealityHideVerificationPolicy.decide(
+                meshDistance: nil,
+                pigDistance: 1.4,
+                attempt: finalAttempt
+            ),
+            .selectAnotherTarget
+        )
+    }
 }

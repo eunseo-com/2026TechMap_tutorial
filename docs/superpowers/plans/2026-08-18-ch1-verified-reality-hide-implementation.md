@@ -31,7 +31,7 @@
 - Consumes: existing `RealityHidePlanner.objectClearance` and the existing 0.03 m mesh margin used by `RealityRevealMonitor`.
 - Produces: `RealityHideAttempt`, `RealityHideVerificationDecision`, and `RealityHideVerificationPolicy.decide(meshDistance:pigDistance:attempt:)` for the AR coordinator.
 
-- [ ] **Step 1: Write the failing policy tests**
+- [x] **Step 1: Write the failing policy tests**
 
 ```swift
 func test_verifiedMeshOcclusionCompletesTheHideAttempt() {
@@ -90,7 +90,7 @@ func test_unoccludedPigRequiresNewTargetAfterTheBoundedRetries() {
 }
 ```
 
-- [ ] **Step 2: Run the focused policy tests to verify RED**
+- [x] **Step 2: Run the focused policy tests to verify RED**
 
 Run:
 
@@ -100,7 +100,7 @@ cd PiggyEscape && xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape 
 
 Expected: test-target compilation fails because `RealityHideAttempt`, `RealityHideVerificationDecision`, and `RealityHideVerificationPolicy` do not exist.
 
-- [ ] **Step 3: Implement the smallest pure policy**
+- [x] **Step 3: Implement the smallest pure policy**
 
 ```swift
 struct RealityHideAttempt: Equatable {
@@ -138,13 +138,13 @@ enum RealityHideVerificationPolicy {
 }
 ```
 
-- [ ] **Step 4: Run the focused policy tests to verify GREEN**
+- [x] **Step 4: Run the focused policy tests to verify GREEN**
 
 Run the Step 2 command.
 
 Expected: `RealityHidePlannerTests` passes with 0 failures.
 
-- [ ] **Step 5: Commit the policy and tests**
+- [x] **Step 5: Commit the policy and tests**
 
 ```bash
 git add PiggyEscape/PiggyEscape/Sources/Reality/RealityHidePlanner.swift PiggyEscape/PiggyEscapeTests/RealityHidePlannerTests.swift

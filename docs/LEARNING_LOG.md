@@ -28,6 +28,18 @@
 
 ## 항목
 
+### L-20260819-104 — 가림 검증 정책 RED XCTest가 Simulator 서비스 접근 전에 중단됨
+
+- 상태: 해결
+- 발생 태스크: 실제 물체 뒤 숨기 검증 — Task 1 RED
+- 재현: `PiggyEscape` 디렉터리에서 iPhone 17 Pro Simulator destination과 `RealityHidePlannerTests`만 지정한 `xcodebuild test`를 실행한다.
+- 관찰: `CoreSimulatorService connection became invalid`와 CoreSimulator 로그 `Operation not permitted`가 발생해 XCTest가 새 타입의 컴파일 단계에 도달하지 못했다.
+- 영향: 새 가림 검증 정책 타입 부재를 보여야 하는 RED 결과를 현재 권한 범위에서 확인할 수 없다.
+- 원인/가설: 기존 L-20260818-099와 같은 Simulator service·로그 경로 접근 제한이며, Swift source 또는 새 테스트 assertion 실패가 아니다.
+- 조치: 이 환경 중단을 먼저 기록하고, 동일 명령을 Simulator service와 Xcode 로그 접근이 가능한 실행으로 한 번 재시도한다.
+- 검증: 접근 가능한 동일 명령을 재실행해 `RealityHideAttempt`와 `RealityHideVerificationPolicy` 타입 부재, 그리고 그 결과의 `.hidden`·`.retry`·`.selectAnotherTarget` 타입 추론 실패로 test-target compile이 중단되는 RED를 확인했다.
+- 배운 점: XCTest가 Simulator 초기화 전에 중단되면 RED 또는 GREEN 결과로 해석하지 말고, 접근 가능한 동일 명령을 한 번만 분리 실행한다.
+
 ### L-20260818-103 — 저장소 내부 경로에서 activity logging skill을 찾지 못함
 
 - 상태: 해결
