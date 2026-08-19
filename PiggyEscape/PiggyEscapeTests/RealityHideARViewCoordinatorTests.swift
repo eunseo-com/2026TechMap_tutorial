@@ -14,13 +14,14 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
         XCTAssertFalse(gate.consumeIfReady(hasAcceptedTarget: true))
     }
 
-    func test_sessionStartGateWaitsForAnAttachedNonzeroARViewAndStartsOnce() {
+    func test_sessionStartGateWaitsForLaidOutARViewAndStartsOnce() {
         var gate = RealityARSessionStartGate()
+        let containerBounds = CGRect(x: 0, y: 0, width: 390, height: 844)
 
-        XCTAssertFalse(gate.consumeIfReady(hasWindow: false, bounds: CGRect(x: 0, y: 0, width: 390, height: 844)))
-        XCTAssertFalse(gate.consumeIfReady(hasWindow: true, bounds: CGRect.zero))
-        XCTAssertTrue(gate.consumeIfReady(hasWindow: true, bounds: CGRect(x: 0, y: 0, width: 390, height: 844)))
-        XCTAssertFalse(gate.consumeIfReady(hasWindow: true, bounds: CGRect(x: 0, y: 0, width: 390, height: 844)))
+        XCTAssertFalse(gate.consumeIfReady(hasWindow: false, containerBounds: containerBounds, arViewBounds: containerBounds))
+        XCTAssertFalse(gate.consumeIfReady(hasWindow: true, containerBounds: containerBounds, arViewBounds: .zero))
+        XCTAssertTrue(gate.consumeIfReady(hasWindow: true, containerBounds: containerBounds, arViewBounds: containerBounds))
+        XCTAssertFalse(gate.consumeIfReady(hasWindow: true, containerBounds: containerBounds, arViewBounds: containerBounds))
     }
 
     func test_coordinatorReportsUnavailableWithoutStartingARSession() {

@@ -30,15 +30,15 @@
 
 ### L-20260819-105 — iPhone 16 Pro에서 AR 카메라가 검게 멈추는 경로를 분리함
 
-- 상태: 부분 해결
+- 상태: 해결 — AR 카메라 배경 초기화
 - 발생 태스크: 실제 물체 뒤 숨기 검증 — 실기기 카메라 진단과 정리
 - 재현: C3에서 권한 전환 후 `RealityHideARView`를 열고, 돼지의 정규화·포즈 로더를 포함한 앵커를 타깃 선택 전부터 AR scene에 추가한다.
 - 관찰: iPhone 16 Pro에서 권한 허용 뒤 자막만 보이고 카메라 배경이 검게 멈췄다. 최소 ARView, 수동 world tracking, mesh reconstruction, scene understanding, plane detection, session delegate, 빈 앵커, 원본 돼지 asset 순서의 진단에서는 카메라가 보였고, 정규화된 포즈 controller를 타깃 전 scene에 붙인 조합에서만 문제가 재현됐다.
 - 영향: 사용자는 스캔·실제 물체 선택·LiDAR 가림 확인으로 진행할 수 없었다.
 - 원인/가설: ARView가 아직 window·유효 bounds를 갖기 전 session을 시작하거나, 타깃 전부터 정규화된 돼지 scene graph를 렌더링하는 수명 순서가 RealityKit camera background 초기화와 충돌한다. 개별 asset 파일이나 LiDAR 지원 여부만의 문제라고 단정할 근거는 없다.
-- 조치: container가 window와 nonzero bounds를 갖춘 뒤에만 AR session을 한 번 시작하고, 돼지 anchor는 사용자가 유효한 숨을 타깃을 선택한 뒤 한 번만 scene에 추가하도록 분리했다. 진단 전용 launch argument와 view는 최종 앱 경로에서 제거한다.
-- 검증: 같은 iPhone 16 Pro에서 카메라 배경이 다시 보이는 것을 관찰했다. Simulator focused `RealityHidePlannerTests`·`RealityHideARViewCoordinatorTests` 36/36도 통과했다. 실제 물체 뒤의 걷기·메쉬 가림·재시도·재발견은 아직 별도 실기기 검증이 필요하다.
-- 배운 점: AR 문제는 최소 구성부터 한 단계씩 기능을 더하는 방식으로 재현 경계를 좁히고, 카메라가 보였다는 관찰과 실제 mesh occlusion이 맞다는 관찰을 분리해 기록한다.
+- 조치: container가 window와 nonzero bounds를 갖춘 뒤에만 AR session을 한 번 시작하고, 돼지 anchor는 사용자가 유효한 숨을 타깃을 선택한 뒤 한 번만 scene에 추가하도록 분리했다. 이후 재현에서 `didMoveToWindow`가 container 크기만으로 시작할 수 있는 경계를 추가로 확인해, 내부 `ARView`의 frame·bounds가 배치된 `layoutSubviews` 뒤에만 시작하게 고정했다. 진단 전용 launch argument와 view는 최종 앱 경로에서 제거한다.
+- 검증: 새 gate의 API 부재 RED compiler failure 뒤 `RealityHideARViewCoordinatorTests` 17/17·0 failures와 iPhone 16 Pro signed build·install·launch를 확인했다. 사용자가 최신 설치에서 카메라 배경이 정상 표시되는 것을 관찰했다. 실제 물체 뒤의 걷기·메쉬 가림·재시도·재발견은 아직 별도 실기기 검증이 필요하다.
+- 배운 점: 에셋 로더는 문제를 재현한 scene graph의 일부였지만 단독 원인으로 결론 내릴 수 없다. ARView container, 내부 render view, session 시작 순서를 분리해 검사하고, 내부 ARView가 실제 크기인 것을 시작 조건으로 삼는다.
 
 ### L-20260819-104 — 가림 검증 정책 RED XCTest가 Simulator 서비스 접근 전에 중단됨
 

@@ -84,8 +84,17 @@ enum RealityHideARStatus: Equatable {
 struct RealityARSessionStartGate {
     private var hasStarted = false
 
-    mutating func consumeIfReady(hasWindow: Bool, bounds: CGRect) -> Bool {
-        guard !hasStarted, hasWindow, !bounds.isEmpty else { return false }
+    mutating func consumeIfReady(
+        hasWindow: Bool,
+        containerBounds: CGRect,
+        arViewBounds: CGRect
+    ) -> Bool {
+        guard !hasStarted,
+              hasWindow,
+              !containerBounds.isEmpty,
+              !arViewBounds.isEmpty else {
+            return false
+        }
         hasStarted = true
         return true
     }
@@ -124,11 +133,15 @@ final class RealityARSessionContainer: UIView {
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
-        startSessionIfReady()
+        setNeedsLayout()
     }
 
     private func startSessionIfReady() {
-        guard startGate.consumeIfReady(hasWindow: window != nil, bounds: bounds) else { return }
+        guard startGate.consumeIfReady(
+            hasWindow: window != nil,
+            containerBounds: bounds,
+            arViewBounds: arView.bounds
+        ) else { return }
         onReadyForSession?(arView)
     }
 }
