@@ -11,5 +11,8 @@ xcrun docc convert Tutorials/SceneKitToRealityKit.docc \
   --hosting-base-path /2026TechMap_tutorial \
   --output-path "$output_path"
 
+cp Web/index.html "$output_path/index.html"
+
 test -f "$output_path/index.html"
 test -f "$output_path/data/tutorials/scenekittorealitykit.json"
+rg --fixed-strings 'tutorials/scenekittorealitykit/' "$output_path/index.html"

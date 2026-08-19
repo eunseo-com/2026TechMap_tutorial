@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "Tutorials/SceneKitToRealityKit.docc/**"
+      - "Web/index.html"
       - "scripts/build-docc-site.sh"
       - ".github/workflows/deploy-docc.yml"
   workflow_dispatch:

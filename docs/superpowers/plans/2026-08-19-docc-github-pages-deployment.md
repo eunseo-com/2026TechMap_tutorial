@@ -172,3 +172,52 @@ https://eunseo-com.github.io/2026TechMap_tutorial/
 ```
 
 Expected: DocC home page, chapter image, and `01-ClosedWorld` tutorial load without missing static assets.
+
+### Task 4: Route the public root to the tutorial
+
+**Files:**
+- Create: `Web/index.html`
+- Modify: `scripts/build-docc-site.sh`
+- Modify: `.github/workflows/deploy-docc.yml`
+
+**Interfaces:**
+- Consumes: the static archive produced by `docc convert`.
+- Produces: a root `index.html` that moves visitors to `tutorials/scenekittorealitykit/` while direct DocC tutorial routes remain unchanged.
+
+- [x] **Step 1: Reproduce the root-entry failure**
+
+```bash
+bash scripts/build-docc-site.sh /tmp/SceneKitToRealityKit.root-check.doccarchive
+rg --fixed-strings 'tutorials/scenekittorealitykit/' /tmp/SceneKitToRealityKit.root-check.doccarchive/index.html
+```
+
+Expected: the `rg` command fails because DocC's generic archive root does not identify this tutorials-only catalog's first route.
+
+- [x] **Step 2: Add an accessible root redirect page**
+
+Create `Web/index.html` with a relative meta refresh, JavaScript replacement, and an ordinary fallback link to `./tutorials/scenekittorealitykit/`.
+
+- [x] **Step 3: Replace the generated archive root after DocC conversion**
+
+Add the following after the `docc convert` command in `scripts/build-docc-site.sh`:
+
+```bash
+cp Web/index.html "$output_path/index.html"
+```
+
+Then assert that the archive root contains `tutorials/scenekittorealitykit/`.
+
+- [x] **Step 4: Include the root page in the deployment trigger and verify locally**
+
+Add `Web/index.html` to the workflow's `push.paths`, then run:
+
+```bash
+bash scripts/build-docc-site.sh /tmp/SceneKitToRealityKit.root-check.doccarchive
+rg --fixed-strings 'tutorials/scenekittorealitykit/' /tmp/SceneKitToRealityKit.root-check.doccarchive/index.html
+```
+
+Expected: the root archive page now routes readers to the tutorial.
+
+- [ ] **Step 5: Commit, deploy, and verify the public root URL**
+
+Push the root-entry fix, then verify that `https://eunseo-com.github.io/2026TechMap_tutorial/` reaches the tutorial start page.

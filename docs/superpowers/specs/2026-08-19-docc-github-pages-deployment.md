@@ -16,6 +16,7 @@
 - 빌드 명령: `scripts/build-docc-site.sh [output-path]`
 - 공개 주소: `https://eunseo-com.github.io/2026TechMap_tutorial/`
 - `docc convert`는 프로젝트 페이지 하위 경로에서 리소스가 깨지지 않도록 `--hosting-base-path /2026TechMap_tutorial`을 사용한다.
+- 루트 주소는 `Web/index.html`로 `tutorials/scenekittorealitykit/`에 이동시킨다. 튜토리얼 전용 DocC 카탈로그의 일반 루트가 표시하는 찾을 수 없음 화면을 공개 시작 화면으로 사용하지 않는다.
 
 ## 배포 계약
 
