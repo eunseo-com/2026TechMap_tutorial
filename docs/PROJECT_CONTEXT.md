@@ -20,7 +20,7 @@
 
 - GitHub 기본 브랜치 `main`을 기준으로 작업한다. 시작할 때마다 원격 변경을 가져와 최신 커밋을 확인한다.
 - Chapter 1의 설계와 8개 태스크 구현 계획은 커밋되어 있다.
-- iOS 앱, Tuist 매니페스트, 에셋 복사는 아직 시작하지 않았다. 사용자 요청에 따라 Chapter 1 DocC 카탈로그는 먼저 원본으로 관리하고 GitHub Pages용 정적 아카이브로 배포한다. 실제 앱 소스가 생기면 카탈로그의 코드 스니펫을 해당 소스와 동기화한다.
+- iOS 앱, Tuist 매니페스트, 에셋 복사는 아직 시작하지 않았다. 사용자 요청에 따라 Chapter 1 DocC 카탈로그는 먼저 원본으로 관리하고 GitHub Pages용 정적 아카이브로 배포했다: `https://eunseo-com.github.io/2026TechMap_tutorial/`. 실제 앱 소스가 생기면 카탈로그의 코드 스니펫을 해당 소스와 동기화한다.
 - Chapter 2(Opening the Door), Chapter 3(Real Hide and Seek), Chapter 4(Comparison)는 상세 설계 전이다.
 
 ## Chapter 1: ClosedWorld

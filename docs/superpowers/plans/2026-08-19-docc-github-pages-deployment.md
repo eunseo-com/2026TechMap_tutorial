@@ -153,7 +153,7 @@ Expected: `valid`.
 
 State that the Chapter 1 catalog is source-managed and GitHub Pages publishes the Actions-built static archive; the iOS implementation plan remains otherwise unchanged.
 
-- [ ] **Step 2: Commit and push the exact validated source**
+- [x] **Step 2: Commit and push the exact validated source**
 
 ```bash
 git add .gitignore .github README.md Tutorials scripts docs
@@ -161,11 +161,11 @@ git commit -m "Deploy DocC tutorial with GitHub Pages"
 git push origin main
 ```
 
-- [ ] **Step 3: Enable the Pages workflow source**
+- [x] **Step 3: Enable the Pages workflow source**
 
 Set this repository's GitHub Pages build type to `workflow`, then confirm a `Deploy DocC` workflow runs from the pushed `main` commit.
 
-- [ ] **Step 4: Verify the published tutorial**
+- [x] **Step 4: Verify the published tutorial**
 
 ```text
 https://eunseo-com.github.io/2026TechMap_tutorial/
