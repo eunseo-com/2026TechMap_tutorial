@@ -218,6 +218,6 @@ grep -Fq 'tutorials/scenekittorealitykit/' /tmp/SceneKitToRealityKit.root-check.
 
 Expected: the root archive page now routes readers to the tutorial.
 
-- [ ] **Step 5: Commit, deploy, and verify the public root URL**
+- [x] **Step 5: Commit, deploy, and verify the public root URL**
 
 Push the root-entry fix, then verify that `https://eunseo-com.github.io/2026TechMap_tutorial/` reaches the tutorial start page.
