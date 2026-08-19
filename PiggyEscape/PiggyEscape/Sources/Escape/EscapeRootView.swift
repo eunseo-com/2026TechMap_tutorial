@@ -163,6 +163,10 @@ final class EscapeRootCoordinator: ObservableObject {
         }
     }
 
+    var showsClosedWorldView: Bool {
+        !showsRealityView
+    }
+
     var showsSettingsRecovery: Bool {
         machine.state == .cameraDenied
     }
@@ -336,16 +340,18 @@ struct EscapeRootView: View {
             )
             .ignoresSafeArea()
 
-            C3ClosedWorldSceneView(
-                onNarrationFinished: coordinator.closedWorldNarrationDidFinish,
-                onDiscovered: beginClosedWorldFade
-            )
-            .opacity(coordinator.isClosedWorldFading ? 0 : 1)
-            .allowsHitTesting(!coordinator.isClosedWorldFading)
-            .animation(
-                .easeInOut(duration: EscapeRootMotion.closedWorldFadeDuration),
-                value: coordinator.isClosedWorldFading
-            )
+            if coordinator.showsClosedWorldView {
+                C3ClosedWorldSceneView(
+                    onNarrationFinished: coordinator.closedWorldNarrationDidFinish,
+                    onDiscovered: beginClosedWorldFade
+                )
+                .opacity(coordinator.isClosedWorldFading ? 0 : 1)
+                .allowsHitTesting(!coordinator.isClosedWorldFading)
+                .animation(
+                    .easeInOut(duration: EscapeRootMotion.closedWorldFadeDuration),
+                    value: coordinator.isClosedWorldFading
+                )
+            }
 
             if coordinator.showsRealityView {
                 RealityHideARView(

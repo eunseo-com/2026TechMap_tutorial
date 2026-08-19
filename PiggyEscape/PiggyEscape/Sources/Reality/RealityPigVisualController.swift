@@ -12,6 +12,8 @@ final class RealityPigVisualController {
     typealias EntityLoader = @MainActor (String, @escaping (Result<Entity, Error>) -> Void) -> AnyCancellable?
     typealias PoseResult = Result<Void, RealityPigVisualError>
 
+    static let targetHeightInMeters: Float = 0.35
+
     let outerEntity: Entity
 
     private(set) var currentPose: C3PigPose = .idle
@@ -168,12 +170,11 @@ final class RealityPigVisualController {
         let unscaledBounds = model.visualBounds(recursive: true, relativeTo: outerEntity)
         let height = unscaledBounds.extents.y
         if height.isFinite, height > 0.0001 {
-            model.scale *= SIMD3(repeating: 1.5 / height)
+            model.scale *= SIMD3(repeating: Self.targetHeightInMeters / height)
             let bounds = model.visualBounds(recursive: true, relativeTo: outerEntity)
             model.position += SIMD3(-bounds.center.x, -bounds.min.y, -bounds.center.z)
         }
 
-        model.generateCollisionShapes(recursive: true)
         if pose == .running {
             playAnimations(in: model)
         }

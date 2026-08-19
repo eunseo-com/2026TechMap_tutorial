@@ -34,6 +34,7 @@ final class EscapeRootCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(coordinator.machine.state, .scanningReality)
         XCTAssertTrue(coordinator.showsRealityView)
+        XCTAssertFalse(coordinator.showsClosedWorldView)
         XCTAssertEqual(coordinator.message, RealityAvailabilityMessage.scanFirst)
 
         coordinator.realityScanningDidBecomeReady()

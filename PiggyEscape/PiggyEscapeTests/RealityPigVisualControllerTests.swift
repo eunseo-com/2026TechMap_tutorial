@@ -4,6 +4,10 @@ import XCTest
 
 @MainActor
 final class RealityPigVisualControllerTests: XCTestCase {
+    func test_realityPigUsesTabletopScaleForPhysicalWorldHiding() {
+        XCTAssertEqual(RealityPigVisualController.targetHeightInMeters, 0.35, accuracy: 0.0001)
+    }
+
     func test_surpriseVisualUsesStableOuterEntityAndSceneKitScaleContract() {
         let controller = RealityPigVisualController.makeForTesting()
         let outerEntity = controller.outerEntity
@@ -62,5 +66,17 @@ final class RealityPigVisualControllerTests: XCTestCase {
         XCTAssertEqual(controller.worldPosition.z, destination.z, accuracy: 0.0001)
         XCTAssertEqual(controller.currentPose, .idle)
         XCTAssertTrue(completed)
+    }
+
+    func test_idlePigDoesNotGenerateCollisionShapesBecauseRealWorldMeshHandlesTaps() {
+        let model = ModelEntity(mesh: .generateBox(size: 1))
+        let controller = RealityPigVisualController.makeForTesting { _, completion in
+            completion(.success(model))
+            return nil
+        }
+
+        controller.loadIdlePig()
+
+        XCTAssertNil(model.components[CollisionComponent.self])
     }
 }

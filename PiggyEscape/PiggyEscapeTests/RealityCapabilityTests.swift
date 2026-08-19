@@ -13,6 +13,21 @@ final class RealityCapabilityTests: XCTestCase {
         XCTAssertEqual(RealityAvailabilityMessage.selectVerticalSide, "숨을 물체의 옆면을 탭해줘.")
         XCTAssertEqual(RealityAvailabilityMessage.moveFartherAway, "조금 떨어진 물체의 옆면을 탭해줘.")
     }
+
+    func test_sessionDiagnosticsIdentifyTheCameraFrameBoundary() {
+        XCTAssertEqual(
+            RealitySessionDiagnostic.starting.message,
+            "AR 세션 시작 요청됨"
+        )
+        XCTAssertEqual(
+            RealitySessionDiagnostic.cameraFrameReceived.message,
+            "AR 카메라 프레임 수신됨"
+        )
+        XCTAssertEqual(
+            RealitySessionDiagnostic.failed("카메라 접근 실패").message,
+            "AR 세션 실패: 카메라 접근 실패"
+        )
+    }
 }
 
 private struct FakeRealityMeshSupport: RealityMeshSupporting {

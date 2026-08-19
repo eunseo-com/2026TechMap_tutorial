@@ -297,7 +297,7 @@ git commit -m 'Verify RealityKit hiding before discovery'
 - Consumes: the verified hide callback from Task 2 and the existing `EscapeRootCoordinator.realityPigDidReachTarget()` state boundary.
 - Produces: normal `ContentView` launch behavior with no private diagnostic modes, current learning records, and a physically testable iPhone 16 Pro checklist.
 
-- [ ] **Step 1: Restore the single production launch path and remove obsolete diagnostic tests**
+- [x] **Step 1: Restore the single production launch path and remove obsolete diagnostic tests**
 
 ```swift
 struct ContentView: View {
@@ -310,11 +310,11 @@ struct ContentView: View {
 
 Remove private diagnostic AR views, launch arguments, and the temporary diagnostic-only assertions from `ContentView.swift` and `PiggyEscapeTests.swift`. Preserve only the production session-start gate, one-time scene-attachment gate, AR session messages, and their tests. The regular root and AR coordinator tests remain the production launch regression coverage. Keep the verified 0.35 m temporary physical height only until the separate object-relative scaling design is approved; do not claim it matches a selected real object.
 
-- [ ] **Step 2: Update handoff and learning records**
+- [x] **Step 2: Update handoff and learning records**
 
 Add a new `LEARNING_LOG.md` entry that records the failed worktree `git fetch --prune origin`, the iPhone 16 Pro black-camera isolation ladder, the conclusion boundary, and the remaining unverified physical hide behavior. Update the first `WORK_LOG.md` handoff entry and checklist so camera display is marked observed, while object-relative scale, visible walking, mesh-verified hiding, and re-discovery remain `실기기 대기` until observed.
 
-- [ ] **Step 3: Run complete automated verification**
+- [x] **Step 3: Run complete automated verification**
 
 Run:
 
@@ -330,7 +330,7 @@ Expected: focused tests and complete XCTest report 0 failures; Simulator build r
 
 Run the signed device build, install it with `xcrun devicectl`, then observe in this order: camera background appears; tapping a vertical real object first shows a visible running Piggy; only a mesh-occluded Piggy changes guidance to “직접 움직여서 피기를 찾아봐.”; retry exhaustion returns to scan guidance. Record each observed result without treating the Simulator as a substitute.
 
-- [ ] **Step 5: Commit the cleanup, documentation, and verification evidence**
+- [x] **Step 5: Commit the cleanup, documentation, and verification evidence**
 
 ```bash
 git add PiggyEscape/PiggyEscape/Sources/ContentView.swift PiggyEscape/PiggyEscapeTests/PiggyEscapeTests.swift PiggyEscape/PiggyEscape/Sources/Reality/RealityCapability.swift PiggyEscape/PiggyEscapeTests/RealityCapabilityTests.swift PiggyEscape/PiggyEscape/Sources/Escape/EscapeRootView.swift PiggyEscape/PiggyEscapeTests/EscapeRootCoordinatorTests.swift PiggyEscape/PiggyEscape/Sources/Reality/RealityPigVisualController.swift PiggyEscape/PiggyEscapeTests/RealityPigVisualControllerTests.swift docs/LEARNING_LOG.md docs/WORK_LOG.md
