@@ -161,7 +161,7 @@ git commit -m 'Add RealityKit hide verification policy'
 - Consumes: `RealityHideAttempt`, `RealityHideVerificationPolicy.decide(meshDistance:pigDistance:attempt:)`, existing `RealityPigVisualController.walk(to:completion:)`, and the existing scene attachment gate.
 - Produces: a `RealityHideARView.Coordinator` that sends `onPigReachedTarget` exactly once only after `.hidden`.
 
-- [ ] **Step 1: Write coordinator RED tests for the callback boundary**
+- [x] **Step 1: Write coordinator RED tests for the callback boundary**
 
 ```swift
 func test_movementCompletionDoesNotReachTheTargetUntilMeshOccludesPiggy() {
@@ -211,7 +211,7 @@ func test_failedHideVerificationReturnsToTargetSelectionAfterBoundedRetries() {
 }
 ```
 
-- [ ] **Step 2: Run the focused coordinator tests to verify RED**
+- [x] **Step 2: Run the focused coordinator tests to verify RED**
 
 Run:
 
@@ -221,7 +221,7 @@ cd PiggyEscape && xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape 
 
 Expected: test-target compilation fails because `processHideArrival(meshDistance:pigDistance:)` does not exist.
 
-- [ ] **Step 3: Integrate one attempt at a time**
+- [x] **Step 3: Integrate one attempt at a time**
 
 ```swift
 private var hideAttempt: RealityHideAttempt?
@@ -266,7 +266,7 @@ func processHideArrival(meshDistance: Float?, pigDistance: Float) {
 
 `acceptHideTarget` must initialize `hideAttempt` with the first destination and a normalized horizontal `destination - initialPosition` direction. `walkPiggy(to:)` must use the existing running→idle completion and call `finishWalking(_:)`; it must not call `onPigReachedTarget` directly. `recoverFromUnverifiedHide()` must reset the attempt, disable the outer entity, set `.waitingForTarget`, and send `RealityAvailabilityMessage.scanFirst`.
 
-- [ ] **Step 4: Run the focused coordinator tests to verify GREEN**
+- [x] **Step 4: Run the focused coordinator tests to verify GREEN**
 
 Run the Step 2 command.
 

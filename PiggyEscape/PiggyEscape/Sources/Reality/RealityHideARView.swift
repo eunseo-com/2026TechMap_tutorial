@@ -81,6 +81,58 @@ enum RealityHideARStatus: Equatable {
     case revealed
 }
 
+struct RealityARSessionStartGate {
+    private var hasStarted = false
+
+    mutating func consumeIfReady(hasWindow: Bool, bounds: CGRect) -> Bool {
+        guard !hasStarted, hasWindow, !bounds.isEmpty else { return false }
+        hasStarted = true
+        return true
+    }
+}
+
+struct RealityPigSceneAttachmentGate {
+    private var hasAttached = false
+
+    mutating func consumeIfReady(hasAcceptedTarget: Bool) -> Bool {
+        guard hasAcceptedTarget, !hasAttached else { return false }
+        hasAttached = true
+        return true
+    }
+}
+
+final class RealityARSessionContainer: UIView {
+    let arView = ARView(frame: .zero, cameraMode: .ar, automaticallyConfigureSession: false)
+    var onReadyForSession: ((ARView) -> Void)?
+
+    private var startGate = RealityARSessionStartGate()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        addSubview(arView)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        arView.frame = bounds
+        startSessionIfReady()
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        startSessionIfReady()
+    }
+
+    private func startSessionIfReady() {
+        guard startGate.consumeIfReady(hasWindow: window != nil, bounds: bounds) else { return }
+        onReadyForSession?(arView)
+    }
+}
+
 struct RealityHideARView: UIViewRepresentable {
     let onScanningReady: () -> Void
     let onTargetAccepted: () -> Void
@@ -121,15 +173,17 @@ struct RealityHideARView: UIViewRepresentable {
         )
     }
 
-    func makeUIView(context: Context) -> ARView {
-        let arView = ARView(frame: .zero, cameraMode: .ar, automaticallyConfigureSession: false)
-        context.coordinator.attach(to: arView)
-        return arView
+    func makeUIView(context: Context) -> RealityARSessionContainer {
+        let container = RealityARSessionContainer(frame: .zero)
+        container.onReadyForSession = { [weak coordinator = context.coordinator] arView in
+            coordinator?.attach(to: arView)
+        }
+        return container
     }
 
-    func updateUIView(_ uiView: ARView, context: Context) {}
+    func updateUIView(_ uiView: RealityARSessionContainer, context: Context) {}
 
-    static func dismantleUIView(_ uiView: ARView, coordinator: Coordinator) {
+    static func dismantleUIView(_ uiView: RealityARSessionContainer, coordinator: Coordinator) {
         coordinator.stop()
     }
 
@@ -151,6 +205,10 @@ struct RealityHideARView: UIViewRepresentable {
         private var scanningReadiness = RealityScanningReadiness()
         private var scanningSubscription: (any Cancellable)?
         private var pigAnchor: AnchorEntity?
+        private var pigSceneAttachment = RealityPigSceneAttachmentGate()
+        private var hideAttempt: RealityHideAttempt?
+        private var hasAttachedToARView = false
+        private var didReceiveCameraFrame = false
 
         private(set) var didStartMeshSession = false
         private(set) var status = RealityHideARStatus.waitingForTarget
@@ -182,12 +240,13 @@ struct RealityHideARView: UIViewRepresentable {
         }
 
         func attach(to arView: ARView) {
+            guard !hasAttachedToARView else { return }
+            hasAttachedToARView = true
             self.arView = arView
             guard startMeshSessionIfSupported(in: arView) else { return }
 
             let anchor = AnchorEntity(world: .zero)
             anchor.addChild(visualController.outerEntity)
-            arView.scene.addAnchor(anchor)
             pigAnchor = anchor
             visualController.loadIdlePig { [weak self] result in
                 guard case .failure = result else { return }
@@ -274,23 +333,106 @@ struct RealityHideARView: UIViewRepresentable {
 
         func acceptHideTarget(destination: SIMD3<Float>, initialPosition: SIMD3<Float>) {
             guard status == .waitingForTarget else { return }
+            let horizontalRetreat = SIMD3(
+                destination.x - initialPosition.x,
+                0,
+                destination.z - initialPosition.z
+            )
+            guard simd_length_squared(horizontalRetreat) > 0.0001 else {
+                onMessage(RealityAvailabilityMessage.scanFirst)
+                return
+            }
+            if let arView, let pigAnchor,
+               pigSceneAttachment.consumeIfReady(hasAcceptedTarget: true) {
+                arView.scene.addAnchor(pigAnchor)
+            }
             status = .walking
+            hideAttempt = RealityHideAttempt(
+                destination: destination,
+                retreatDirection: simd_normalize(horizontalRetreat),
+                retryCount: 0
+            )
             visualController.outerEntity.setPosition(initialPosition, relativeTo: nil)
             visualController.outerEntity.isEnabled = true
             onTargetAccepted()
+            walkPiggy(to: destination)
+        }
+
+        func processHideArrival(meshDistance: Float?, pigDistance: Float) {
+            guard status == .walking, let hideAttempt else { return }
+            switch RealityHideVerificationPolicy.decide(
+                meshDistance: meshDistance,
+                pigDistance: pigDistance,
+                attempt: hideAttempt
+            ) {
+            case .hidden:
+                self.hideAttempt = nil
+                status = .hidden
+                onPigReachedTarget()
+                if let arView {
+                    beginRevealMonitoring(in: arView)
+                }
+            case let .retry(nextAttempt):
+                self.hideAttempt = nextAttempt
+                walkPiggy(to: nextAttempt.destination)
+            case .selectAnotherTarget:
+                recoverFromUnverifiedHide()
+            }
+        }
+
+        private func walkPiggy(to destination: SIMD3<Float>) {
             visualController.walk(to: destination) { [weak self] result in
                 guard let self else { return }
                 switch result {
                 case .success:
-                    self.status = .hidden
-                    self.onPigReachedTarget()
-                    if let arView = self.arView {
-                        self.beginRevealMonitoring(in: arView)
-                    }
+                    self.verifyHideAfterWalking()
                 case .failure:
                     self.reportVisualFailure(recoveringTo: .waitingForTarget)
                 }
             }
+        }
+
+        private func verifyHideAfterWalking() {
+            guard status == .walking else {
+                return
+            }
+            // Unit tests exercise the verification decision directly without an ARView.
+            // A live AR session without a current frame cannot verify occlusion, so it
+            // returns to target selection instead of leaving the pig in `.walking`.
+            guard let arView else { return }
+            guard let cameraTransform = arView.session.currentFrame?.camera.transform else {
+                recoverFromUnverifiedHide()
+                return
+            }
+            let pigPosition = visualController.worldPosition
+            let screenPoint = arView.project(pigPosition)
+            guard RealityProjectionGate.canObserve(
+                projectedPoint: screenPoint,
+                viewportBounds: arView.bounds,
+                pigPosition: pigPosition,
+                cameraTransform: cameraTransform
+            ), let screenPoint else {
+                recoverFromUnverifiedHide()
+                return
+            }
+            let cameraPosition = Self.position(from: cameraTransform)
+            let meshDistance = arView.hitTest(
+                screenPoint,
+                query: .nearest,
+                mask: .sceneUnderstanding
+            ).first.map { simd_distance(cameraPosition, $0.position) }
+            processHideArrival(
+                meshDistance: meshDistance,
+                pigDistance: simd_distance(cameraPosition, pigPosition)
+            )
+        }
+
+        private func recoverFromUnverifiedHide() {
+            hideAttempt = nil
+            revealMonitor = RealityRevealMonitor()
+            status = .waitingForTarget
+            visualController.outerEntity.isEnabled = false
+            onMessage(RealityAvailabilityMessage.scanFirst)
         }
 
         func stop() {
@@ -318,9 +460,21 @@ struct RealityHideARView: UIViewRepresentable {
                 .physics,
                 .receivesLighting
             ]
+            arView.session.delegate = self
             arView.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
             didStartMeshSession = true
+            onMessage(RealitySessionDiagnostic.starting.message)
             return true
+        }
+
+        private func recordCameraFrame() {
+            guard !didReceiveCameraFrame else { return }
+            didReceiveCameraFrame = true
+            onMessage(RealitySessionDiagnostic.cameraFrameReceived.message)
+        }
+
+        private func recordSessionFailure(_ error: Error) {
+            onMessage(RealitySessionDiagnostic.failed(error.localizedDescription).message)
         }
 
         private func reportUnavailable() {
@@ -375,6 +529,7 @@ struct RealityHideARView: UIViewRepresentable {
             status = recoveryStatus
             revealMonitor = RealityRevealMonitor()
             if recoveryStatus == .waitingForTarget {
+                hideAttempt = nil
                 visualController.outerEntity.isEnabled = false
             } else if recoveryStatus == .hidden {
                 visualController.outerEntity.isEnabled = true
@@ -478,6 +633,20 @@ struct RealityHideARView: UIViewRepresentable {
 
         private static func position(from transform: simd_float4x4) -> SIMD3<Float> {
             SIMD3(transform.columns.3.x, transform.columns.3.y, transform.columns.3.z)
+        }
+    }
+}
+
+extension RealityHideARView.Coordinator: ARSessionDelegate {
+    nonisolated func session(_ session: ARSession, didUpdate frame: ARFrame) {
+        Task { @MainActor [weak self] in
+            self?.recordCameraFrame()
+        }
+    }
+
+    nonisolated func session(_ session: ARSession, didFailWithError error: Error) {
+        Task { @MainActor [weak self] in
+            self?.recordSessionFailure(error)
         }
     }
 }
