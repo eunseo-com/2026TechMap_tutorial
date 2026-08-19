@@ -68,7 +68,7 @@ test -f "$output_path/data/tutorials/scenekittorealitykit.json"
 
 ```bash
 bash scripts/build-docc-site.sh /tmp/SceneKitToRealityKit.github-pages.doccarchive
-rg --fixed-strings 'baseUrl = "/2026TechMap_tutorial/"' /tmp/SceneKitToRealityKit.github-pages.doccarchive/index.html
+grep -Fq 'baseUrl = "/2026TechMap_tutorial/"' /tmp/SceneKitToRealityKit.github-pages.doccarchive/index.html
 ```
 
 Expected: both archive contract files exist and the root HTML contains the repository base path.
@@ -188,7 +188,7 @@ Expected: DocC home page, chapter image, and `01-ClosedWorld` tutorial load with
 
 ```bash
 bash scripts/build-docc-site.sh /tmp/SceneKitToRealityKit.root-check.doccarchive
-rg --fixed-strings 'tutorials/scenekittorealitykit/' /tmp/SceneKitToRealityKit.root-check.doccarchive/index.html
+grep -Fq 'tutorials/scenekittorealitykit/' /tmp/SceneKitToRealityKit.root-check.doccarchive/index.html
 ```
 
 Expected: the `rg` command fails because DocC's generic archive root does not identify this tutorials-only catalog's first route.
@@ -213,7 +213,7 @@ Add `Web/index.html` to the workflow's `push.paths`, then run:
 
 ```bash
 bash scripts/build-docc-site.sh /tmp/SceneKitToRealityKit.root-check.doccarchive
-rg --fixed-strings 'tutorials/scenekittorealitykit/' /tmp/SceneKitToRealityKit.root-check.doccarchive/index.html
+grep -Fq 'tutorials/scenekittorealitykit/' /tmp/SceneKitToRealityKit.root-check.doccarchive/index.html
 ```
 
 Expected: the root archive page now routes readers to the tutorial.

@@ -15,4 +15,4 @@ cp Web/index.html "$output_path/index.html"
 
 test -f "$output_path/index.html"
 test -f "$output_path/data/tutorials/scenekittorealitykit.json"
-rg --fixed-strings 'tutorials/scenekittorealitykit/' "$output_path/index.html"
+grep -Fq 'tutorials/scenekittorealitykit/' "$output_path/index.html"
