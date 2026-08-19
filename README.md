@@ -2,6 +2,15 @@
 
 SceneKit에서 RealityKit으로 넘어가는 이유를 이야기형 DocC 튜토리얼로 풀어내는 2026 TechMap 프로젝트입니다.
 
+현재 카탈로그는 다음 네 장으로 구성됩니다.
+
+1. C3의 닫힌 SceneKit 세계와 가상 카메라
+2. 카메라 권한과 AR 세션으로 여는 현실 공간
+3. LiDAR 메쉬·수직 면 탭·오클루전으로 실제 물체 뒤에 숨기
+4. 노드 세계와 Entity–Component–System(ECS) 사고방식 비교
+
+Chapter 3의 실제 가구 가림과 재발견은 LiDAR 지원 실기기에서 직접 확인해야 합니다. Simulator의 빌드·테스트 통과만으로 이를 대신하지 않습니다.
+
 ## 시작하기
 
 - 작업 맥락과 현재 진행 상태: [docs/PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md)
