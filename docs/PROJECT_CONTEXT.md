@@ -23,6 +23,7 @@
 - GitHub Pages용 DocC 카탈로그는 `https://eunseo-com.github.io/2026TechMap_tutorial/`에 배포한다. 문서 콘텐츠는 C3 월드에서 실제 RealityKit 숨기까지 진행한 별도 Xcode 작업본의 코드를 대조해 4개 챕터로 확장했다.
 - 이 저장소의 앱 구현 승인 범위는 계속 Chapter 1이다. DocC의 Chapter 2–4는 확인한 C3→RealityKit 실험 흐름을 설명하는 학습 문서이며, 이 저장소에서 새 앱 구현을 승인한다는 뜻은 아니다.
 - 카메라 권한과 AR 카메라 배경은 실기기에서 관찰했지만, Chapter 3의 실제 가구 메쉬 가림·사용자 이동 뒤 재발견은 LiDAR 지원 실기기에서 최종 수동 검증이 필요하다.
+- GitHub 위키(SceneKit, RealityKit, 비교와 마이그레이션, 실기기 카메라 진단)의 참고 표·체크리스트·진단 기록을 DocC Article 4개(`Tutorials/SceneKitToRealityKit.docc/Articles/`)로 옮기고, 각 챕터 본문과 `@Resources`에서 연결했다. 근거는 `docs/superpowers/specs/2026-08-19-wiki-reference-articles-design.md`. 로컬 `docc convert`/`docc preview`로 링크 해석과 렌더링을 확인했으며, `main` 푸시에 따른 실제 GitHub Pages 배포는 아직 하지 않았다.
 
 ## Chapter 1: ClosedWorld
 

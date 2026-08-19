@@ -6,7 +6,7 @@
     }
 
     @Chapter(name: "1장 — C3의 닫힌 세계") {
-        SceneKit 섬·나무·돼지·조명·가상 카메라는 모두 코드와 에셋으로 선언한다. 화면을 돌리고 돼지를 탭할 수 있지만, 이 동작은 아직 현실을 읽지 않는다.
+        SceneKit 섬·나무·돼지·조명·가상 카메라는 모두 코드와 에셋으로 선언한다. 화면을 돌리고 돼지를 탭할 수 있지만, 이 동작은 아직 현실을 읽지 않는다. 참고 표는 <doc:SceneGraphDeepDive>에서 다룬다.
 
         @Image(source: "closed-world-chapter-icon.png", alt: "균열이 난 파란 방 안에 갇힌 분홍 돼지")
 
@@ -14,7 +14,7 @@
     }
 
     @Chapter(name: "2장 — 카메라로 문 열기") {
-        시스템 카메라 권한을 받고 ARView가 실제 화면 크기를 얻은 뒤 세션을 시작한다. 이제 앱은 현실을 관찰할 준비를 한다.
+        시스템 카메라 권한을 받고 ARView가 실제 화면 크기를 얻은 뒤 세션을 시작한다. 이제 앱은 현실을 관찰할 준비를 한다. 검은 화면 진단 기록은 <doc:DeviceCameraDiagnostics>에서 다룬다.
 
         @Image(source: "closed-world-chapter-icon.png", alt: "현실 공간으로 나가는 튜토리얼 챕터 아이콘")
 
@@ -22,7 +22,7 @@
     }
 
     @Chapter(name: "3장 — 실제 물체 뒤 숨기") {
-        LiDAR가 재구성한 실제 물체의 수직 면을 탭한다. 메쉬의 깊이가 돼지를 가리고, 사용자가 물리적으로 움직여 다시 찾아낸다.
+        LiDAR가 재구성한 실제 물체의 수직 면을 탭한다. 메쉬의 깊이가 돼지를 가리고, 사용자가 물리적으로 움직여 다시 찾아낸다. ECS·앵커 참고 자료는 <doc:RealityKitECS>에서 다룬다.
 
         @Image(source: "closed-world-chapter-icon.png", alt: "실제 물체 뒤 숨기 튜토리얼 챕터 아이콘")
 
@@ -30,10 +30,23 @@
     }
 
     @Chapter(name: "4장 — 같은 돼지, 다른 세계") {
-        노드 안에 모인 책임과 Entity·Component·System으로 나뉜 책임, 그리고 코드가 만든 사실과 공간이 알려 준 사실을 비교한다.
+        노드 안에 모인 책임과 Entity·Component·System으로 나뉜 책임, 그리고 코드가 만든 사실과 공간이 알려 준 사실을 비교한다. 마이그레이션 워크시트는 <doc:MigrationWorksheet>에서 다룬다.
 
         @Image(source: "closed-world-chapter-icon.png", alt: "두 세계를 비교하는 튜토리얼 챕터 아이콘")
 
         @TutorialReference(tutorial: "doc:04-Comparison")
+    }
+
+    @Resources {
+        각 장의 서사에서 다 담지 못한 표·체크리스트·진단 기록을 참고 문서로 모았다.
+
+        @Documentation(destination: "doc:SceneGraphDeepDive") {
+            각 장에서 다루지 못한 참고 표와 체크리스트를 정리했다.
+
+            - <doc:SceneGraphDeepDive>: 씬 그래프, 좌표 변환, 노드에 붙는 컴포넌트, 디버깅 표
+            - <doc:RealityKitECS>: Entity·Component·System 구분, 앵커 종류, 뷰 선택 기준
+            - <doc:MigrationWorksheet>: SceneKit-RealityKit 개념 대응표와 6단계 마이그레이션 워크시트
+            - <doc:DeviceCameraDiagnostics>: 실기기 검은 화면 진단 기록 — 원인 배제·확인된 경계·해결 방식
+        }
     }
 }
