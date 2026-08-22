@@ -28,6 +28,18 @@
 
 ## 항목
 
+### L-20260819-106 — 실기기 설치 전 Xcode destination 목록에서 iPhone 16 Pro가 사라짐
+
+- 상태: 보류
+- 발생 태스크: C3 시작 화면 full-screen 레이아웃 — 실기기 설치
+- 재현: iPhone 16 Pro UDID를 지정해 `xcodebuild ... -destination 'id=CE2EB817-83F9-54CE-9D11-AEB432B82FE4' build`를 실행한다.
+- 관찰: `Unable to find a destination matching ...`으로 build가 source compile 전에 중단됐고, Xcode는 My Mac·Simulator·Any iOS Device만 열거했다.
+- 영향: safe area 수정의 실제 iPhone 화면 확인·설치가 아직 수행되지 않았다.
+- 원인/가설: iPhone 연결·신뢰·잠금 상태 또는 Xcode device discovery의 일시적 상태이며, Swift source·signing 실패는 아직 관찰되지 않았다.
+- 조치: 기기 연결이 `connected`가 된 뒤 동일한 signed build·install 명령을 재실행했다. C3 view에 `ignoresSafeArea()`와 무한 frame을 직접 추가한 실험도 설치했으나 상·하단 여백은 변하지 않았다. 사용자가 이 항목은 더 진행하지 않기로 했으므로 효과 없던 source 변경은 되돌린다.
+- 검증: iPhone 16 Pro signed build·install·launch은 성공했고, 사용자가 실제 화면의 상·하단 여백이 그대로임을 관찰했다.
+- 배운 점: 실기기 destination 오류는 앱 build 오류로 해석하지 말고, source 변경 전 device discovery 결과를 분리한다. SwiftUI modifier만으로 변화가 없으면 scene content의 카메라 framing과 container layout을 구분해 별도 설계 범위로 조사한다.
+
 ### L-20260819-105 — iPhone 16 Pro에서 AR 카메라가 검게 멈추는 경로를 분리함
 
 - 상태: 해결 — AR 카메라 배경 초기화
