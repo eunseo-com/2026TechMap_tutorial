@@ -30,49 +30,6 @@ enum RealityProjectionGate {
     }
 }
 
-enum RealityInitialPigPlacement {
-    static func position(
-        cameraPosition: SIMD3<Float>,
-        hit: RealitySurfaceHit,
-        destination: SIMD3<Float>,
-        floorY: Float
-    ) -> SIMD3<Float>? {
-        guard cameraPosition.x.isFinite,
-              cameraPosition.y.isFinite,
-              cameraPosition.z.isFinite,
-              hit.point.x.isFinite,
-              hit.point.y.isFinite,
-              hit.point.z.isFinite,
-              hit.normal.x.isFinite,
-              hit.normal.y.isFinite,
-              hit.normal.z.isFinite,
-              destination.x.isFinite,
-              destination.y.isFinite,
-              destination.z.isFinite,
-              floorY.isFinite,
-              floorY < cameraPosition.y - 0.2 else {
-            return nil
-        }
-
-        let horizontalNormal = SIMD3(hit.normal.x, 0, hit.normal.z)
-        guard simd_length_squared(horizontalNormal) > 0.0001 else { return nil }
-        let normal = simd_normalize(horizontalNormal)
-        let cameraOffset = cameraPosition - hit.point
-        let towardCamera = simd_dot(normal, cameraOffset) >= 0 ? normal : -normal
-        let destinationOffset = destination - hit.point
-        guard simd_dot(towardCamera, cameraOffset) > 0,
-              simd_dot(towardCamera, destinationOffset) < 0 else {
-            return nil
-        }
-
-        return SIMD3(
-            hit.point.x + towardCamera.x * RealityHidePlanner.objectClearance,
-            floorY,
-            hit.point.z + towardCamera.z * RealityHidePlanner.objectClearance
-        )
-    }
-}
-
 enum RealityHideARStatus: Equatable {
     case waitingForTarget
     case walking
@@ -369,40 +326,24 @@ struct RealityHideARView: UIViewRepresentable {
         }
 
         @discardableResult
-        func processTargetSelection(
-            destination: SIMD3<Float>,
-            initialPosition: SIMD3<Float>
-        ) -> Bool {
+        func processTargetSelection(plan: RealityHidePlan) -> Bool {
             guard interactionMode == .selectingTarget else { return false }
-            return acceptHideTarget(destination: destination, initialPosition: initialPosition)
+            return acceptHideTarget(plan: plan)
         }
 
         @discardableResult
-        func acceptHideTarget(destination: SIMD3<Float>, initialPosition: SIMD3<Float>) -> Bool {
+        func acceptHideTarget(plan: RealityHidePlan) -> Bool {
             guard status == .waitingForTarget else { return false }
-            let horizontalRetreat = SIMD3(
-                destination.x - initialPosition.x,
-                0,
-                destination.z - initialPosition.z
-            )
-            guard simd_length_squared(horizontalRetreat) > 0.0001 else {
-                onMessage(RealityAvailabilityMessage.scanFirst)
-                return false
-            }
             if let arView, let pigAnchor,
                pigSceneAttachment.consumeIfReady(hasAcceptedTarget: true) {
                 arView.scene.addAnchor(pigAnchor)
             }
             status = .walking
-            hideAttempt = RealityHideAttempt(
-                destination: destination,
-                retreatDirection: simd_normalize(horizontalRetreat),
-                retryCount: 0
-            )
-            visualController.outerEntity.setPosition(initialPosition, relativeTo: nil)
+            hideAttempt = RealityHideAttempt(plan: plan)
+            visualController.outerEntity.setPosition(plan.start, relativeTo: nil)
             visualController.outerEntity.isEnabled = true
             onTargetAccepted()
-            walkPiggy(to: destination)
+            walkPiggy(to: plan.destination)
             return true
         }
 
@@ -549,28 +490,19 @@ struct RealityHideARView: UIViewRepresentable {
             }
 
             let cameraPosition = Self.position(from: frame.camera.transform)
-            let floor = nearestFloor(in: frame, to: hit.position)
+            let floorRegion = nearestFloorRegion(in: frame, to: hit.position)
             let surfaceHit = RealitySurfaceHit(point: hit.position, normal: hit.normal)
             let result = RealityHidePlanner.plan(
                 hit: surfaceHit,
                 cameraPosition: cameraPosition,
-                floor: floor
+                floorRegion: floorRegion
             )
 
             switch result {
             case let .rejected(rejection):
                 onMessage(message(for: rejection))
-            case let .accepted(destination):
-                guard let initialPosition = RealityInitialPigPlacement.position(
-                    cameraPosition: cameraPosition,
-                    hit: surfaceHit,
-                    destination: destination,
-                    floorY: destination.y
-                ) else {
-                    onMessage(RealityAvailabilityMessage.scanFirst)
-                    return
-                }
-                _ = processTargetSelection(destination: destination, initialPosition: initialPosition)
+            case let .accepted(plan):
+                _ = processTargetSelection(plan: plan)
             }
         }
 
@@ -590,25 +522,28 @@ struct RealityHideARView: UIViewRepresentable {
             onMessage(RealityAvailabilityMessage.pigAssetLoadFailed)
         }
 
-        private func nearestFloor(in frame: ARFrame, to surfacePoint: SIMD3<Float>) -> RealityFloor? {
+        private func nearestFloorRegion(in frame: ARFrame, to surfacePoint: SIMD3<Float>) -> RealityFloorRegion? {
             let planeAnchors = frame.anchors.compactMap { $0 as? ARPlaneAnchor }
-            let containingFloors = planeAnchors.compactMap { anchor -> RealityFloor? in
+            let containingFloors = planeAnchors.compactMap { anchor -> RealityFloorRegion? in
                 guard anchor.alignment == .horizontal,
                       anchor.classification == .floor else {
                     return nil
                 }
 
-                let footprint = RealityFloorPlane(
+                let region = RealityFloorRegion(
+                    anchorIdentifier: anchor.identifier,
                     transform: anchor.transform,
                     center: anchor.center,
                     extent: SIMD2(anchor.planeExtent.width, anchor.planeExtent.height),
                     rotationOnYAxis: anchor.planeExtent.rotationOnYAxis
                 )
-                return footprint.floor(containing: surfacePoint)
+                return region.containsSurfaceXZ(surfacePoint) ? region : nil
             }
 
             return containingFloors.min { lhs, rhs in
-                abs(lhs.point.y - surfacePoint.y) < abs(rhs.point.y - surfacePoint.y)
+                let lhsY = lhs.pointOnFloor(projecting: surfacePoint)?.y ?? .infinity
+                let rhsY = rhs.pointOnFloor(projecting: surfacePoint)?.y ?? .infinity
+                return abs(lhsY - surfacePoint.y) < abs(rhsY - surfacePoint.y)
             }
         }
 

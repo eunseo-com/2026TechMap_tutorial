@@ -3,27 +3,40 @@ import simd
 @testable import PiggyEscape
 
 final class RealityHidePlannerTests: XCTestCase {
-    func test_verticalSurfacePlacesPigOnCameraOppositeSideOfObject() {
-        let result = RealityHidePlanner.plan(
-            hit: RealitySurfaceHit(point: SIMD3(1, 0.9, 0), normal: SIMD3(1, 0, 0)),
-            cameraPosition: SIMD3(3, 1.5, 0),
-            floor: RealityFloor(point: SIMD3(1, 0.25, 0))
+    func test_exactNinetyCentimeterSurfaceIsAcceptedAndCloserSurfaceIsRejected() {
+        let region = makeFloorRegion(extent: SIMD2(4, 4))
+
+        XCTAssertEqual(
+            RealityHidePlanner.plan(
+                hit: RealitySurfaceHit(point: SIMD3(0, 0.8, 0), normal: SIMD3(0, 0, 1)),
+                cameraPosition: SIMD3(0, 0.8, 0.899),
+                floorRegion: region
+            ),
+            .rejected(.moveFartherAway)
         )
 
-        guard case let .accepted(position) = result else {
-            return XCTFail("expected accepted target")
+        let result = RealityHidePlanner.plan(
+            hit: RealitySurfaceHit(point: SIMD3(0, 0.8, 0), normal: SIMD3(0, 0, 1)),
+            cameraPosition: SIMD3(0, 0.8, 0.9),
+            floorRegion: region
+        )
+
+        guard case let .accepted(plan) = result else {
+            return XCTFail("expected exact boundary acceptance")
         }
-        XCTAssertLessThan(position.x, 1)
-        XCTAssertEqual(position.x, 0.72, accuracy: 0.0001)
-        XCTAssertEqual(position.y, 0.25, accuracy: 0.0001)
+        XCTAssertEqual(plan.start, SIMD3(0, 0, 0.28))
+        XCTAssertEqual(plan.destination, SIMD3(0, 0, -0.28))
+        XCTAssertEqual(plan.retreatDirection, SIMD3(0, 0, -1))
+        XCTAssertEqual(plan.floorRegion, region)
     }
 
     func test_horizontalSurfaceAndMissingFloorAreRejected() {
+        let region = makeFloorRegion(extent: SIMD2(4, 4))
         XCTAssertEqual(
             RealityHidePlanner.plan(
                 hit: RealitySurfaceHit(point: SIMD3(0, 0.8, 0), normal: SIMD3(0, 1, 0)),
                 cameraPosition: SIMD3(0, 1.5, 1),
-                floor: RealityFloor(point: SIMD3(0, 0, 0))
+                floorRegion: region
             ),
             .rejected(.selectVerticalSide)
         )
@@ -31,26 +44,7 @@ final class RealityHidePlannerTests: XCTestCase {
             RealityHidePlanner.plan(
                 hit: RealitySurfaceHit(point: SIMD3(1, 0.8, 0), normal: SIMD3(1, 0, 0)),
                 cameraPosition: SIMD3(3, 1.5, 0),
-                floor: nil
-            ),
-            .rejected(.findFloor)
-        )
-    }
-
-    func test_nearCameraAndFarFloorAreRejected() {
-        XCTAssertEqual(
-            RealityHidePlanner.plan(
-                hit: RealitySurfaceHit(point: SIMD3(0, 0.8, 0), normal: SIMD3(0, 0, 1)),
-                cameraPosition: SIMD3(0, 0.8, 0.44),
-                floor: RealityFloor(point: SIMD3(0, 0, 0))
-            ),
-            .rejected(.moveFartherAway)
-        )
-        XCTAssertEqual(
-            RealityHidePlanner.plan(
-                hit: RealitySurfaceHit(point: SIMD3(0, 0.8, 0), normal: SIMD3(0, 0, 1)),
-                cameraPosition: SIMD3(0, 1.5, 2),
-                floor: RealityFloor(point: SIMD3(2, 0, 0))
+                floorRegion: nil
             ),
             .rejected(.findFloor)
         )
@@ -61,7 +55,7 @@ final class RealityHidePlannerTests: XCTestCase {
             RealityHidePlanner.plan(
                 hit: RealitySurfaceHit(point: SIMD3(0, 0.8, 0), normal: SIMD3(repeating: 0)),
                 cameraPosition: SIMD3(0, 1.5, 2),
-                floor: RealityFloor(point: SIMD3(0, 0, 0))
+                floorRegion: makeFloorRegion(extent: SIMD2(4, 4))
             ),
             .rejected(.selectVerticalSide)
         )
@@ -89,66 +83,59 @@ final class RealityHidePlannerTests: XCTestCase {
         XCTAssertTrue(monitor.update(meshDistance: 1.97, pigDistance: 2, cameraPose: movedPose))
     }
 
-    func test_floorFootprintUsesTransformedExtentInsteadOfItsDistantCenter() {
+    func test_rotatedFloorRegionProjectsStartAndDestinationUsingTheSnapshotTransform() {
         var transform = matrix_identity_float4x4
         transform.columns.0 = SIMD4(0, 0, -1, 0)
         transform.columns.2 = SIMD4(1, 0, 0, 0)
         transform.columns.3 = SIMD4(10, 0.3, -4, 1)
-        let plane = RealityFloorPlane(
+        let region = RealityFloorRegion(
+            anchorIdentifier: UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!,
             transform: transform,
             center: SIMD3(1, 0, 2),
-            extent: SIMD2(8, 6)
+            extent: SIMD2(8, 6),
+            rotationOnYAxis: .pi / 2
         )
         let selectedObjectPoint = SIMD3<Float>(11, 2, -7.5)
-
-        guard let floor = plane.floor(containing: selectedObjectPoint) else {
-            return XCTFail("expected the selected point inside the rotated floor footprint")
-        }
-        XCTAssertEqual(floor.point.x, 11, accuracy: 0.0001)
-        XCTAssertEqual(floor.point.y, 0.3, accuracy: 0.0001)
-        XCTAssertEqual(floor.point.z, -7.5, accuracy: 0.0001)
 
         let result = RealityHidePlanner.plan(
             hit: RealitySurfaceHit(point: selectedObjectPoint, normal: SIMD3(0, 0, 1)),
             cameraPosition: SIMD3(11, 2, -6.5),
-            floor: floor
+            floorRegion: region
         )
-        guard case .accepted = result else {
-            return XCTFail("expected the floor directly under the selected object to be accepted")
+        guard case let .accepted(plan) = result else {
+            return XCTFail("expected rotated floor plan")
         }
+        XCTAssertEqual(plan.start, SIMD3(11, 0.3, -7.22))
+        XCTAssertEqual(plan.destination, SIMD3(11, 0.3, -7.78))
+        XCTAssertEqual(plan.floorRegion.anchorIdentifier, region.anchorIdentifier)
     }
 
-    func test_floorFootprintRejectsPointOutsideNearbyAnchorCenter() {
-        let plane = RealityFloorPlane(
-            transform: matrix_identity_float4x4,
-            center: .zero,
-            extent: SIMD2(1, 1)
-        )
+    func test_surfaceToleranceIsTwoCentimetersButPlacementsRequireTenCentimeterInset() {
+        let region = makeFloorRegion(extent: SIMD2(1, 1))
 
-        XCTAssertNil(plane.floor(containing: SIMD3(0.75, 1, 0)))
+        XCTAssertTrue(region.containsSurfaceXZ(SIMD3(0.52, 1, 0)))
+        XCTAssertFalse(region.containsSurfaceXZ(SIMD3(0.521, 1, 0)))
+        XCTAssertTrue(region.containsPlacementXZ(SIMD3(0.4, 0, 0)))
+        XCTAssertFalse(region.containsPlacementXZ(SIMD3(0.401, 0, 0)))
     }
 
-    func test_floorFootprintAllowsOnlyItsTwoCentimeterBoundaryTolerance() {
-        let plane = RealityFloorPlane(
-            transform: matrix_identity_float4x4,
-            center: .zero,
-            extent: SIMD2(1, 1)
+    func test_initialPlanRejectsWhenEitherStartOrDestinationLeavesTheSafeInset() {
+        XCTAssertEqual(
+            RealityHidePlanner.plan(
+                hit: RealitySurfaceHit(point: SIMD3(0, 0.8, -0.15), normal: SIMD3(0, 0, 1)),
+                cameraPosition: SIMD3(0, 0.8, 0.9),
+                floorRegion: makeFloorRegion(extent: SIMD2(1, 1))
+            ),
+            .rejected(.findFloor)
         )
-
-        XCTAssertNotNil(plane.floor(containing: SIMD3(0.52, 1, 0)))
-        XCTAssertNil(plane.floor(containing: SIMD3(0.521, 1, 0)))
-    }
-
-    func test_floorFootprintAppliesThePlaneExtentRotation() {
-        let plane = RealityFloorPlane(
-            transform: matrix_identity_float4x4,
-            center: .zero,
-            extent: SIMD2(4, 2),
-            rotationOnYAxis: .pi / 2
+        XCTAssertEqual(
+            RealityHidePlanner.plan(
+                hit: RealitySurfaceHit(point: SIMD3(0, 0.8, 0.15), normal: SIMD3(0, 0, 1)),
+                cameraPosition: SIMD3(0, 0.8, 1.1),
+                floorRegion: makeFloorRegion(extent: SIMD2(1, 1))
+            ),
+            .rejected(.findFloor)
         )
-
-        XCTAssertNotNil(plane.floor(containing: SIMD3(0, 0, -1.9)))
-        XCTAssertNil(plane.floor(containing: SIMD3(1.1, 0, 0)))
     }
 
     func test_revealMonitorDoesNotRevealForZeroMovementNullHits() {
@@ -232,6 +219,7 @@ final class RealityHidePlannerTests: XCTestCase {
         let attempt = RealityHideAttempt(
             destination: SIMD3<Float>(0, 0, -1),
             retreatDirection: SIMD3<Float>(0, 0, -1),
+            floorRegion: makeFloorRegion(extent: SIMD2(4, 4)),
             retryCount: 0
         )
 
@@ -247,8 +235,9 @@ final class RealityHidePlannerTests: XCTestCase {
 
     func test_unoccludedPigRetriesOnlyTowardTheObjectBackSide() {
         let attempt = RealityHideAttempt(
-            destination: SIMD3<Float>(0, 0, -1),
+            destination: SIMD3<Float>(0, 0, -0.22),
             retreatDirection: SIMD3<Float>(0, 0, -1),
+            floorRegion: makeFloorRegion(extent: SIMD2(1, 1)),
             retryCount: 0
         )
 
@@ -261,15 +250,35 @@ final class RealityHidePlannerTests: XCTestCase {
         }
         XCTAssertEqual(nextAttempt.destination.x, 0, accuracy: 0.0001)
         XCTAssertEqual(nextAttempt.destination.y, 0, accuracy: 0.0001)
-        XCTAssertEqual(nextAttempt.destination.z, -1.18, accuracy: 0.0001)
+        XCTAssertEqual(nextAttempt.destination.z, -0.4, accuracy: 0.0001)
         XCTAssertEqual(nextAttempt.retreatDirection, SIMD3<Float>(0, 0, -1))
+        XCTAssertEqual(nextAttempt.floorRegion, attempt.floorRegion)
         XCTAssertEqual(nextAttempt.retryCount, 1)
+    }
+
+    func test_retryOutsideThePreservedInsetSelectsAnotherTargetWithoutMoving() {
+        let attempt = RealityHideAttempt(
+            destination: SIMD3<Float>(0, 0, -0.4),
+            retreatDirection: SIMD3<Float>(0, 0, -1),
+            floorRegion: makeFloorRegion(extent: SIMD2(1, 1)),
+            retryCount: 1
+        )
+
+        XCTAssertEqual(
+            RealityHideVerificationPolicy.decide(
+                meshDistance: nil,
+                pigDistance: 1,
+                attempt: attempt
+            ),
+            .selectAnotherTarget
+        )
     }
 
     func test_unoccludedPigRequiresNewTargetAfterTheBoundedRetries() {
         let finalAttempt = RealityHideAttempt(
             destination: SIMD3<Float>(0, 0, -1.36),
             retreatDirection: SIMD3<Float>(0, 0, -1),
+            floorRegion: makeFloorRegion(extent: SIMD2(4, 4)),
             retryCount: 2
         )
 
@@ -282,4 +291,19 @@ final class RealityHidePlannerTests: XCTestCase {
             .selectAnotherTarget
         )
     }
+}
+
+private func makeFloorRegion(
+    extent: SIMD2<Float>,
+    transform: simd_float4x4 = matrix_identity_float4x4,
+    center: SIMD3<Float> = .zero,
+    rotationOnYAxis: Float = 0
+) -> RealityFloorRegion {
+    RealityFloorRegion(
+        anchorIdentifier: UUID(uuidString: "11111111-2222-3333-4444-555555555555")!,
+        transform: transform,
+        center: center,
+        extent: extent,
+        rotationOnYAxis: rotationOnYAxis
+    )
 }

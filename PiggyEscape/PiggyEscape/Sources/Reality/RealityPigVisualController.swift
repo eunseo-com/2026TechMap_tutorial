@@ -5,14 +5,13 @@ import simd
 
 enum RealityPigVisualError: Error, Equatable {
     case assetLoadFailed(C3PigPose)
+    case invalidVisualBounds(C3PigPose)
 }
 
 @MainActor
 final class RealityPigVisualController {
     typealias EntityLoader = @MainActor (String, @escaping (Result<Entity, Error>) -> Void) -> AnyCancellable?
     typealias PoseResult = Result<Void, RealityPigVisualError>
-
-    static let targetHeightInMeters: Float = 0.35
 
     let outerEntity: Entity
 
@@ -50,7 +49,7 @@ final class RealityPigVisualController {
 
     static func makeForTesting(
         entityLoader: @escaping EntityLoader = { _, completion in
-            completion(.success(Entity()))
+            completion(.success(ModelEntity(mesh: .generateBox(size: 0.3))))
             return nil
         }
     ) -> RealityPigVisualController {
@@ -143,9 +142,13 @@ final class RealityPigVisualController {
             self.requestedPose = nil
             switch result {
             case let .success(entity):
-                self.install(entity, for: pose)
-                self.currentPose = pose
-                completion(.success(()))
+                do {
+                    try self.install(entity, for: pose)
+                    self.currentPose = pose
+                    completion(.success(()))
+                } catch {
+                    completion(.failure(.invalidVisualBounds(pose)))
+                }
             case .failure:
                 completion(.failure(.assetLoadFailed(pose)))
             }
@@ -156,24 +159,47 @@ final class RealityPigVisualController {
         pose == .idle ? "Piggy" : "Piggy_\(pose.rawValue)"
     }
 
-    private func install(_ model: Entity, for pose: C3PigPose) {
-        outerEntity.children
-            .filter { $0.name.hasPrefix("RealityPigModel_") }
-            .forEach { $0.removeFromParent() }
-
+    private func install(_ model: Entity, for pose: C3PigPose) throws {
         model.name = "RealityPigModel_\(pose.rawValue)"
         let xCorrection = simd_quatf(angle: .pi / 2, axis: SIMD3(1, 0, 0))
         let zCorrection = simd_quatf(angle: .pi, axis: SIMD3(0, 0, 1))
         model.orientation = zCorrection * xCorrection
         outerEntity.addChild(model)
 
-        let unscaledBounds = model.visualBounds(recursive: true, relativeTo: outerEntity)
-        let height = unscaledBounds.extents.y
-        if height.isFinite, height > 0.0001 {
-            model.scale *= SIMD3(repeating: Self.targetHeightInMeters / height)
-            let bounds = model.visualBounds(recursive: true, relativeTo: outerEntity)
-            model.position += SIMD3(-bounds.center.x, -bounds.min.y, -bounds.center.z)
+        do {
+            let correctedBounds = model.visualBounds(recursive: true, relativeTo: outerEntity)
+            _ = try PigScalePolicy.uniformScale(
+                visualBoundsMin: correctedBounds.min,
+                visualBoundsMax: correctedBounds.max
+            )
+            model.position += SIMD3(
+                -correctedBounds.center.x,
+                -correctedBounds.min.y,
+                -correctedBounds.center.z
+            )
+
+            let alignedBounds = model.visualBounds(recursive: true, relativeTo: outerEntity)
+            let baselineScale = try PigScalePolicy.uniformScale(
+                visualBoundsMin: alignedBounds.min,
+                visualBoundsMax: alignedBounds.max
+            )
+            model.scale *= SIMD3(repeating: baselineScale)
+
+            let normalizedBounds = model.visualBounds(recursive: true, relativeTo: outerEntity)
+            model.position += SIMD3(
+                -normalizedBounds.center.x,
+                -normalizedBounds.min.y,
+                -normalizedBounds.center.z
+            )
+        } catch {
+            model.removeFromParent()
+            throw error
         }
+
+        outerEntity.children
+            .filter { $0 !== model && $0.name.hasPrefix("RealityPigModel_") }
+            .forEach { $0.removeFromParent() }
+        outerEntity.scale = .one
 
         if pose == .running {
             playAnimations(in: model)

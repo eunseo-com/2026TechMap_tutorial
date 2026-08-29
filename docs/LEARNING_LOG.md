@@ -28,6 +28,102 @@
 
 ## 항목
 
+### L-20260830-124 — 실제 iPhone XCTest 성공 후 devicectl 진단 수집이 부분 bundle로 끝남
+
+- 상태: 보류
+- 발생 태스크: Task 4 — 18cm 크기와 안전한 floor region 배치
+- 재현: development team 명령행 override로 실제 `YES iPhone` focused·전체 XCTest를 실행한다.
+- 관찰: focused 45개와 전체 137개가 모두 0 failures, `** TEST SUCCEEDED **`로 완료된 뒤 `IDETestOperationsObserverDebug: Failure collecting diagnostics from devices` 및 `CoreDeviceCLISupport.DiagnoseError` 경고가 발생했다. Xcode는 각 xcresult의 `Diagnostics/devicectl_diagnostics.zip`에 부분 진단 bundle을 남겼다.
+- 영향: test assertion count·pass/failure·result bundle은 정상 생성되었고 xcodebuild exit는 0이다. 기기 진단 추가 수집만 완전하지 않았다.
+- 원인/가설: XCTest 종료 후 Xcode가 실행한 선택적 `devicectl diagnose`가 CoreDevice 진단 아카이브를 완전히 수집하지 못했다. Task 4 source·assertion 실패 근거는 없다.
+- 조치: Task 4 범위 밖의 기기 진단 수집 환경은 변경하지 않고, 테스트 성공 결과와 후속 진단 경고를 분리해 기록한다.
+- 검증: focused bundle은 `/tmp/piggyescape-task4-device-focused-signed/Logs/Test/Test-PiggyEscape-2026.08.30_02-57-27-+0900.xcresult`, 전체 bundle은 `/tmp/piggyescape-task4-device-full-signed/Logs/Test/Test-PiggyEscape-2026.08.30_02-58-01-+0900.xcresult`이며 xcodebuild는 각각 exit 0이다. `xcresulttool` summary도 실제 iPhone 16 Pro iOS 26.6(arm64)에서 각각 total 45·passed 45·failed 0, total 137·passed 137·failed 0, `result: Passed`를 반환했다.
+- 배운 점: XCTest assertion 결과와 종료 후 추가 진단 수집 경고를 분리해, 성공을 과장하지 않고 잔여 환경 경고도 보존한다.
+
+### L-20260830-123 — 잠금 해제 후 실제 iPhone focused build가 development team 미설정으로 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 4 — 18cm 크기와 안전한 floor region 배치
+- 재현: `xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS,id=00008140-0008385214C0801C' -derivedDataPath /tmp/piggyescape-task4-device-focused-unlocked -only-testing:PiggyEscapeTests/PigScalePolicyTests -only-testing:PiggyEscapeTests/RealityPigVisualControllerTests -only-testing:PiggyEscapeTests/RealityHidePlannerTests -only-testing:PiggyEscapeTests/RealityHideARViewCoordinatorTests test`
+- 관찰: 기기 destination·DDI 준비를 통과해 dependency graph·provisioning input 단계에 도달했지만 `Signing for "PiggyEscapeTests" requires a development team.`과 `Signing for "PiggyEscape" requires a development team.` 두 오류로 exit 65, `** TEST FAILED **`가 발생했다.
+- 영향: focused 45개는 compile·install·assertion 실행 전에 중단됐다. focused 성공이 없으므로 실제 iPhone 전체 suite는 시작하지 않았다.
+- 원인/가설: generated project의 `PiggyEscape`·`PiggyEscapeTests` 타겟에 실제 기기 서명에 필요한 development team이 설정되지 않은 것이 Xcode 오류로 확인됐다. Task 4 source·test assertion 실패 근거는 없다.
+- 조치: 저장소 signing 설정은 변경하지 않고, 사용자가 확인한 기존 로컬 development team `GMLPV8QDSK`를 `DEVELOPMENT_TEAM=GMLPV8QDSK CODE_SIGN_STYLE=Automatic -allowProvisioningUpdates`로 명령행에만 override했다.
+- 검증: 실패 result bundle은 `/tmp/piggyescape-task4-device-focused-unlocked/Logs/Test/Test-PiggyEscape-2026.08.30_02-54-53-+0900.xcresult`다. override 후 새 DerivedData에서 실제 iPhone 16 Pro iOS 26.6 focused 45/45·0 failures, 전체 137/137·0 failures가 모두 exit 0, `** TEST SUCCEEDED **`로 완료됐다. 결과 bundle은 각각 `/tmp/piggyescape-task4-device-focused-signed/Logs/Test/Test-PiggyEscape-2026.08.30_02-57-27-+0900.xcresult`, `/tmp/piggyescape-task4-device-full-signed/Logs/Test/Test-PiggyEscape-2026.08.30_02-58-01-+0900.xcresult`다.
+- 배운 점: generic Simulator compile은 code signing을 필요로 하지 않으므로 실제 iPhone XCTest의 development team·provisioning 게이트를 대체하지 않는다.
+
+### L-20260830-122 — 실제 iPhone focused XCTest가 developer disk image mount 실패로 시작하지 못함
+
+- 상태: 해결
+- 발생 태스크: Task 4 — 18cm 크기와 안전한 floor region 배치
+- 재현: `xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS,id=00008140-0008385214C0801C' -derivedDataPath /tmp/piggyescape-task4-device-focused-2 -only-testing:PiggyEscapeTests/PigScalePolicyTests -only-testing:PiggyEscapeTests/RealityPigVisualControllerTests -only-testing:PiggyEscapeTests/RealityHidePlannerTests -only-testing:PiggyEscapeTests/RealityHideARViewCoordinatorTests test`
+- 관찰: Xcode는 `YES iPhone` UDID를 available destination으로 인식했지만 `Timed out waiting for all destinations ...` 및 `The developer disk image could not be mounted on this device.`로 exit 70을 반환했다. 첫 name 포함 명령은 Xcode가 표시한 기기 이름 끝 공백과 맞지 않아 destination 불일치로 끝났고, 고유 UDID만 사용한 재실행에서 DDI 오류를 확인했다. 후속 `devicectl device info ddiServices`는 `kAMDMobileImageMounterDeviceLocked`, error `0xe80000e2`, `The device is locked`를 반환했다.
+- 영향: Task 4 focused 45개는 컴파일·설치·assertion 실행 전에 중단됐고, focused 성공이 없으므로 실제 iPhone 전체 suite는 시작하지 않았다.
+- 원인/가설: 기기 잠금이 확정 원인이다. `devicectl` error가 Mobile Image Mounter의 device-locked 상태를 명시했다. DDI host `update --no-clean`은 성공했지만 installed set이 equivalent였으므로 host image 부재·노후화가 원인이 아니다.
+- 조치: DDI를 무리하게 우회하지 않고 실행을 중단했다. 사용자가 `YES iPhone`을 잠금 해제하고 잠금 해제 상태를 유지한 뒤 같은 UDID·focused 명령을 새 `/tmp` DerivedData로 재실행한다.
+- 검증: 이 실행의 assertion count는 0이며 `TEST SUCCEEDED` 또는 정상 xcresult bundle은 생성되지 않았다. 기기 잠금 해제 후 같은 UDID focused 재실행은 DDI 오류 없이 provisioning input 단계에 도달했고, 후속 signing blocker는 L-20260830-123에 분리했다.
+- 배운 점: available destination에 실제 기기가 표시되는 것과 잠금 해제된 기기에 test runtime을 mount해 실행 가능한 것은 별도 게이트이며, device-locked DDI mount 실패를 앱 컴파일·test assertion 실패로 해석하지 않는다.
+
+### L-20260830-121 — self-review 뒤 focused 재실행이 Simulator Busy로 시작하지 못함
+
+- 상태: 보류
+- 발생 태스크: Task 4 — 18cm 크기와 안전한 floor region 배치
+- 재현: self-review에서 reveal 회귀와 start/retry 경계를 보강한 뒤 새 `/tmp/piggyescape-task4-final-focused` DerivedData로 네 focused suite를 실행한다.
+- 관찰: app과 test bundle compile·install 단계 뒤 Simulator가 `Application failed preflight checks: Busy`로 test runner launch를 거부해 assertion 실행 수 없이 exit 65로 끝났다.
+- 영향: 새로 보강한 경계를 포함한 최종 focused pass count를 이 실행으로 확인할 수 없다. 직전 변경 전 suite는 42/42였다.
+- 원인/가설: source·test assertion이 아니라 Simulator SpringBoard preflight의 일시적 busy 상태로 오류 domain과 reason에서 확인됐다.
+- 조치: 같은 project·scheme·destination·focused test 조건을 새 DerivedData에서 재시도했으나 같은 Busy가 반복됐다. 확인 시점의 iPhone 17 Pro iOS 26.5 Simulator는 `Shutdown`이었으므로 사용자가 부팅한 뒤 실행 검증을 재개한다. 대기 중 source를 바꾸지 않고 generic iOS Simulator destination에서 전체 `build-for-testing`을 실행했다.
+- 검증: 첫 결과 bundle은 `/tmp/piggyescape-task4-final-focused/Logs/Test/Test-PiggyEscape-2026.08.30_01-25-50-+0900.xcresult`, 반복 결과는 `/tmp/piggyescape-task4-final-focused-retry/Logs/Test/Test-PiggyEscape-2026.08.30_01-26-50-+0900.xcresult`다. 새 `/tmp/piggyescape-task4-build-for-testing` DerivedData와 `generic/platform=iOS Simulator`, `CODE_SIGNING_ALLOWED=NO`로 실행한 `build-for-testing`은 app·test bundle의 arm64·x86_64 compile 후 `** TEST BUILD SUCCEEDED **`로 완료됐다. 이 결과는 XCTest assertion 실행을 대체하지 않으며, Simulator 부팅 뒤 focused·전체 실행 count를 후속 검증에 기록한다.
+- 배운 점: compile 뒤 test runner preflight가 막힌 결과도 assertion 실패와 분리하고, generic `build-for-testing`은 전체 소스·테스트 타겟 컴파일 건전성만 확인한다.
+
+### L-20260830-120 — 첫 Task 4 GREEN에서 synchronous test loader가 두 test process를 종료함
+
+- 상태: 해결
+- 발생 태스크: Task 4 — 18cm 크기와 안전한 floor region 배치
+- 재현: scale·visual·planner·coordinator focused test를 새 `/tmp/piggyescape-task4-green` DerivedData에서 실행한다.
+- 관찰: production과 test bundle compile은 성공했고 planner 등 실행된 assertion은 통과했지만, pose baseline test는 pending load 배열을 `inout`으로 수정하는 동안 completion이 같은 배열에 재진입해 exclusivity conflict로 종료했다. 기존 coordinator test는 새 invalid-bounds 계약에서도 빈 `Entity()`를 성공 fixture로 전달해 running install이 실패한 뒤 존재하지 않는 idle load를 `removeFirst()`하여 종료했다.
+- 영향: 첫 focused 실행은 2개 test crash와 exit 65로 GREEN이 아니며, production scale/floor assertion 실패 여부를 최종 판정할 수 없다.
+- 원인/가설: 두 종료 모두 synchronous test loader의 부정확한 fixture/lifetime으로 stack과 실행 순서에서 확인됐다. production scale 또는 planner 계산 실패 근거는 없다.
+- 조치: pending load를 배열의 `inout` 접근 밖에서 완료하고, 성공 설치 fixture를 유효한 bounds의 `ModelEntity`로 바꾼다. 이어 남은 surprised fixture에도 같은 유효 bounds 규칙을 적용했다.
+- 검증: iPhone 17 Pro iOS 26.5 Simulator에서 같은 네 focused suite가 42/42·0 failures와 `** TEST SUCCEEDED **`로 완료됐다. 결과 bundle은 `/tmp/piggyescape-task4-green-3/Logs/Test/Test-PiggyEscape-2026.08.30_01-23-53-+0900.xcresult`다. 이 실행 뒤 self-review로 기존 reveal 테스트를 복원하고 start/retry coordinator 경계를 보강한 최종 45개는 L-20260830-121의 Simulator 대기 경계에 따라 실행 미검증이다.
+- 배운 점: synchronous completion이 새 request를 즉시 enqueue하는 test double은 배열의 exclusive access를 유지한 채 호출하지 않고, bounds validation을 추가하면 모든 성공 fixture도 실제 non-empty visual model을 사용해야 한다.
+
+### L-20260830-119 — Task 4 focused RED가 Simulator service 제한으로 compile 전에 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 4 — 18cm 크기와 안전한 floor region 배치
+- 재현: iPhone 17 Pro iOS 26.5 destination, `/tmp/piggyescape-task4-red` DerivedData, scale·visual·planner 세 focused test target으로 기본 권한 `xcodebuild test`를 실행한다.
+- 관찰: CoreSimulatorService connection과 log 접근이 `Operation not permitted`로 끊겨 설치된 runtime을 찾지 못했고, matching destination 부재 exit 70으로 compile 전에 종료했다.
+- 영향: 새 타입 부재 또는 assertion으로 실패하는 의도된 RED를 이 실행으로는 확인할 수 없다.
+- 원인/가설: L-20260829-110·L-20260830-114와 같은 Simulator service 접근 제한이며 source failure 근거가 아니다.
+- 조치: 동일 project·scheme·destination·DerivedData·focused test 명령을 Simulator service 접근 권한이 있는 실행으로 한 번 재시도했다.
+- 검증: 재실행은 새 계약 타입 `RealityFloorRegion` 부재 compiler error, exit 65, `TEST FAILED`로 끝나 의도한 RED를 확인했다. 결과 bundle은 `/tmp/piggyescape-task4-red/Logs/Test/Test-PiggyEscape-2026.08.30_01-17-15-+0900.xcresult`다.
+- 배운 점: destination discovery에서 끝난 실행은 TDD RED로 세지 않고, 동일 조건에서 compiler가 새 계약을 거부하는 결과를 따로 확보한다.
+
+### L-20260830-118 — Task 4 RED 전 Tuist 생성이 session 경로 권한으로 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 4 — 18cm 크기와 안전한 floor region 배치
+- 재현: 새 `PigScalePolicyTests.swift`를 추가한 뒤 `PiggyEscape` 디렉터리에서 기본 권한으로 `tuist generate --no-open`을 실행한다.
+- 관찰: 사용자 상태 디렉터리의 `tuist/sessions/...`에 쓸 수 없다는 `Permission denied`와 함께 exit 133으로 종료했다.
+- 영향: 새 test source를 generated Xcode project에 포함해 focused RED를 실행하기 전 단계가 환경 권한에서 중단됐다. Swift compile 또는 assertion 결과는 아직 아니다.
+- 원인/가설: 프로젝트 경로 밖 사용자 상태 디렉터리에 session을 기록하려는 동작이 현재 기본 권한에 막힌 것으로 보인다.
+- 조치: 같은 Tuist 생성 명령을 사용자 상태 디렉터리 접근 권한이 있는 실행으로 한 번 재시도했다.
+- 검증: 권한 있는 `tuist generate --no-open`은 새 workspace와 project를 생성하고 `Project generated`로 완료됐다. 이어지는 focused RED는 별도 항목에 기록한다.
+- 배운 점: generated project에 신규 파일 반영이 필요한 RED에서는 Tuist 환경 실패와 compiler RED를 분리해 각각 증거를 남긴다.
+
+### L-20260830-117 — Task 4 시작 fetch가 공용 Git metadata 쓰기 제한으로 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 4 — 18cm 크기와 안전한 floor region 배치
+- 재현: `ch1-reality-escape` worktree에서 기본 권한으로 `git fetch --prune origin`을 실행한다.
+- 관찰: `.git/worktrees/ch1-reality-escape/FETCH_HEAD`를 열 수 없다는 `Operation not permitted` 오류로 명령이 종료했다.
+- 영향: Task 4 구현 전에 원격 변경을 최신 상태로 확인하는 절차가 기본 권한에서는 완료되지 않았다. 현재 작업 트리는 깨끗하고 브랜치는 `ch1-reality-escape`다.
+- 원인/가설: L-20260829-113과 같은 연결 worktree 공용 Git metadata 쓰기 제한으로 보이며, source 또는 원격 저장소 오류 근거는 없다.
+- 조치: 같은 명령을 공용 Git metadata 쓰기 권한이 있는 실행으로 한 번 재시도했다.
+- 검증: 권한 있는 `git fetch --prune origin` 재시도는 출력 없이 exit 0으로 완료됐다. 이후 구현은 갱신된 원격 참조와 현재 worktree 상태를 기준으로 진행한다.
+- 배운 점: 반복되는 worktree metadata 제한도 태스크별 시작 근거와 영향 범위를 기록한 뒤 동일 명령만 권한 있게 재시도한다.
+
 ### L-20260830-116 — deadline handle이 보관 owner를 되잡는 lifetime cycle
 
 - 상태: 해결

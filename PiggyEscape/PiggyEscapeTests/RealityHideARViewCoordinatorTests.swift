@@ -222,12 +222,12 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
 
         let runningLoad = pendingLoads.removeFirst()
         XCTAssertEqual(runningLoad.asset, "Piggy_running")
-        runningLoad.completion(.success(Entity()))
+        runningLoad.completion(.success(ModelEntity(mesh: .generateBox(size: 0.3))))
         XCTAssertEqual(events, ["accepted"])
 
         let idleLoad = pendingLoads.removeFirst()
         XCTAssertEqual(idleLoad.asset, "Piggy")
-        idleLoad.completion(.success(Entity()))
+        idleLoad.completion(.success(ModelEntity(mesh: .generateBox(size: 0.3))))
         XCTAssertEqual(events, ["accepted"])
 
         coordinator.processHideArrival(meshDistance: 0.5, pigDistance: 2)
@@ -239,47 +239,8 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
         XCTAssertEqual(revealCount, 0)
         let surprisedLoad = pendingLoads.removeFirst()
         XCTAssertEqual(surprisedLoad.asset, "Piggy_surprised")
-        surprisedLoad.completion(.success(Entity()))
+        surprisedLoad.completion(.success(ModelEntity(mesh: .generateBox(size: 0.3))))
         XCTAssertEqual(revealCount, 1)
-    }
-
-    func test_initialPlacementUsesFloorAndCameraForwardOnlyWhenDefensible() {
-        let nearHit = RealitySurfaceHit(point: SIMD3(0, 1, -0.5), normal: SIMD3(0, 0, 1))
-        let position = RealityInitialPigPlacement.position(
-            cameraPosition: SIMD3(0, 1.5, 0),
-            hit: nearHit,
-            destination: SIMD3(0, 0, -0.78),
-            floorY: 0
-        )
-
-        guard let position else {
-            return XCTFail("expected a floor-anchored initial position")
-        }
-        XCTAssertEqual(position.x, 0, accuracy: 0.0001)
-        XCTAssertEqual(position.y, 0, accuracy: 0.0001)
-        XCTAssertGreaterThan(position.z, nearHit.point.z)
-        XCTAssertEqual(position.z, -0.22, accuracy: 0.0001)
-
-        let farHit = RealitySurfaceHit(point: SIMD3(0, 0.8, -2), normal: SIMD3(0, 0, 1))
-        let farPosition = RealityInitialPigPlacement.position(
-            cameraPosition: SIMD3(0, 1.5, 0),
-            hit: farHit,
-            destination: SIMD3(0, 0, -2.28),
-            floorY: 0
-        )
-        XCTAssertEqual(farPosition?.z, -1.72)
-        XCTAssertNil(RealityInitialPigPlacement.position(
-            cameraPosition: SIMD3(0, 1.5, 0),
-            hit: nearHit,
-            destination: SIMD3(0, 0, -0.22),
-            floorY: 0
-        ))
-        XCTAssertNil(RealityInitialPigPlacement.position(
-            cameraPosition: SIMD3(0, 1.5, 0),
-            hit: nearHit,
-            destination: SIMD3(0, 1.5, -0.78),
-            floorY: 1.5
-        ))
     }
 
     func test_runningLoadFailureReturnsToRetryableWaitingStateAndReportsError() {
@@ -420,6 +381,33 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
         XCTAssertFalse(visualController.outerEntity.isEnabled)
         XCTAssertEqual(messages, [RealityAvailabilityMessage.scanFirst])
     }
+
+    func test_outOfInsetRetryReturnsToSelectionWithoutMovingPastTheAcceptedDestination() {
+        let visualController = RealityPigVisualController.makeForTesting()
+        let coordinator = RealityHideARView.Coordinator(
+            meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
+            visualController: visualController
+        )
+        let region = RealityFloorRegion(
+            anchorIdentifier: UUID(uuidString: "12345678-1234-1234-1234-123456789ABC")!,
+            transform: matrix_identity_float4x4,
+            center: .zero,
+            extent: SIMD2(1, 1)
+        )
+        let acceptedDestination = SIMD3<Float>(0, 0, -0.4)
+
+        coordinator.acceptHideTarget(plan: RealityHidePlan(
+            start: SIMD3(0, 0, 0.16),
+            destination: acceptedDestination,
+            retreatDirection: SIMD3(0, 0, -1),
+            floorRegion: region
+        ))
+        coordinator.processHideArrival(meshDistance: nil, pigDistance: 1)
+
+        XCTAssertEqual(coordinator.status, .waitingForTarget)
+        XCTAssertEqual(visualController.worldPosition, acceptedDestination)
+        XCTAssertFalse(visualController.outerEntity.isEnabled)
+    }
 }
 
 private struct FakeRealityMeshSupport: RealityMeshSupporting {
@@ -438,7 +426,7 @@ private final class ControlledRealityEntityLoader {
     }
 
     func succeedNext() {
-        pending.removeFirst()(.success(Entity()))
+        pending.removeFirst()(.success(ModelEntity(mesh: .generateBox(size: 0.3))))
     }
 
     func failNext() {
@@ -447,3 +435,48 @@ private final class ControlledRealityEntityLoader {
 }
 
 private struct TestRealityEntityLoadError: Error {}
+
+@MainActor
+private extension RealityHideARView.Coordinator {
+    func processTargetSelection(
+        destination: SIMD3<Float>,
+        initialPosition: SIMD3<Float>
+    ) -> Bool {
+        processTargetSelection(plan: makeHidePlan(
+            destination: destination,
+            initialPosition: initialPosition
+        ))
+    }
+
+    func acceptHideTarget(
+        destination: SIMD3<Float>,
+        initialPosition: SIMD3<Float>
+    ) -> Bool {
+        acceptHideTarget(plan: makeHidePlan(
+            destination: destination,
+            initialPosition: initialPosition
+        ))
+    }
+}
+
+private func makeHidePlan(
+    destination: SIMD3<Float>,
+    initialPosition: SIMD3<Float>
+) -> RealityHidePlan {
+    let horizontalRetreat = SIMD3(
+        destination.x - initialPosition.x,
+        0,
+        destination.z - initialPosition.z
+    )
+    return RealityHidePlan(
+        start: initialPosition,
+        destination: destination,
+        retreatDirection: simd_normalize(horizontalRetreat),
+        floorRegion: RealityFloorRegion(
+            anchorIdentifier: UUID(uuidString: "99999999-8888-7777-6666-555555555555")!,
+            transform: matrix_identity_float4x4,
+            center: .zero,
+            extent: SIMD2(10, 10)
+        )
+    )
+}
