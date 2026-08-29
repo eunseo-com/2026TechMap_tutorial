@@ -28,6 +28,18 @@
 
 ## 항목
 
+### L-20260830-116 — deadline handle이 보관 owner를 되잡는 lifetime cycle
+
+- 상태: 해결
+- 발생 태스크: Task 3 검토 보수 — deadline owner 수명
+- 재현: owner가 production `RealityDeadlineScheduler`가 반환한 handle을 보관하고, 이전 no-argument operation이 owner 상태를 갱신하도록 한 뒤 외부 owner 참조를 해제한다.
+- 관찰: 새 focused XCTest 1개는 weak owner가 nil이 되기를 기대했지만 owner instance가 남아 `XCTAssertNil` 1 failure로 끝났다. wall-clock 대기는 사용하지 않았다.
+- 영향: deadline이 아직 만료되지 않아도 handle → operation → owner cycle이 owner 해제를 막고, cancellation 뒤에도 closure가 남을 수 있었다.
+- 원인/가설: scheduler가 owner는 약하게 저장했지만 operation은 강하게 유지했고, operation이 owner를 캡처할 수 있었다. cancellation과 one-shot firing도 stored operation을 비우지 않았다.
+- 조치: operation이 아직 live인 owner를 인자로 받도록 scheduler 경계를 바꾸고 모든 호출부가 그 인자를 사용하게 했다. cancellation, firing, owner 부재 경로에서 operation과 task 참조를 해제한다.
+- 검증: RED 결과 bundle은 `/tmp/piggyescape-task3-lifetime-red/Logs/Test/Test-PiggyEscape-2026.08.30_01-00-25-+0900.xcresult`다. 첫 GREEN 시도는 Simulator `Application failed preflight checks: Busy`로 assertion 전에 중단됐고, 같은 조건 재시도에서 focused 27/27·0 failures를 확인했다. 전체 XCTest도 135/135·0 failures와 `TEST SUCCEEDED`로 완료됐으며 bundle은 각각 `/tmp/piggyescape-task3-lifetime-green/Logs/Test/Test-PiggyEscape-2026.08.30_01-02-38-+0900.xcresult`, `/tmp/piggyescape-task3-lifetime-full/Logs/Test/Test-PiggyEscape-2026.08.30_01-03-04-+0900.xcresult`다.
+- 배운 점: weak owner만으로 callback lifecycle이 안전해지지 않는다. owner가 cancellation handle을 보관할 수 있는 API는 closure의 owner capture를 구조적으로 피하고 terminal path에서 stored operation을 비워야 한다.
+
 ### L-20260830-115 — Task 3 RED 확인과 actor-isolated deadline cleanup 경계
 
 - 상태: 해결

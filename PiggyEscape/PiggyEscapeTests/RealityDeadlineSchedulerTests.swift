@@ -7,9 +7,9 @@ final class RealityDeadlineSchedulerTests: XCTestCase {
         let scheduler = ManualRealityDeadlineScheduler()
         let owner = DeadlineOwner()
 
-        scheduler.schedule(.scan, owner: owner) {}
-        scheduler.schedule(.interruption, owner: owner) {}
-        scheduler.schedule(.occlusionObservation, owner: owner) {}
+        scheduler.schedule(.scan, owner: owner) { _ in }
+        scheduler.schedule(.interruption, owner: owner) { _ in }
+        scheduler.schedule(.occlusionObservation, owner: owner) { _ in }
 
         XCTAssertEqual(scheduler.scheduledDelays, [20.0, 10.0, 1.5])
     }
@@ -18,7 +18,7 @@ final class RealityDeadlineSchedulerTests: XCTestCase {
         let scheduler = ManualRealityDeadlineScheduler()
         let owner = DeadlineOwner()
         var fired = 0
-        let task = scheduler.schedule(.scan, owner: owner) { fired += 1 }
+        let task = scheduler.schedule(.scan, owner: owner) { _ in fired += 1 }
 
         task.cancel()
         scheduler.advance(by: 20.0)
@@ -30,7 +30,7 @@ final class RealityDeadlineSchedulerTests: XCTestCase {
         let scheduler = ManualRealityDeadlineScheduler()
         let owner = DeadlineOwner()
         var fired = 0
-        scheduler.schedule(.occlusionObservation, owner: owner) { fired += 1 }
+        scheduler.schedule(.occlusionObservation, owner: owner) { _ in fired += 1 }
 
         scheduler.advance(by: 1.49)
         XCTAssertEqual(fired, 0)
@@ -44,16 +44,37 @@ final class RealityDeadlineSchedulerTests: XCTestCase {
         let scheduler = ManualRealityDeadlineScheduler()
         var fired = 0
         var owner: DeadlineOwner? = DeadlineOwner()
-        scheduler.schedule(.interruption, owner: owner!) { fired += 1 }
+        scheduler.schedule(.interruption, owner: owner!) { _ in fired += 1 }
         owner = nil
 
         scheduler.advance(by: 10.0)
 
         XCTAssertEqual(fired, 0)
     }
+
+    func test_productionDeadlineDoesNotRetainAnOwnerThatStoresItsHandle() {
+        let scheduler = RealityDeadlineScheduler()
+        weak var releasedOwner: RetainingDeadlineOwner?
+
+        do {
+            let owner = RetainingDeadlineOwner()
+            releasedOwner = owner
+            owner.deadline = scheduler.schedule(.scan, owner: owner) { retainedOwner in
+                retainedOwner.didReceiveDeadline += 1
+            }
+        }
+
+        XCTAssertNil(releasedOwner)
+    }
 }
 
 private final class DeadlineOwner {}
+
+@MainActor
+private final class RetainingDeadlineOwner {
+    var deadline: (any RealityDeadlineCancellable)?
+    var didReceiveDeadline = 0
+}
 
 @MainActor
 private final class ManualRealityDeadlineScheduler: RealityDeadlineScheduling {
@@ -62,16 +83,19 @@ private final class ManualRealityDeadlineScheduler: RealityDeadlineScheduling {
     private var tasks: [ManualRealityDeadlineTask] = []
 
     @discardableResult
-    func schedule(
+    func schedule<Owner: AnyObject>(
         _ deadline: RealityDeadline,
-        owner: AnyObject,
-        operation: @escaping @MainActor () -> Void
+        owner: Owner,
+        operation: @escaping @MainActor (Owner) -> Void
     ) -> any RealityDeadlineCancellable {
         scheduledDelays.append(deadline.duration)
         let task = ManualRealityDeadlineTask(
             dueTime: now + deadline.duration,
             owner: owner,
-            operation: operation
+            operation: { resolvedOwner in
+                guard let typedOwner = resolvedOwner as? Owner else { return }
+                operation(typedOwner)
+            }
         )
         tasks.append(task)
         return task
@@ -89,11 +113,11 @@ private final class ManualRealityDeadlineScheduler: RealityDeadlineScheduling {
 private final class ManualRealityDeadlineTask: RealityDeadlineCancellable {
     private let dueTime: TimeInterval
     private weak var owner: AnyObject?
-    private let operation: @MainActor () -> Void
+    private var operation: (@MainActor (AnyObject) -> Void)?
     private var isCancelled = false
     private var didFire = false
 
-    init(dueTime: TimeInterval, owner: AnyObject, operation: @escaping @MainActor () -> Void) {
+    init(dueTime: TimeInterval, owner: AnyObject, operation: @escaping @MainActor (AnyObject) -> Void) {
         self.dueTime = dueTime
         self.owner = owner
         self.operation = operation
@@ -101,11 +125,19 @@ private final class ManualRealityDeadlineTask: RealityDeadlineCancellable {
 
     func cancel() {
         isCancelled = true
+        operation = nil
     }
 
     func fireIfDue(at time: TimeInterval) {
-        guard !isCancelled, !didFire, owner != nil, time >= dueTime else { return }
+        guard !isCancelled, !didFire, let owner, time >= dueTime else {
+            if time >= dueTime {
+                operation = nil
+            }
+            return
+        }
         didFire = true
-        operation()
+        let operation = operation
+        self.operation = nil
+        operation?(owner)
     }
 }

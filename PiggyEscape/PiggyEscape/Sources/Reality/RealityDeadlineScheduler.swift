@@ -25,34 +25,37 @@ protocol RealityDeadlineCancellable: AnyObject {
 @MainActor
 protocol RealityDeadlineScheduling: AnyObject {
     @discardableResult
-    func schedule(
+    func schedule<Owner: AnyObject>(
         _ deadline: RealityDeadline,
-        owner: AnyObject,
-        operation: @escaping @MainActor () -> Void
+        owner: Owner,
+        operation: @escaping @MainActor (Owner) -> Void
     ) -> any RealityDeadlineCancellable
 }
 
 @MainActor
 final class RealityDeadlineScheduler: RealityDeadlineScheduling {
     @discardableResult
-    func schedule(
+    func schedule<Owner: AnyObject>(
         _ deadline: RealityDeadline,
-        owner: AnyObject,
-        operation: @escaping @MainActor () -> Void
+        owner: Owner,
+        operation: @escaping @MainActor (Owner) -> Void
     ) -> any RealityDeadlineCancellable {
-        RealityTaskDeadline(owner: owner, delay: deadline.duration, operation: operation)
+        RealityTaskDeadline(owner: owner, delay: deadline.duration) { resolvedOwner in
+            guard let typedOwner = resolvedOwner as? Owner else { return }
+            operation(typedOwner)
+        }
     }
 }
 
 @MainActor
 private final class RealityTaskDeadline: RealityDeadlineCancellable {
     private weak var owner: AnyObject?
-    private let operation: @MainActor () -> Void
+    private var operation: (@MainActor (AnyObject) -> Void)?
     private var task: Task<Void, Never>?
     private var isCancelled = false
     private var didFire = false
 
-    init(owner: AnyObject, delay: TimeInterval, operation: @escaping @MainActor () -> Void) {
+    init(owner: AnyObject, delay: TimeInterval, operation: @escaping @MainActor (AnyObject) -> Void) {
         self.owner = owner
         self.operation = operation
         task = Task { @MainActor [weak self] in
@@ -69,12 +72,19 @@ private final class RealityTaskDeadline: RealityDeadlineCancellable {
         isCancelled = true
         task?.cancel()
         task = nil
+        operation = nil
     }
 
     private func fireIfOwned() {
-        guard !isCancelled, !didFire, owner != nil else { return }
+        guard !isCancelled, !didFire, let owner else {
+            operation = nil
+            task = nil
+            return
+        }
         didFire = true
+        let operation = operation
+        self.operation = nil
         task = nil
-        operation()
+        operation?(owner)
     }
 }
