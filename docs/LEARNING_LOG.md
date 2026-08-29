@@ -28,6 +28,42 @@
 
 ## 항목
 
+### L-20260830-114 — 병합 후 전체 XCTest가 기본 권한의 CoreSimulatorService 제한으로 시작하지 못함
+
+- 상태: 해결
+- 발생 태스크: Task 1 — 공개 DocC 기준선 통합
+- 재현: worktree에서 iPhone 17 Pro iOS 26.5 destination과 새 `/tmp/piggyescape-task1-tests` DerivedData를 지정해 전체 `xcodebuild test`를 실행한다.
+- 관찰: `CoreSimulatorService connection became invalid`, CoreSimulator log의 `Operation not permitted`, runtime discovery 실패가 발생해 XCTest 실행 결과와 `TEST SUCCEEDED`가 나오기 전에 중단됐다.
+- 영향: 병합 뒤 112개 XCTest의 실제 실행 수와 failure 수를 기본 권한 실행만으로 확인할 수 없다.
+- 원인/가설: L-20260829-110과 같은 Simulator service·사용자 로그 경로 접근 제한으로 보이며, source compile 또는 test assertion 실패 근거는 아직 없다.
+- 조치: 이 환경 중단을 기록한 뒤, 같은 project·scheme·destination·DerivedData 명령을 Simulator service 접근이 가능한 실행으로 한 번 재시도한다.
+- 검증: 같은 project·scheme·destination·DerivedData 조건의 재실행이 `PiggyEscapeTests.xctest`와 `All tests` 112/112·0 failures, `** TEST SUCCEEDED **`로 완료됐다. 결과 bundle은 `/tmp/piggyescape-task1-tests/Logs/Test/Test-PiggyEscape-2026.08.30_00-03-08-+0900.xcresult`이며, `xcresulttool` summary도 `totalTestCount: 112`, `passedTests: 112`, `failedTests: 0`, `result: Passed`를 반환했다.
+- 배운 점: Simulator service 초기화 이전에 멈춘 실행을 병합 후 앱 회귀 실패로 해석하지 말고, 같은 조건의 권한 있는 한 번의 재실행으로 분리한다.
+
+### L-20260829-113 — 연결 worktree에서 기본 권한 fetch가 공용 Git metadata 쓰기 제한으로 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 1 — 공개 DocC 기준선 통합
+- 재현: `ch1-reality-escape` worktree에서 기본 권한으로 `git fetch --prune origin`을 실행한다.
+- 관찰: `.git/worktrees/ch1-reality-escape/FETCH_HEAD`를 열 수 없다는 `Operation not permitted` 오류로 명령이 종료했다.
+- 영향: `origin/main`의 공개 DocC·Pages 기준선을 최신 원격 상태에서 병합하기 전 확인이 기본 권한에서는 진행되지 않았다.
+- 원인/가설: 연결 worktree가 공용 Git metadata의 `FETCH_HEAD`를 갱신하는 경로가 현재 기본 권한에 허용되지 않은 환경 제약이다. source 또는 원격 상태 오류로 단정할 근거는 없다.
+- 조치: 동일 명령을 공용 Git metadata 쓰기 권한이 있는 실행으로 한 번 재시도했다.
+- 검증: 재시도한 `git fetch --prune origin`은 오류 없이 완료됐다. 이후 병합과 검증은 이 최신 `origin/main` 기준으로 진행한다.
+- 배운 점: 연결 worktree의 fetch가 metadata 쓰기에서 막히면 앱·문서 상태와 구분해 기록하고, 같은 명령의 권한 있는 재시도로 원격 기준만 확인한다.
+
+### L-20260829-112 — 현재 worktree에 컨셉 노트가 없음
+
+- 상태: 해결
+- 발생 태스크: Task 1 — 공개 DocC 기준선 통합
+- 재현: 현재 `ch1-reality-escape` worktree에서 시작 순서에 지정된 `씬킷에서_리얼리티킷으로_컨셉노트.md`를 연다.
+- 관찰: 해당 파일은 worktree에 없으며, 상위 로컬 checkout에는 별도 참고 사본이 존재한다.
+- 영향: 현재 작업 트리만으로는 초기 이야기·기술 의도를 직접 읽을 수 없다. 공개 DocC 기준선 병합의 승인 범위 판단에는 최신 설계 문서가 필요하다.
+- 원인/가설: 이 파일은 현재 브랜치에 추적되지 않은 로컬 참고물이며, 병합 대상 `origin/main`에도 포함되지 않은 것으로 보인다.
+- 조치: 로컬 참고 사본은 읽기 전용으로만 대조하고, 승인된 `docs/superpowers/specs/2026-08-29-four-chapter-experience-and-docc-design.md`와 실행 계획을 현재 범위의 대체 근거로 사용한다.
+- 검증: 현재 `docs/PROJECT_CONTEXT.md`의 부재 시 대체 근거 절차와 최신 4장 설계·Task 1 계획을 확인했다.
+- 배운 점: 현재 브랜치에 없는 참고 문서가 있어도 로컬 다른 checkout을 수정하지 말고, 승인된 추적 설계와 계획으로 작업 경계를 결정한다.
+
 ### L-20260829-111 — paired iPhone 16 Pro가 DDI·tunnel unavailable로 Xcode destination에 없음
 
 - 상태: 실기기 대기
