@@ -28,6 +28,18 @@
 
 ## 항목
 
+### L-20260830-115 — Task 3 RED 확인과 actor-isolated deadline cleanup 경계
+
+- 상태: 해결
+- 발생 태스크: Task 3 — Reality 준비 상태와 Chapter 3 이전 탭 잠금
+- 재현: 새 readiness·deadline·interaction mode XCTest를 추가하고 iPhone 17 Pro iOS 26.5 destination에서 focused test를 실행한다.
+- 관찰: 처음에는 scheduler 경계 타입이 없어 compiler가 `RealityDeadlineScheduling`, `RealityDeadlineCancellable`, `RealityDeadline`을 찾지 못해 RED가 됐다. 구현 첫 실행에서는 main-actor deadline object의 `deinit`이 isolated `cancel()`을 동기 호출해 compiler 오류가 났다. 이어 mesh-or-floor 정책으로 바꾼 mutation은 readiness coordinator test에서 5 assertion failures를 냈다.
+- 영향: 새 준비 완료·deadline 수명·tap lock의 의도된 RED와 Swift actor 수명 경계를 구분하지 않으면 callback 안정성 또는 TDD 증거를 잘못 판단할 수 있었다.
+- 원인/가설: deadline 취소 protocol이 main actor에 격리되지 않았고, deinit은 actor-isolated method를 동기 호출할 수 없었다. 기존 readiness 정책은 한 신호만으로 callback을 보내므로 complete-room 계약을 충족하지 않는다.
+- 조치: cancellation protocol과 구현을 main actor 경계에 정렬하고, 약한 self를 가진 task가 deallocated handle 뒤 callback을 전달하지 않도록 deinit 호출을 제거했다. `RealityEnvironmentReadiness`가 mesh와 floor를 독립적으로 latch하고 최초 complete transition만 보고하도록 복원했다.
+- 검증: Tuist 생성 성공 뒤 focused XCTest 26/26·0 failures, 전체 XCTest 134/134·0 failures와 `TEST SUCCEEDED`를 확인했다. OR mutation RED 결과는 `/tmp/piggyescape-task3-or-mutant-red/Logs/Test/Test-PiggyEscape-2026.08.30_00-50-44-+0900.xcresult`, 최종 focused 결과는 `/tmp/piggyescape-task3-final-focused/Logs/Test/Test-PiggyEscape-2026.08.30_00-51-29-+0900.xcresult`, 전체 결과는 `/tmp/piggyescape-task3-full/Logs/Test/Test-PiggyEscape-2026.08.30_00-49-19-+0900.xcresult`에 남았다.
+- 배운 점: deadline handle과 callback owner의 actor·해제 경계를 API 수준에서 함께 모델링하고, readiness 완료는 개별 signal이 아니라 aggregate transition으로 test해야 한다.
+
 ### L-20260830-114 — 병합 후 전체 XCTest가 기본 권한의 CoreSimulatorService 제한으로 시작하지 못함
 
 - 상태: 해결

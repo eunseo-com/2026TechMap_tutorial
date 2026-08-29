@@ -50,7 +50,7 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.message(for: .findFloor), RealityAvailabilityMessage.scanFirst)
     }
 
-    func test_scanningReadinessWaitsForTheFirstMeaningfulMeshOrFloorObservation() {
+    func test_scanningReadinessRequiresBothMeshAndClassifiedFloorBeforeReportingOnce() {
         var readyCount = 0
         let coordinator = RealityHideARView.Coordinator(
             meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
@@ -59,10 +59,46 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
 
         XCTAssertFalse(coordinator.processScanningObservation(hasMesh: false, hasFloor: false))
         XCTAssertEqual(readyCount, 0)
-        XCTAssertTrue(coordinator.processScanningObservation(hasMesh: true, hasFloor: false))
+        XCTAssertFalse(coordinator.processScanningObservation(hasMesh: true, hasFloor: false))
+        XCTAssertEqual(readyCount, 0)
+        XCTAssertTrue(coordinator.processScanningObservation(hasMesh: false, hasFloor: true))
         XCTAssertEqual(readyCount, 1)
-        XCTAssertFalse(coordinator.processScanningObservation(hasMesh: false, hasFloor: true))
+        XCTAssertFalse(coordinator.processScanningObservation(hasMesh: true, hasFloor: true))
         XCTAssertEqual(readyCount, 1)
+    }
+
+    func test_preparingModeRejectsTargetSelectionWithoutChangingStatus() {
+        let coordinator = RealityHideARView.Coordinator(
+            meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true)
+        )
+        coordinator.interactionMode = .preparing
+
+        XCTAssertFalse(coordinator.processTargetSelection(
+            destination: SIMD3(0, 0, -1),
+            initialPosition: SIMD3(0, 0, -0.44)
+        ))
+        XCTAssertEqual(coordinator.status, .waitingForTarget)
+    }
+
+    func test_selectingTargetModeAcceptsOneTargetThenLocksFurtherSelections() {
+        var acceptedCount = 0
+        let coordinator = RealityHideARView.Coordinator(
+            meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
+            visualController: RealityPigVisualController.makeForTesting(),
+            onTargetAccepted: { acceptedCount += 1 }
+        )
+        coordinator.interactionMode = .selectingTarget
+
+        XCTAssertTrue(coordinator.processTargetSelection(
+            destination: SIMD3(0, 0, -1),
+            initialPosition: SIMD3(0, 0, -0.44)
+        ))
+        XCTAssertFalse(coordinator.processTargetSelection(
+            destination: SIMD3(0, 0, -2),
+            initialPosition: SIMD3(0, 0, -1.44)
+        ))
+        XCTAssertEqual(acceptedCount, 1)
+        XCTAssertEqual(coordinator.status, .walking)
     }
 
     func test_revealIsReportedOnceOnlyAfterARealBlockingFrame() {

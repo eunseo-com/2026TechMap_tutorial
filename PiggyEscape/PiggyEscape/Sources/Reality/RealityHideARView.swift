@@ -81,6 +81,14 @@ enum RealityHideARStatus: Equatable {
     case revealed
 }
 
+enum RealityHideInteractionMode: Equatable {
+    case preparing
+    case selectingTarget
+    case moving
+    case searching
+    case revealed
+}
+
 struct RealityARSessionStartGate {
     private var hasStarted = false
 
@@ -147,6 +155,7 @@ final class RealityARSessionContainer: UIView {
 }
 
 struct RealityHideARView: UIViewRepresentable {
+    let interactionMode: RealityHideInteractionMode
     let onScanningReady: () -> Void
     let onTargetAccepted: () -> Void
     let onPigReachedTarget: () -> Void
@@ -156,6 +165,7 @@ struct RealityHideARView: UIViewRepresentable {
     let onMessage: (String) -> Void
 
     init(
+        interactionMode: RealityHideInteractionMode = .preparing,
         onScanningReady: @escaping () -> Void,
         onTargetAccepted: @escaping () -> Void,
         onPigReachedTarget: @escaping () -> Void,
@@ -164,6 +174,7 @@ struct RealityHideARView: UIViewRepresentable {
         onUnavailable: @escaping () -> Void,
         onMessage: @escaping (String) -> Void
     ) {
+        self.interactionMode = interactionMode
         self.onScanningReady = onScanningReady
         self.onTargetAccepted = onTargetAccepted
         self.onPigReachedTarget = onPigReachedTarget
@@ -176,6 +187,7 @@ struct RealityHideARView: UIViewRepresentable {
     func makeCoordinator() -> Coordinator {
         Coordinator(
             meshSupport: SystemRealityMeshSupport(),
+            interactionMode: interactionMode,
             onScanningReady: onScanningReady,
             onTargetAccepted: onTargetAccepted,
             onPigReachedTarget: onPigReachedTarget,
@@ -194,7 +206,9 @@ struct RealityHideARView: UIViewRepresentable {
         return container
     }
 
-    func updateUIView(_ uiView: RealityARSessionContainer, context: Context) {}
+    func updateUIView(_ uiView: RealityARSessionContainer, context: Context) {
+        context.coordinator.interactionMode = interactionMode
+    }
 
     static func dismantleUIView(_ uiView: RealityARSessionContainer, coordinator: Coordinator) {
         coordinator.stop()
@@ -215,7 +229,7 @@ struct RealityHideARView: UIViewRepresentable {
         private weak var arView: ARView?
         private var revealMonitor = RealityRevealMonitor()
         private var revealSubscription: (any Cancellable)?
-        private var scanningReadiness = RealityScanningReadiness()
+        private var environmentReadiness = RealityEnvironmentReadiness()
         private var scanningSubscription: (any Cancellable)?
         private var pigAnchor: AnchorEntity?
         private var pigSceneAttachment = RealityPigSceneAttachmentGate()
@@ -225,6 +239,7 @@ struct RealityHideARView: UIViewRepresentable {
 
         private(set) var didStartMeshSession = false
         private(set) var status = RealityHideARStatus.waitingForTarget
+        var interactionMode: RealityHideInteractionMode
 
         var canStartMeshSession: Bool {
             meshSupport.supportsMeshWithClassification
@@ -233,6 +248,7 @@ struct RealityHideARView: UIViewRepresentable {
         init(
             meshSupport: any RealityMeshSupporting,
             visualController: RealityPigVisualController? = nil,
+            interactionMode: RealityHideInteractionMode = .preparing,
             onScanningReady: @escaping () -> Void = {},
             onTargetAccepted: @escaping () -> Void = {},
             onPigReachedTarget: @escaping () -> Void = {},
@@ -243,6 +259,7 @@ struct RealityHideARView: UIViewRepresentable {
         ) {
             self.meshSupport = meshSupport
             self.visualController = visualController ?? RealityPigVisualController()
+            self.interactionMode = interactionMode
             self.onScanningReady = onScanningReady
             self.onTargetAccepted = onTargetAccepted
             self.onPigReachedTarget = onPigReachedTarget
@@ -335,7 +352,14 @@ struct RealityHideARView: UIViewRepresentable {
 
         @discardableResult
         func processScanningObservation(hasMesh: Bool, hasFloor: Bool) -> Bool {
-            guard scanningReadiness.observe(hasMesh: hasMesh, hasFloor: hasFloor) else {
+            var becameReady = false
+            if hasMesh {
+                becameReady = environmentReadiness.observeMesh()
+            }
+            if hasFloor {
+                becameReady = environmentReadiness.observeClassifiedFloor() || becameReady
+            }
+            guard becameReady else {
                 return false
             }
             scanningSubscription?.cancel()
@@ -344,8 +368,18 @@ struct RealityHideARView: UIViewRepresentable {
             return true
         }
 
-        func acceptHideTarget(destination: SIMD3<Float>, initialPosition: SIMD3<Float>) {
-            guard status == .waitingForTarget else { return }
+        @discardableResult
+        func processTargetSelection(
+            destination: SIMD3<Float>,
+            initialPosition: SIMD3<Float>
+        ) -> Bool {
+            guard interactionMode == .selectingTarget else { return false }
+            return acceptHideTarget(destination: destination, initialPosition: initialPosition)
+        }
+
+        @discardableResult
+        func acceptHideTarget(destination: SIMD3<Float>, initialPosition: SIMD3<Float>) -> Bool {
+            guard status == .waitingForTarget else { return false }
             let horizontalRetreat = SIMD3(
                 destination.x - initialPosition.x,
                 0,
@@ -353,7 +387,7 @@ struct RealityHideARView: UIViewRepresentable {
             )
             guard simd_length_squared(horizontalRetreat) > 0.0001 else {
                 onMessage(RealityAvailabilityMessage.scanFirst)
-                return
+                return false
             }
             if let arView, let pigAnchor,
                pigSceneAttachment.consumeIfReady(hasAcceptedTarget: true) {
@@ -369,6 +403,7 @@ struct RealityHideARView: UIViewRepresentable {
             visualController.outerEntity.isEnabled = true
             onTargetAccepted()
             walkPiggy(to: destination)
+            return true
         }
 
         func processHideArrival(meshDistance: Float?, pigDistance: Float) {
@@ -498,6 +533,7 @@ struct RealityHideARView: UIViewRepresentable {
         @objc
         private func handleTap(_ recognizer: UITapGestureRecognizer) {
             guard recognizer.state == .ended,
+                  interactionMode == .selectingTarget,
                   status == .waitingForTarget,
                   let arView,
                   let frame = arView.session.currentFrame else { return }
@@ -534,7 +570,7 @@ struct RealityHideARView: UIViewRepresentable {
                     onMessage(RealityAvailabilityMessage.scanFirst)
                     return
                 }
-                acceptHideTarget(destination: destination, initialPosition: initialPosition)
+                _ = processTargetSelection(destination: destination, initialPosition: initialPosition)
             }
         }
 
@@ -661,15 +697,5 @@ extension RealityHideARView.Coordinator: ARSessionDelegate {
         Task { @MainActor [weak self] in
             self?.recordSessionFailure(error)
         }
-    }
-}
-
-private struct RealityScanningReadiness {
-    private var hasReported = false
-
-    mutating func observe(hasMesh: Bool, hasFloor: Bool) -> Bool {
-        guard !hasReported, hasMesh || hasFloor else { return false }
-        hasReported = true
-        return true
     }
 }
