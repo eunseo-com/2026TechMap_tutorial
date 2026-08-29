@@ -5,7 +5,7 @@
 ## 현재 승인 범위
 
 - 범위: 사용자가 Chapter 2–4 확장을 승인했다. 최종 범위는 **C3 SceneKit 닫힌 세계 → RealityKit 현실 준비 → 실제 물체 뒤 숨기·이동 재발견 → SceneKit/RealityKit 비교·완료**의 네 챕터다.
-- 상세 기준: [4개 챕터 완성 설계](superpowers/specs/2026-08-29-four-chapter-experience-and-docc-design.md)는 현재 사용자 검토 대기다. 검토 확정 뒤 실행 계획과 테스트 순서로 분해하고 구현한다.
+- 상세 기준: 사용자가 [4개 챕터 완성 설계](superpowers/specs/2026-08-29-four-chapter-experience-and-docc-design.md)를 승인했다. 구현은 이 설계와 [4개 챕터 실행 계획](superpowers/plans/2026-08-29-four-chapter-experience-and-docc-implementation.md)의 테스트·커밋 순서를 따른다.
 - 기준선: 기존 방·가짜 소파 구현은 SceneKit 개념을 설명하는 참고 예제로 보존한다. 실행 앱의 Chapter 1은 현재 C3 섬·기존 나무·돼지 경험을 기준으로 한다.
 - 진입 화면: `ContentView`는 `EscapeRootView` 하나를 시작한다. Chapter 2와 3은 같은 `RealityHideARView`·AR session을 유지하고 Chapter 4에서 정리한다.
 - 공개 문서: 저장소 루트 `Tutorials/SceneKitToRealityKit.docc`를 유일한 공개 DocC 원본으로 통합하고, 기준 URL의 네 챕터를 앱 구현과 동기화한다.
@@ -19,7 +19,7 @@
 4. 사용자가 최초 가림 pose에서 0.15m 이상 이동하거나 15° 이상 회전한 이력을 만든 뒤, 중심을 포함한 세 점이 서로 다른 AR frame의 연속 두 관찰에서 보일 때 한 번 발견한다. 이후 같은 AR session에서 다시 숨기거나 Chapter 4로 진행한다.
 5. **Chapter 4**: 세계·좌표·앞뒤 관계·책임 구조의 네 축으로 SceneKit과 RealityKit을 비교하고 완료 또는 replay를 제공한다.
 
-정확한 상태 전이·수치·오류·DocC·검증 경계는 사용자 검토가 확정된 뒤 [4개 챕터 완성 설계](superpowers/specs/2026-08-29-four-chapter-experience-and-docc-design.md)를 최우선으로 한다. 이전 설계는 변경 이유와 구현 이력을 확인하는 참고 문서로 유지한다.
+정확한 상태 전이·수치·오류·DocC·검증 경계는 승인된 [4개 챕터 완성 설계](superpowers/specs/2026-08-29-four-chapter-experience-and-docc-design.md)를 최우선으로 한다. 이전 설계는 변경 이유와 구현 이력을 확인하는 참고 문서로 유지한다.
 
 ## 시작 순서와 협업 규칙
 

@@ -28,6 +28,30 @@
 
 ## 항목
 
+### L-20260829-111 — paired iPhone 16 Pro가 DDI·tunnel unavailable로 Xcode destination에 없음
+
+- 상태: 실기기 대기
+- 발생 태스크: 4개 챕터 실행 계획 — 실기기 기준선 감사
+- 재현: device 목록에서 iPhone 16 Pro 세부 상태를 확인하고 `xcodebuild -showdestinations`와 대조한다.
+- 관찰: iPhone 16 Pro `CE2EB817-83F9-54CE-9D11-AEB432B82FE4`는 paired·iOS 26.6이지만 `ddiServicesAvailable:false`, `tunnelState:unavailable`이고 Xcode destination 목록에는 나타나지 않는다.
+- 영향: 0.18m 실제 크기, LiDAR 5점 메시 가림, 물리적 재발견, replay와 DocC 전·후 증거 캡처를 현재 실행할 수 없다.
+- 원인/가설: 기기 연결·잠금 해제·신뢰 또는 Developer Disk Image service/tunnel이 준비되지 않은 외부 상태다. 앱 source 실패 근거는 아니다.
+- 조치: 자동 구현·Simulator·DocC 작업은 계속하고, 기기를 연결·잠금 해제·신뢰한 뒤 DDI/tunnel과 Xcode destination을 다시 확인한다.
+- 검증: 실기기 항목은 연결 복구 뒤에만 수행하며 Simulator 결과로 대체하지 않는다.
+- 배운 점: paired 상태만으로 install·launch 가능하다고 보지 말고 DDI, tunnel, Xcode destination 세 조건을 함께 확인한다.
+
+### L-20260829-110 — sandbox에서 CoreSimulatorService 조회가 권한 제한으로 중단됨
+
+- 상태: 해결
+- 발생 태스크: 4개 챕터 실행 계획 — 전체 XCTest 기준선
+- 재현: 기본 권한으로 `xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -showdestinations`를 실행한다.
+- 관찰: `CoreSimulatorService connection became invalid`, CoreSimulator log `Operation not permitted`가 발생하고 placeholder destination만 열거됐다.
+- 영향: 설치된 iPhone 17 Pro destination과 전체 XCTest 기준선을 기본 권한 실행으로 선택할 수 없었다.
+- 원인/가설: source나 project 오류가 아니라 Simulator service·사용자 로그 경로 접근 제한이며, 권한이 있는 동일 명령 결과로 확인했다.
+- 조치: 동일 `showdestinations`를 Simulator service 접근이 가능한 실행으로 한 번 재시도했다.
+- 검증: iPhone 17 Pro iOS 26.5 UDID `669EA62B-11F3-47A7-89AD-6E99F22A1B91`를 확인했고, 해당 destination의 전체 XCTest가 112/112·0 failures와 `TEST SUCCEEDED`로 완료됐다.
+- 배운 점: placeholder만 보이면 runtime 부재로 단정하지 않고 같은 명령을 service 접근 권한과 분리해 확인한다.
+
 ### L-20260829-109 — Swift 6 strict concurrency에서 C3 예약 취소 경계가 빌드되지 않음
 
 - 상태: 보류
@@ -40,16 +64,16 @@
 - 검증: 현재 Swift 5 generic Simulator build 성공은 유지한다. strict concurrency build는 수정 뒤 같은 명령으로 다시 실행해야 한다.
 - 배운 점: 프로젝트의 실제 Swift language mode와 선택적 strict diagnostic 결과를 구분하고, 통과하지 않은 모드를 문서의 지원 조건으로 쓰지 않는다.
 
-### L-20260829-108 — 최신 HEAD의 전체 XCTest 통과 근거가 없음
+### L-20260829-108 — 최신 HEAD의 전체 XCTest 통과 근거가 없었음
 
-- 상태: 조사 중
+- 상태: 해결
 - 발생 태스크: Chapter 1–4 완성 설계 — 검증 기준선 감사
 - 재현: test source에서 XCTest method를 정적으로 집계하고 `docs/WORK_LOG.md`의 마지막 전체·focused 실행 기록과 비교한다.
 - 관찰: 현재 test source에는 정적 집계상 112개 test가 있다. 작업 로그의 마지막 전체 실행은 101/101이고, 이후 최신 기록은 planner·AR coordinator focused 36/36뿐이다.
 - 영향: 현재 HEAD 전체 회귀가 통과했다고 주장할 수 없으며, 새 범위의 RED 기준선도 확정되지 않았다.
 - 원인/가설: 최근 실제 가림 보수에서 focused test만 실행하고 전체 suite를 다시 기록하지 않은 것이 확인된 차이다.
-- 조치: 설계 승인 뒤 실행 계획의 첫 단계에서 명시적 `xcodebuild test`를 실행하고 실제 실행 수와 `TEST SUCCEEDED`를 함께 기록한다. test를 건너뛸 수 있는 `tuist test` exit code만 근거로 사용하지 않는다.
-- 검증: 아직 전체 suite를 새로 실행하지 않았다.
+- 조치: iPhone 17 Pro iOS 26.5 Simulator의 UDID를 명시하고 `/tmp/piggyescape-four-chapter-baseline` DerivedData에서 전체 `xcodebuild test`를 실행했다. test를 건너뛸 수 있는 `tuist test` exit code는 근거로 사용하지 않았다.
+- 검증: `PiggyEscapeTests.xctest`가 112/112·0 failures, `All tests` 112/112·0 failures, `** TEST SUCCEEDED **`로 완료됐다. 결과 bundle은 `/tmp/piggyescape-four-chapter-baseline/Logs/Test/Test-PiggyEscape-2026.08.29_23-31-56-+0900.xcresult`다.
 - 배운 점: test 파일 수나 exit code가 아니라 실제 실행 count·failure count·최종 result를 같은 기준선에서 확인한다.
 
 ### L-20260829-107 — 앱용 한 챕터 DocC와 공개 네 챕터 DocC가 서로 다른 원본이 됨
