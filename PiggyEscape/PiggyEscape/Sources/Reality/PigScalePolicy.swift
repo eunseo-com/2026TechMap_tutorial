@@ -22,7 +22,11 @@ enum PigScalePolicy {
         guard height.isFinite, height > 0 else {
             throw PigScalePolicyError.invalidVisualBounds
         }
-        return targetHeight / height
+        let scale = targetHeight / height
+        guard scale.isFinite, scale > 0 else {
+            throw PigScalePolicyError.invalidVisualBounds
+        }
+        return scale
     }
 }
 

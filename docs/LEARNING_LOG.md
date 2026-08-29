@@ -28,6 +28,18 @@
 
 ## 항목
 
+### L-20260830-125 — near-zero visual height가 infinite 돼지 scale로 성공 처리됨
+
+- 상태: 해결
+- 발생 태스크: Task 4 검토 보수 1차 — 유한한 18cm scale 계약
+- 재현: `Float.leastNonzeroMagnitude`를 visual bounds height로 주고 `PigScalePolicy.uniformScale`이 기존 typed `invalidVisualBounds`를 throw하는지 실제 iPhone의 `PigScalePolicyTests`로 확인한다.
+- 관찰: 높이는 finite·positive guard를 통과했지만 `0.18 / height`는 infinity가 됐고, 새 테스트는 `XCTAssertThrowsError failed: did not throw an error`로 실패했다. RED는 3 tests·1 failure, exit 65, `** TEST FAILED **`였다.
+- 영향: 극단적으로 작은 finite bounds가 invalid install failure 대신 infinite scale로 성공해 화면을 채우거나 transform을 오염시킬 수 있었다.
+- 원인/가설: 기존 policy가 입력 height만 finite·positive인지 확인하고 division 결과 scale의 finite·positive 계약은 검증하지 않았다.
+- 조치: `targetHeight / height`를 로컬 scale로 계산한 뒤 `scale.isFinite && scale > 0`인 경우에만 반환하고, 그 외에는 `PigScalePolicyError.invalidVisualBounds`를 throw한다.
+- 검증: RED bundle은 `/tmp/piggyescape-task4-review1-red/Logs/Test/Test-PiggyEscape-2026.08.30_03-07-47-+0900.xcresult`다. 실제 iPhone 16 Pro iOS 26.6에서 policy·visual focused 9/9·0 failures, 전체 `PiggyEscapeTests` 138/138·0 failures가 모두 exit 0, `** TEST SUCCEEDED **`로 완료됐다. GREEN bundle은 각각 `/tmp/piggyescape-task4-review1-focused-green/Logs/Test/Test-PiggyEscape-2026.08.30_03-08-20-+0900.xcresult`, `/tmp/piggyescape-task4-review1-full-green/Logs/Test/Test-PiggyEscape-2026.08.30_03-08-43-+0900.xcresult`다.
+- 배운 점: 부동소수점 계산 입력이 유한하다고 결과까지 유한한 것은 아니므로, 물리 transform에 적용할 값은 division 후 결과 계약까지 검증한다.
+
 ### L-20260830-124 — 실제 iPhone XCTest 성공 후 devicectl 진단 수집이 부분 bundle로 끝남
 
 - 상태: 보류

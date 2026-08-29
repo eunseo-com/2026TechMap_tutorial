@@ -34,4 +34,15 @@ final class PigScalePolicyTests: XCTestCase {
             }
         }
     }
+
+    func test_nearZeroHeightThatWouldProduceInfiniteScaleIsRejected() {
+        XCTAssertThrowsError(
+            try PigScalePolicy.uniformScale(
+                visualBoundsMin: .zero,
+                visualBoundsMax: SIMD3(0.2, Float.leastNonzeroMagnitude, 0.2)
+            )
+        ) { error in
+            XCTAssertEqual(error as? PigScalePolicyError, .invalidVisualBounds)
+        }
+    }
 }
