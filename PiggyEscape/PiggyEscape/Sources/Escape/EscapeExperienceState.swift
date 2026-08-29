@@ -22,15 +22,11 @@ enum EscapeExperienceEvent {
     case occlusionVerified, occlusionExhausted, realityPigDiscovered, sessionInterrupted
     case realityAssetLoadFailed, replayRealHide, reviewDifferences
     case retryReality, skipToComparison, finishTutorial, retryChapter3, reset
-
-    // These retain the pre-four-chapter coordinator contract until Task 7 replaces it.
-    case cameraDenied, meshSupported, pigReachedRealObject
 }
 
 struct EscapeExperienceMachine {
     private(set) var state: EscapeExperienceState
     private(set) var isCameraAuthorizationRecheckArmed = false
-    private var requiresSettingsAuthorizationRecheck = false
 
     init(state: EscapeExperienceState = .openingNarration) {
         self.state = state
@@ -41,7 +37,6 @@ struct EscapeExperienceMachine {
         case (_, .reset):
             state = .openingNarration
             isCameraAuthorizationRecheckArmed = false
-            requiresSettingsAuthorizationRecheck = false
 
         case (.openingNarration, .narrationFinished): state = .readyForPigTap
         case (.readyForPigTap, .pigTapped): state = .walkingBehindTree
@@ -52,24 +47,22 @@ struct EscapeExperienceMachine {
         case (.requestingCameraPermission, .cameraAuthorized): state = .scanningReality
         case (.requestingCameraPermission, .cameraAuthorizationDenied):
             state = .cameraDenied
-            requiresSettingsAuthorizationRecheck = true
         case (.requestingCameraPermission, .cameraAuthorizationRestricted): state = .cameraRestricted
-        case (.requestingCameraPermission, .cameraDenied):
-            state = .cameraDenied
-            requiresSettingsAuthorizationRecheck = false
         case (.cameraDenied, .openSettings)
-            where requiresSettingsAuthorizationRecheck && !isCameraAuthorizationRecheckArmed:
+            where !isCameraAuthorizationRecheckArmed:
             isCameraAuthorizationRecheckArmed = true
-        case (.cameraDenied, .cameraAuthorized)
-            where !requiresSettingsAuthorizationRecheck || isCameraAuthorizationRecheckArmed:
+        case (.cameraDenied, .cameraAuthorized) where isCameraAuthorizationRecheckArmed:
             state = .scanningReality
             isCameraAuthorizationRecheckArmed = false
-            requiresSettingsAuthorizationRecheck = false
+        case (.cameraDenied, .cameraAuthorizationDenied) where isCameraAuthorizationRecheckArmed:
+            isCameraAuthorizationRecheckArmed = false
+        case (.cameraDenied, .cameraAuthorizationRestricted) where isCameraAuthorizationRecheckArmed:
+            state = .cameraRestricted
+            isCameraAuthorizationRecheckArmed = false
 
         case (.scanningReality, .meshUnsupported): state = .lidarUnavailable
         case (.scanningReality, .environmentReady): state = .realityReady
         case (.scanningReality, .scanDeadlineElapsed): state = .scanTimedOut
-        case (.scanningReality, .meshSupported): state = .waitingForRealTarget
 
         case (.realityReady, .startRealHide): state = .waitingForRealTarget
         case (.waitingForRealTarget, .realTargetAccepted): state = .walkingBehindRealObject
@@ -77,7 +70,6 @@ struct EscapeExperienceMachine {
         case (.verifyingOcclusion, .occlusionRetryStarted): state = .walkingBehindRealObject
         case (.verifyingOcclusion, .occlusionVerified): state = .hiddenInReality
         case (.verifyingOcclusion, .occlusionExhausted): state = .waitingForRealTarget
-        case (.walkingBehindRealObject, .pigReachedRealObject): state = .hiddenInReality
         case (.hiddenInReality, .realityPigDiscovered): state = .discoveredInReality
         case (.discoveredInReality, .replayRealHide): state = .waitingForRealTarget
         case (.discoveredInReality, .reviewDifferences): state = .comparison(.completedHide)
@@ -87,7 +79,8 @@ struct EscapeExperienceMachine {
              (.hiddenInReality, .sessionInterrupted): state = .waitingForRealTarget
         case (.waitingForRealTarget, .realityAssetLoadFailed),
              (.walkingBehindRealObject, .realityAssetLoadFailed),
-             (.verifyingOcclusion, .realityAssetLoadFailed): state = .realityAssetFailed
+             (.verifyingOcclusion, .realityAssetLoadFailed),
+             (.hiddenInReality, .realityAssetLoadFailed): state = .realityAssetFailed
 
         case (.scanningReality, .sessionDidFail), (.realityReady, .sessionDidFail),
              (.waitingForRealTarget, .sessionDidFail), (.walkingBehindRealObject, .sessionDidFail),

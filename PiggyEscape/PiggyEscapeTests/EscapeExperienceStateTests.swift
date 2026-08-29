@@ -115,10 +115,21 @@ final class EscapeExperienceStateTests: XCTestCase {
         XCTAssertTrue(denied.send(.cameraAuthorizationDenied))
         XCTAssertEqual(denied.state, .cameraDenied)
         XCTAssertFalse(denied.send(.cameraAuthorized))
+        XCTAssertFalse(denied.send(.cameraAuthorizationDenied))
+        XCTAssertFalse(denied.send(.cameraAuthorizationRestricted))
         XCTAssertTrue(denied.send(.openSettings))
         XCTAssertEqual(denied.state, .cameraDenied)
         XCTAssertTrue(denied.isCameraAuthorizationRecheckArmed)
         XCTAssertFalse(denied.send(.openSettings))
+        XCTAssertTrue(denied.send(.cameraAuthorizationDenied))
+        XCTAssertEqual(denied.state, .cameraDenied)
+        XCTAssertFalse(denied.isCameraAuthorizationRecheckArmed)
+        XCTAssertFalse(denied.send(.cameraAuthorized))
+
+        XCTAssertTrue(denied.send(.openSettings))
+        XCTAssertTrue(denied.send(.cameraAuthorizationRestricted))
+        XCTAssertEqual(denied.state, .cameraRestricted)
+        XCTAssertFalse(denied.isCameraAuthorizationRecheckArmed)
 
         var restricted = EscapeExperienceMachine(state: .requestingCameraPermission)
         XCTAssertTrue(restricted.send(.cameraAuthorizationRestricted))
@@ -144,6 +155,10 @@ final class EscapeExperienceStateTests: XCTestCase {
         XCTAssertEqual(assetLoading.state, .realityAssetFailed)
         XCTAssertTrue(assetLoading.send(.sessionDidFail))
         XCTAssertEqual(assetLoading.state, .sessionFailed)
+
+        var hidden = EscapeExperienceMachine(state: .hiddenInReality)
+        XCTAssertTrue(hidden.send(.realityAssetLoadFailed))
+        XCTAssertEqual(hidden.state, .realityAssetFailed)
     }
 
     private func assertSkipRoute(

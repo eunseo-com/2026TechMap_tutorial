@@ -60,7 +60,7 @@ final class EscapeRootCoordinatorTests: XCTestCase {
         XCTAssertEqual(settings.openCount, 1)
     }
 
-    func test_restrictedCameraShowsItsOwnBlockedMessageAndWaitsForRecoveryTap() {
+    func test_restrictedCameraShowsItsOwnBlockedMessageWithoutSettingsRecovery() {
         let authorizer = FakeCameraAuthorizer()
         let settings = FakeSettingsOpener()
         let coordinator = makeCoordinator(authorizer: authorizer, settings: settings)
@@ -68,13 +68,14 @@ final class EscapeRootCoordinatorTests: XCTestCase {
 
         authorizer.resolve(.restricted)
 
-        XCTAssertEqual(coordinator.machine.state, .cameraDenied)
+        XCTAssertEqual(coordinator.machine.state, .cameraRestricted)
         XCTAssertFalse(coordinator.showsRealityView)
+        XCTAssertFalse(coordinator.showsSettingsRecovery)
         XCTAssertEqual(coordinator.message, EscapeRootMessage.cameraRestricted)
         XCTAssertEqual(settings.openCount, 0)
 
         coordinator.openSettingsForRecovery()
-        XCTAssertEqual(settings.openCount, 1)
+        XCTAssertEqual(settings.openCount, 0)
     }
 
     func test_activeAfterSettingsGrantStartsRealityOnceWithoutAnotherPrompt() {
@@ -148,8 +149,9 @@ final class EscapeRootCoordinatorTests: XCTestCase {
         coordinator.applicationDidBecomeActive()
         coordinator.applicationDidBecomeActive()
 
-        XCTAssertEqual(coordinator.machine.state, .cameraDenied)
+        XCTAssertEqual(coordinator.machine.state, .cameraRestricted)
         XCTAssertEqual(coordinator.message, EscapeRootMessage.cameraRestricted)
+        XCTAssertFalse(coordinator.showsSettingsRecovery)
         XCTAssertEqual(authorizer.requestCount, 1)
         XCTAssertEqual(authorizer.authorizationQueryCount, 1)
         XCTAssertEqual(settings.openCount, 1)
@@ -242,6 +244,21 @@ final class EscapeRootCoordinatorTests: XCTestCase {
         coordinator.realityMessageDidChange(RealityAvailabilityMessage.pigAssetLoadFailed)
         XCTAssertEqual(coordinator.realityErrorCount, 1)
         XCTAssertEqual(coordinator.message, RealityAvailabilityMessage.pigAssetLoadFailed)
+    }
+
+    func test_surprisedAssetFailureMovesTheHiddenExperienceToRetryableError() {
+        let authorizer = FakeCameraAuthorizer()
+        let coordinator = makeCoordinator(authorizer: authorizer)
+        reachCameraRequest(coordinator)
+        authorizer.resolve(.authorized)
+        coordinator.realityScanningDidBecomeReady()
+        coordinator.realityTargetDidBecomeAccepted()
+        coordinator.realityPigDidReachTarget()
+
+        XCTAssertEqual(coordinator.machine.state, .hiddenInReality)
+        coordinator.realityMessageDidChange(RealityAvailabilityMessage.pigAssetLoadFailed)
+
+        XCTAssertEqual(coordinator.machine.state, .realityAssetFailed)
     }
 
     func test_reducedMotionDoesNotDigitallyScaleTheRealityCameraSurface() {

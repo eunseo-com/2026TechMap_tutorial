@@ -155,8 +155,9 @@ final class EscapeRootCoordinator: ObservableObject {
 
     var showsRealityView: Bool {
         switch machine.state {
-        case .scanningReality, .waitingForRealTarget, .walkingBehindRealObject,
-             .hiddenInReality, .discoveredInReality:
+        case .scanningReality, .realityReady, .waitingForRealTarget,
+             .walkingBehindRealObject, .verifyingOcclusion, .hiddenInReality,
+             .discoveredInReality, .realityAssetFailed:
             true
         default:
             false
@@ -174,7 +175,6 @@ final class EscapeRootCoordinator: ObservableObject {
     private let cameraAuthorizer: any CameraAuthorizing
     private let settingsOpener: any AppSettingsOpening
     private var hasRequestedCamera = false
-    private var awaitingSettingsReturn = false
 
     init() {
         cameraAuthorizer = SystemCameraAuthorizer()
@@ -212,7 +212,8 @@ final class EscapeRootCoordinator: ObservableObject {
     }
 
     func realityScanningDidBecomeReady() {
-        guard machine.send(.meshSupported) else { return }
+        guard machine.send(.environmentReady),
+              machine.send(.startRealHide) else { return }
         message = RealityAvailabilityMessage.selectVerticalSide
     }
 
@@ -227,7 +228,8 @@ final class EscapeRootCoordinator: ObservableObject {
     }
 
     func realityPigDidReachTarget() {
-        guard machine.send(.pigReachedRealObject) else { return }
+        guard machine.send(.movementFinished),
+              machine.send(.occlusionVerified) else { return }
         message = EscapeRootMessage.findPig
     }
 
@@ -242,19 +244,20 @@ final class EscapeRootCoordinator: ObservableObject {
     }
 
     func realityMessageDidChange(_ message: String) {
+        if message == RealityAvailabilityMessage.pigAssetLoadFailed {
+            _ = machine.send(.realityAssetLoadFailed)
+        }
         self.message = message
     }
 
     func openSettingsForRecovery() {
-        guard showsSettingsRecovery else { return }
-        awaitingSettingsReturn = true
+        guard machine.send(.openSettings) else { return }
         settingsOpener.openAppSettings()
     }
 
     func applicationDidBecomeActive() {
         guard machine.state == .cameraDenied,
-              awaitingSettingsReturn else { return }
-        awaitingSettingsReturn = false
+              machine.isCameraAuthorizationRecheckArmed else { return }
         let result = cameraAuthorizer.currentVideoAuthorization()
         cameraAuthorizationResult = result
         switch result {
@@ -262,8 +265,10 @@ final class EscapeRootCoordinator: ObservableObject {
             guard machine.send(.cameraAuthorized) else { return }
             message = RealityAvailabilityMessage.scanFirst
         case .denied:
+            guard machine.send(.cameraAuthorizationDenied) else { return }
             message = EscapeRootMessage.cameraDenied
         case .restricted:
+            guard machine.send(.cameraAuthorizationRestricted) else { return }
             message = EscapeRootMessage.cameraRestricted
         case .notDetermined:
             message = EscapeRootMessage.cameraDenied
@@ -290,10 +295,10 @@ final class EscapeRootCoordinator: ObservableObject {
             guard machine.send(.cameraAuthorized) else { return }
             message = RealityAvailabilityMessage.scanFirst
         case .denied:
-            guard machine.send(.cameraDenied) else { return }
+            guard machine.send(.cameraAuthorizationDenied) else { return }
             message = EscapeRootMessage.cameraDenied
         case .restricted:
-            guard machine.send(.cameraDenied) else { return }
+            guard machine.send(.cameraAuthorizationRestricted) else { return }
             message = EscapeRootMessage.cameraRestricted
         case .notDetermined:
             return
