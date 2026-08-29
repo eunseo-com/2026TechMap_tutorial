@@ -4,13 +4,13 @@
 
 ## 현재 인수인계
 
-- 상태: Chapter 1 C3 월드→RealityKit 숨기 흐름에서 실제 물체의 LiDAR 메쉬 가림을 확인한 뒤에만 다음 안내로 진행하도록 보수 중이다. AR 카메라 배경은 iPhone 16 Pro에서 내부 ARView 레이아웃 완료 뒤 session을 시작하는 조건으로 정상 표시를 재확인했으며, 물체 뒤 걷기·메쉬 가림·재시도는 실기기 대기다.
-- 진행 중 범위: 앱 진입점은 `EscapeRootView` 하나다. C3에서 초기 나레이션이 끝난 뒤 돼지를 탭하면 기존 `Cylinder_Tree`까지 달리고, 나무 도착 0.40초 뒤 카메라 조작과 무관하게 한 번만 놀란 상태·자막·1.5배→1.0배 반응을 실행한다. 이 C3 발견 callback은 0.70초 페이드가 끝난 뒤에만 카메라 권한을 한 번 요청한다. 허용 시 `RealityHideARView`를 자동으로 열고 스캔 준비·타깃 수락·돼지 도착·재발견·오류 callback을 상태 순서로 연결한다. RealityKit은 첫 `ARMeshAnchor` 또는 분류된 수평 floor anchor를 관찰한 뒤에만 스캔 준비 callback을 한 번 전달한다. 실제 물체 선택에는 회전된 AR floor footprint 안의 동일 XZ를 floor Y로 투영하며, anchor 중심이 아닌 `planeExtent`의 width·height·Y축 회전을 사용한다. 숨은 뒤 재발견은 최초로 실제 가림이 확인된 camera pose를 hide cycle 동안 기준으로 삼고, 실제 camera pose가 그 지점에서 0.15m 이상 이동하거나 15° 이상 회전한 뒤 두 frame 연속 nonblocking일 때 한 번만 발생한다. 이후 blocked frame은 visible 안정 count만 초기화하며, camera transform 부재·screen-out·camera-behind 같은 invalid 관찰도 그 count만 초기화하고 최초 pose는 보존한다. 사용자가 `설정 열기`를 탭해 Settings 복귀 대기를 남긴 경우에만 다음 active가 현재 권한을 한 번 읽고, 허용이면 요청·Settings 재열기 없이 한 번 AR 스캔으로 전환한다. Settings를 열지 않은 active와 대기 소비 뒤의 active는 거부·제한 상태에서도 조회하지 않으며, 두 번째 명시적 Settings 탭은 새 1회 조회를 허용한다. AR 외부 callback은 다음 MainActor turn의 취소 가능한 relay를 거쳐 SwiftUI 생성·갱신 중 루트 상태를 바꾸지 않으며, AR 화면 해제 뒤 예약된 callback은 폐기한다. 현실 재발견에는 `ARView` 컨테이너 1.12→1.0 확대가 추가됐고 실제 AR camera transform은 변경하지 않으며 Reduce Motion에서는 화면 확대를 생략한다. DocC는 같은 흐름을 C3 섬·나무 뒤 자동 진행·권한 전환·실제 메쉬·물리적 재발견의 다섯 장면으로 설명한다.
-- 실패 기록: `docs/LEARNING_LOG.md`에 실패·검증 한계의 재현 조건·원인/가설·조치·재발 방지 근거를 기록한다.
-- 마지막 완료 범위: iPhone 16 Pro의 검은 AR 카메라를 window/bounds 준비 전 session 시작과 타깃 전 돼지 anchor 부착의 조합으로 분리했다. AR session은 유효한 container에서 한 번만 시작하고, 돼지 anchor는 유효한 물체 타깃을 선택한 뒤에만 붙인다. 돼지는 도착 타이머만으로 숨김 완료가 되지 않으며, 카메라→돼지 선분에서 mesh hit가 돼지보다 3cm 이상 앞일 때만 `onPigReachedTarget`을 전달한다. 가려지지 않으면 18cm씩 최대 두 번 더 물체 반대쪽으로 걷고, 계속 실패하면 돼지를 숨긴 채 타깃 선택 안내로 복귀한다. 현재 0.35m 높이는 임시 물리 크기일 뿐 선택한 물체 비례 크기 기능은 아니다.
-- 마지막 검증: `cd PiggyEscape && xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:PiggyEscapeTests/RealityHidePlannerTests -only-testing:PiggyEscapeTests/RealityHideARViewCoordinatorTests test`가 focused XCTest 36/36·0 failures와 `** TEST SUCCEEDED **`로 완료됐다. `tuist test`는 test action을 비워 실제 테스트를 건너뛸 수 있으므로 통과 근거로 사용하지 않는다(L-20260811-066).
-- 다음 시작점: 진단 전용 launch 경로를 제거한 production build를 iPhone 16 Pro에 설치한다. 세로 물체를 탭해 돼지가 카메라 쪽에서 출발해 반대편으로 걷는지, 가림이 확인된 뒤에만 안내가 바뀌는지, 실패 시 재시도·타깃 선택 복귀가 되는지를 순서대로 기록한다.
-- 차단 요소: 실제 권한 UI·0.70초 전환·Settings 복귀·1.12 화면 확대·메쉬 가림·재발견은 관찰 전까지 `실기기 대기`다. 실제 floor 분류·planeExtent 회전·메쉬 가림·최초 block 기준 0.15m/15° 재발견·시야 이탈 뒤 안정 관찰 reset은 자동 테스트로 계약을 보호하지만 실기기 체감과 센서 동작은 아직 검증하지 않았다. DocC는 새 이미지 에셋을 추가하지 않는 제약 때문에 Chapter Image 경고 1건을 남긴다.
+- 상태: 사용자가 기존 Chapter 1 제한을 해제하고 Chapter 2–4와 공개 DocC까지 완성하는 범위를 승인했다. 코드·DocC·검증 상태를 읽기 전용으로 감사한 뒤 [4개 챕터 완성 설계](superpowers/specs/2026-08-29-four-chapter-experience-and-docc-design.md)를 작성했으며, 구현 전에 사용자 문서 검토를 기다린다.
+- 진행 중 범위: 실행 앱은 C3 섬을 Chapter 1, 카메라 권한·AR 준비를 Chapter 2, 실제 물체 뒤 숨기·물리적 재발견을 Chapter 3, SceneKit/RealityKit 비교·완료를 Chapter 4로 분리한다. Chapter 2–3은 같은 `ARView`·session을 유지한다. Chapter 3은 0.18m 돼지, 0.90m 최소 거리, 현재 camera view 기준 중심·상·하·좌·우 5점, 중심 포함 4/5의 서로 다른 AR frame 연속 두 관찰 가림, 0.15m 또는 15° 이동 이력 뒤 중심 포함 3/5의 연속 두 관찰 재발견을 기준으로 한다. 정보 overlay는 AR 탭을 막지 않으며 발견 뒤 다시 숨기기와 Chapter 4 진행을 제공한다.
+- 문서 범위: `origin/main`의 공개 네 챕터와 Pages 파이프라인을 기능 worktree에 통합하고, 저장소 루트 `Tutorials/SceneKitToRealityKit.docc`를 유일한 원본으로 만든다. 앱 경로의 한 챕터 복사본은 제거한다. 공개 사이트는 고유 챕터 이미지, 실제 Chapter 3 전·후 증거, 정상 링크·한국어 접근성·desktop/mobile 렌더링을 검증한다.
+- 기준선 관찰: 현재 앱은 높이 0.35m·최소 거리 0.45m이고, 가림 판정이 돼지 중심 한 점뿐이며 첫 mesh 또는 floor 중 하나만 관찰해도 준비 완료가 되어 화면을 크게 가리거나 충분한 공간 정보 없이 찾기 단계가 시작될 수 있다. 정적 집계상 XCTest는 112개지만 최신 HEAD의 전체 실행 근거는 없고, Swift 6 strict concurrency build는 알려진 actor 격리 오류로 실패한다. 공개 DocC는 네 챕터가 열리지만 동일 아이콘 반복, Chapter 3 실제 전·후 이미지 부재, 미해결 링크·localization placeholder·접근성 문제가 있다.
+- 마지막 검증: 기존 focused `RealityHidePlannerTests`·`RealityHideARViewCoordinatorTests` 36/36·0 failures 기록과 iPhone 16 Pro의 AR 카메라 배경 정상 관찰은 유지한다. 새 범위의 구현·전체 112개 테스트·Debug/Release·DocC·브라우저 검증은 아직 실행하지 않았다.
+- 다음 시작점: 사용자가 2026-08-29 설계를 검토·확정하면 별도 실행 계획을 작성하고, 현재 기준선 전체 테스트를 실행한 뒤 Chapter flow와 다중 지점 가림 정책의 실패 테스트부터 추가한다.
+- 차단 요소: 설계 검토 전에는 구현 계획과 production code를 시작하지 않는다. LiDAR 실기기 두 대가 현재 unavailable이므로 실제 크기·메시 가림·물리적 재발견·Chapter 3 증거 이미지는 기기 연결 전까지 `실기기 대기`다. 이 제약은 자동 구현과 문서 구조 개선을 막지 않는다.
 
 ### 실기기 수용 목록 — 실기기 대기
 
@@ -20,11 +20,14 @@
 - [ ] 나무 도착 0.40초 뒤 카메라 조작 없이 놀란 모델·자막·1.5배 확대 후 복귀가 한 번 실행된다.
 - [x] 페이드 뒤 시스템 카메라 권한 문구가 보이고, 허용 뒤 AR 카메라 배경이 열린다. 스캔 안내와 LiDAR 준비 상태의 일치는 별도 확인한다.
 - [ ] 권한 거부·제한과 Settings 복구를 각각 관찰한다.
-- [ ] 실제 물체의 수직 옆면을 탭하면 돼지가 카메라 쪽 바닥에서 반대편 바닥으로 걸어간다.
-- [ ] 초기 시점에서 실제 물체의 LiDAR 메쉬가 돼지를 가린다.
-- [ ] 사용자가 옆으로 이동해 다시 볼 때 놀란 모델·자막·1.5배 돼지 확대·1.12배 화면 확대가 한 번 실행되고 복귀한다.
-- [ ] 가려진 채로 0.15m 이상 이동하거나 15° 이상 회전한 뒤 돼지가 보이면, 추가 이동 없이 연속된 두 유효 관찰 뒤에만 한 번 발견된다.
-- [ ] 돼지가 화면 밖·카메라 뒤로 잠시 벗어난 뒤 다시 보이면, 그 전후의 유효 관찰을 합쳐 조기 발견하지 않고 복귀 뒤 두 유효 관찰을 새로 요구한다.
+- [ ] Chapter 2의 공간 준비 CTA 전에는 AR 화면 탭이 타깃을 만들지 않고, CTA 뒤 같은 session에서 Chapter 3으로 이어진다.
+- [ ] 카메라에서 0.90m 이상 떨어진 실제 물체의 수직 옆면을 탭하면 0.18m 돼지가 카메라 쪽 바닥에서 반대편 바닥으로 걸어가며 화면을 과도하게 가리지 않는다.
+- [ ] 현재 camera view 기준 중심·상·하·좌·우가 모두 화면 안에서 유효하고, 중심 포함 4/5를 실제 LiDAR mesh가 서로 다른 AR frame의 연속 두 관찰에서 가린 뒤에만 찾기 안내가 나타난다.
+- [ ] “옆으로 움직이거나 카메라 방향을 바꿔 피기를 찾아봐.” 정보 패널이 물체 선택·카메라 조작을 가로채지 않는다.
+- [ ] 가려진 채로 0.15m 이상 이동하거나 15° 이상 회전한 이력을 만든 뒤 중심 포함 3/5가 서로 다른 AR frame의 연속 두 유효 관찰에서 보일 때만 한 번 발견된다.
+- [ ] 발견 때 놀란 모델·자막·1.5배 돼지 확대·1.12배 화면 확대가 한 번 실행되고 복귀한다.
+- [ ] 돼지가 화면 밖·카메라 뒤로 잠시 벗어난 뒤 다시 보이면, 그 전후 관찰을 합쳐 조기 발견하지 않고 복귀 뒤 두 유효 관찰을 새로 요구한다.
+- [ ] “다시 숨기기”를 연속 두 번 사용해도 이전 anchor·callback이 남지 않고, “차이 돌아보기”가 Chapter 4로 이어진다.
 - [ ] LiDAR 미지원, 수평면 탭, 너무 가까운 탭, 바닥 추적 부족, 돼지 에셋 로드 실패 안내와 재시도 경로를 관찰한다.
 
 ### Task 7에서 해결한 항목
@@ -44,6 +47,7 @@
 
 | 날짜 | 작업 범위 | 결과 | 검증 | 다음 시작점 |
 | --- | --- | --- | --- | --- |
+| 2026-08-29 | Chapter 1–4 앱·DocC 완성 설계 | 기존 한 흐름을 C3 닫힌 세계, Reality 준비, 0.18m 돼지의 5점 실제 숨기·이동 재발견, 비교·완료로 분리했다. Chapter 2–3 동일 AR session, replay 수명, 공개 DocC 단일 원본·접근성·증거·배포 게이트를 고정했다. | 앱 소스·상태·테스트 112개 정적 집계, public DocC 네 장 렌더링·desktop/mobile, DocC source·배포 pipeline, 일반/Swift 6 build 경계를 읽기 전용 감사했다. production code는 변경하지 않았다. | 사용자 설계 검토 뒤 실행 계획 작성 |
 | 2026-08-19 | 실제 물체 뒤 숨기 검증 — 카메라 초기화·메쉬 가림 게이트 | iPhone 16 Pro에서 정규화된 돼지 anchor를 타깃 전부터 붙일 때 검은 카메라가 나던 경계를 분리해 session 시작과 anchor 부착 시점을 늦췄다. 이후 container만 화면에 붙은 `didMoveToWindow`가 세션을 시작할 수 있던 경계를 제거하고, 내부 ARView의 실제 layout 뒤에만 시작하게 고정했다. 돼지 도착 뒤 mesh hit가 돼지보다 3cm 이상 앞일 때만 숨김 완료를 알리고, 그렇지 않으면 18cm씩 최대 두 번 더 반대편으로 걷은 뒤 타깃 선택으로 복귀하게 했다. 진단 launch mode는 제거했다. | 새 session-start gate API RED compiler failure 뒤 focused coordinator XCTest 17/17·0 failures, iPhone 16 Pro signed build·install·launch 성공. 최신 설치에서 AR 카메라 배경 정상 표시를 관찰했다. 물체 뒤 걷기·mesh occlusion·재시도·재발견은 `실기기 대기`. | 세로 물체 탭→보이는 걷기→가림 뒤 안내 전환→실패 복귀를 관찰 |
 | 2026-08-18 | C3 자동 진행 최종 보수 — 문서·예약 수명 | PROJECT_CONTEXT와 DocC를 현재 자동 흐름으로 정합화하고, 주입 가능한 scheduler로 실제 Coordinator callback 설치·나무 도착 지연·한 번 큐잉·dismantle 취소·팬 비진행을 wall-clock sleep 없이 검증함 | scheduler seam 부재 RED 뒤 focused C3 XCTest 12/12, 전체 XCTest 101/101·0 failures, iPhone 17 Pro Simulator build 성공. macOS arm64 destination에서 `CODE_SIGNING_ALLOWED=NO docbuild` 성공. 보수 범위 독립 재검토 승인. 경로·Simulator·signing 검증 한계와 해소는 L-20260818-091~092, 095~101 | LiDAR 지원 실기기에서 자동 진행·0.40초 체감·카메라 권한 전환과 기존 RealityKit 수용 목록 관찰 |
 | 2026-08-18 | C3 자동 진행 — 나무 도착 뒤 발견 | 나레이션 뒤 탭한 돼지가 기존 나무에 도착하면 0.40초 뒤 카메라 yaw·프러스텀 조건 없이 한 번만 놀란 모델·자막·확대 반응을 실행하도록 변경함. 장면 coordinator가 약한 참조의 취소 가능한 예약을 소유하고 장면 해제 시 취소함 | API 부재 RED를 확인한 뒤 C3 focused XCTest 7/7, 전체 XCTest 97/97·0 failures, iPhone 17 Pro Simulator build 성공. 실제 나무 도착·0.40초 체감·카메라 권한 UI 전환은 `실기기 대기` | LiDAR 지원 실기기에서 자동 진행·권한 전환과 기존 RealityKit 수용 목록 관찰 |

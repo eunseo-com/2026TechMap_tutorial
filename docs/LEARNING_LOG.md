@@ -28,6 +28,42 @@
 
 ## 항목
 
+### L-20260829-109 — Swift 6 strict concurrency에서 C3 예약 취소 경계가 빌드되지 않음
+
+- 상태: 보류
+- 발생 태스크: Chapter 1–4 완성 설계 — 검증 기준선 감사
+- 재현: `PiggyEscape`에서 generic iOS Simulator destination, `SWIFT_VERSION=6 SWIFT_STRICT_CONCURRENCY=complete CODE_SIGNING_ALLOWED=NO`로 scheme을 build한다.
+- 관찰: `C3ClosedWorldSceneView.swift:125`에서 non-Sendable `C3AutoDiscoveryCancellable` 접근이 actor 격리 경계를 넘는 오류로 build가 중단됐다. 같은 source는 현재 설정된 Swift 5 모드의 generic Simulator build를 통과했다.
+- 영향: 현재 앱을 Swift 6 strict concurrency 대응 완료라고 설명할 수 없다. 일반 앱 구현과 기존 Swift 모드 build는 별도다.
+- 원인/가설: 취소 handle protocol과 coordinator lifecycle 경계가 Swift 6의 전송 가능성 검사를 만족하지 않는 것이 compiler 진단으로 확인됐다.
+- 조치: 4개 챕터 실행 계획에 해당 수명 경계 보수를 별도 준비 게이트로 넣되, 사용자 경험 변경과 함께 무리하게 언어 모드를 전환하지 않는다.
+- 검증: 현재 Swift 5 generic Simulator build 성공은 유지한다. strict concurrency build는 수정 뒤 같은 명령으로 다시 실행해야 한다.
+- 배운 점: 프로젝트의 실제 Swift language mode와 선택적 strict diagnostic 결과를 구분하고, 통과하지 않은 모드를 문서의 지원 조건으로 쓰지 않는다.
+
+### L-20260829-108 — 최신 HEAD의 전체 XCTest 통과 근거가 없음
+
+- 상태: 조사 중
+- 발생 태스크: Chapter 1–4 완성 설계 — 검증 기준선 감사
+- 재현: test source에서 XCTest method를 정적으로 집계하고 `docs/WORK_LOG.md`의 마지막 전체·focused 실행 기록과 비교한다.
+- 관찰: 현재 test source에는 정적 집계상 112개 test가 있다. 작업 로그의 마지막 전체 실행은 101/101이고, 이후 최신 기록은 planner·AR coordinator focused 36/36뿐이다.
+- 영향: 현재 HEAD 전체 회귀가 통과했다고 주장할 수 없으며, 새 범위의 RED 기준선도 확정되지 않았다.
+- 원인/가설: 최근 실제 가림 보수에서 focused test만 실행하고 전체 suite를 다시 기록하지 않은 것이 확인된 차이다.
+- 조치: 설계 승인 뒤 실행 계획의 첫 단계에서 명시적 `xcodebuild test`를 실행하고 실제 실행 수와 `TEST SUCCEEDED`를 함께 기록한다. test를 건너뛸 수 있는 `tuist test` exit code만 근거로 사용하지 않는다.
+- 검증: 아직 전체 suite를 새로 실행하지 않았다.
+- 배운 점: test 파일 수나 exit code가 아니라 실제 실행 count·failure count·최종 result를 같은 기준선에서 확인한다.
+
+### L-20260829-107 — 앱용 한 챕터 DocC와 공개 네 챕터 DocC가 서로 다른 원본이 됨
+
+- 상태: 보류
+- 발생 태스크: Chapter 1–4 완성 설계 — DocC 구조 감사
+- 재현: 기능 worktree의 `PiggyEscape/PiggyEscape/Tutorials/SceneKitToRealityKit.docc`, `origin/main`의 루트 `Tutorials/SceneKitToRealityKit.docc`, 공개 Pages URL을 각각 비교한다.
+- 관찰: 기능 worktree는 1개 chapter·5개 snippet·이미지 0개이고, `origin/main`과 공개 사이트는 4개 chapter와 별도 article·배포 pipeline을 가진다. 공개 사이트의 네 장도 동일 icon 반복, 실제 Chapter 3 전·후 이미지 부재, 미해결 링크와 접근성 문제가 남는다.
+- 영향: 앱 구현과 학습 문서가 다른 상태·수치·코드를 설명하고, 현재 기능 worktree만으로 공개 사이트를 재현하거나 안전하게 유지할 수 없다.
+- 원인/가설: 앱 target 안의 DocC와 GitHub Pages용 루트 DocC가 별도 작업 흐름에서 편집되어 단일 원본 규칙이 없었던 것이 파일 구조로 확인됐다.
+- 조치: 2026-08-29 설계에서 루트 catalog를 유일한 원본으로 정하고, 구현 단계에서 `origin/main`의 공개 문서·pipeline을 기능 worktree에 통합한 뒤 앱 내부 복사본을 제거한다.
+- 검증: 통합 전이므로 두 catalog는 아직 분리된 상태다. 최종적으로 한 catalog inventory, 경고 없는 convert, 네 route, snippet type-check와 배포 URL을 검증해야 한다.
+- 배운 점: DocC를 앱 resource와 Pages source로 복제하지 말고, 하나의 catalog와 하나의 publication pipeline을 기준으로 문서·코드를 함께 갱신한다.
+
 ### L-20260819-106 — 실기기 설치 전 Xcode destination 목록에서 iPhone 16 Pro가 사라짐
 
 - 상태: 보류
