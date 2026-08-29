@@ -15,14 +15,14 @@ Chapter 3의 실제 가구 가림과 재발견은 LiDAR 지원 실기기에서 �
 
 - 작업 맥락과 현재 진행 상태: [docs/PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md)
 - 전체 이야기와 의도: [씬킷에서_리얼리티킷으로_컨셉노트.md](씬킷에서_리얼리티킷으로_컨셉노트.md)
-- Chapter 1 설계: [ClosedWorld design](docs/superpowers/specs/2026-08-10-ch1-scenekit-closed-world-design.md)
-- Chapter 1 구현 계획: [ClosedWorld implementation plan](docs/superpowers/plans/2026-08-10-ch1-closed-world-implementation.md)
+- 승인된 4개 챕터 설계: [four-chapter experience and DocC design](docs/superpowers/specs/2026-08-29-four-chapter-experience-and-docc-design.md)
+- 승인된 13-태스크 구현 계획: [four-chapter experience and DocC implementation plan](docs/superpowers/plans/2026-08-29-four-chapter-experience-and-docc-implementation.md)
 
 Claude와 Codex를 포함한 작업자는 [AGENTS.md](AGENTS.md)를 먼저 읽습니다.
 
 ## DocC 웹 문서
 
-Chapter 1의 `ClosedWorld` DocC 카탈로그는 [Tutorials/SceneKitToRealityKit.docc](Tutorials/SceneKitToRealityKit.docc)에 있습니다. Xcode가 설치된 macOS에서는 아래 명령으로 GitHub Pages용 정적 아카이브를 만들 수 있습니다.
+공개 네 챕터 DocC 카탈로그의 유일한 공개·검증 원본은 [Tutorials/SceneKitToRealityKit.docc](Tutorials/SceneKitToRealityKit.docc)입니다. Xcode가 설치된 macOS에서는 아래 명령으로 GitHub Pages용 정적 아카이브를 만들 수 있습니다.
 
 ```bash
 bash scripts/build-docc-site.sh /tmp/SceneKitToRealityKit.doccarchive
