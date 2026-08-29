@@ -40,6 +40,8 @@
 - 검증: 같은 project·scheme·destination·DerivedData 조건의 재실행이 `PiggyEscapeTests.xctest`와 `All tests` 112/112·0 failures, `** TEST SUCCEEDED **`로 완료됐다. 결과 bundle은 `/tmp/piggyescape-task1-tests/Logs/Test/Test-PiggyEscape-2026.08.30_00-03-08-+0900.xcresult`이며, `xcresulttool` summary도 `totalTestCount: 112`, `passedTests: 112`, `failedTests: 0`, `result: Passed`를 반환했다.
 - 배운 점: Simulator service 초기화 이전에 멈춘 실행을 병합 후 앱 회귀 실패로 해석하지 말고, 같은 조건의 권한 있는 한 번의 재실행으로 분리한다.
 
+  - 재발 연결 (2026-08-30, Task 2): 기본 권한 focused test는 같은 CoreSimulatorService 접근 제한으로 시작 전에 중단됐고, 권한 있는 재실행에서 새 type·event 부재 RED compiler failure를 확인했다. 이후 Simulator의 일시적 `Application failed preflight checks: Busy`는 한 번 재시도해 실제 assertion 결과와 분리했다.
+
 ### L-20260829-113 — 연결 worktree에서 기본 권한 fetch가 공용 Git metadata 쓰기 제한으로 중단됨
 
 - 상태: 해결
