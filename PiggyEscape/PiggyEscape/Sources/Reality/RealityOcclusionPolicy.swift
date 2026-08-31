@@ -19,6 +19,8 @@ enum PigOcclusionSampler {
     ) -> [PigOcclusionSampleID: SIMD3<Float>]? {
         guard boundsCorners.count == 8,
               boundsCorners.allSatisfy(\.allFinite),
+              Set(boundsCorners).count == 8,
+              hasThreeDimensionalSpan(boundsCorners),
               let right = normalized(cameraRight),
               let up = normalized(cameraUp),
               simd_length_squared(simd_cross(right, up)) > 0.000_001 else {
@@ -55,6 +57,34 @@ enum PigOcclusionSampler {
             .right: center + (rightSupport - center) * supportInset,
         ]
         return result.values.allSatisfy(\.allFinite) ? result : nil
+    }
+
+    private static func hasThreeDimensionalSpan(_ corners: [SIMD3<Float>]) -> Bool {
+        let origin = SIMD3<Double>(corners[0])
+        let offsets = corners.dropFirst().map { SIMD3<Double>($0) - origin }
+
+        for firstIndex in offsets.indices {
+            let firstLength = simd_length(offsets[firstIndex])
+            guard firstLength.isFinite, firstLength > 0 else { continue }
+            let first = offsets[firstIndex] / firstLength
+
+            for secondIndex in offsets.indices where secondIndex > firstIndex {
+                let secondLength = simd_length(offsets[secondIndex])
+                guard secondLength.isFinite, secondLength > 0 else { continue }
+                let second = offsets[secondIndex] / secondLength
+
+                for thirdIndex in offsets.indices where thirdIndex > secondIndex {
+                    let thirdLength = simd_length(offsets[thirdIndex])
+                    guard thirdLength.isFinite, thirdLength > 0 else { continue }
+                    let third = offsets[thirdIndex] / thirdLength
+                    let normalizedVolume = abs(simd_dot(first, simd_cross(second, third)))
+                    if normalizedVolume.isFinite, normalizedVolume > 0.000_001 {
+                        return true
+                    }
+                }
+            }
+        }
+        return false
     }
 
     private static func normalized(_ vector: SIMD3<Float>) -> SIMD3<Float>? {
@@ -102,7 +132,9 @@ enum OcclusionSampleState: Equatable {
         }
         guard let meshDistance else { return .visible }
         guard meshDistance.isFinite, meshDistance >= 0 else { return .invalid }
-        return pigDistance > meshDistance + meshSafetyMargin ? .blocked : .visible
+        let distanceDifference = pigDistance - meshDistance
+        guard distanceDifference.isFinite else { return .invalid }
+        return distanceDifference > meshSafetyMargin ? .blocked : .visible
     }
 }
 
@@ -316,7 +348,7 @@ struct RealityRevealMonitor {
         let referenceForward = simd_normalize(referencePose.forward)
         let currentForward = simd_normalize(currentPose.forward)
         let directionsDot = simd_clamp(simd_dot(referenceForward, currentForward), -1, 1)
-        return directionsDot <= cos(Self.minimumRotation) + 0.000_001
+        return directionsDot <= cos(Self.minimumRotation)
     }
 }
 

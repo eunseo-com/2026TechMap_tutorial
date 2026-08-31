@@ -28,6 +28,42 @@
 
 ## 항목
 
+### L-20260901-134 — Task 5 검토 regression은 compile되지만 runtime assertion은 보류됨
+
+- 상태: 보류
+- 발생 태스크: Task 5 검토 보수 1차 — 실제 3D corner·정확한 3cm/15° 경계
+- 재현: production 수정 전 새 `/tmp/piggyescape-task5-fix1-red-compile-20260901`에서 generic iOS Simulator `build-for-testing`을 실행한다.
+- 관찰: 새 regression을 포함한 앱·테스트 bundle은 arm64·x86_64로 compile/link되어 exit 0, `** TEST BUILD SUCCEEDED **`로 끝났다. compile-only 명령은 assertion을 실행하지 않으므로 실패 개수를 만들지 않는다.
+- 영향: 네 테스트가 현재 구현에 대해 갖는 RED 조건은 fixture의 정확한 Float 비교와 source 분기로 정적으로 확인했지만, 현재 최종 diff의 focused 35개·전체 158개 assertion runtime 성공은 증명되지 않았다.
+- 원인/가설: 사용자가 Simulator 실행을 금지하고 DocC를 우선하도록 지정했기 때문에 Simulator를 부팅하거나 XCTest `test` action을 실행하지 않았다.
+- 조치: RED 상태 compile과 GREEN 상태 fresh compile을 각각 보존하고, 테스트 실행 결과와 혼동하지 않는다. runtime assertion은 허용된 실행 destination이 생길 때까지 `실행 검증 대기`로 둔다.
+- 검증: 수정 뒤 새 `/tmp/piggyescape-task5-fix1-green-20260901`의 동일한 `build-for-testing`도 exit 0, `** TEST BUILD SUCCEEDED **`였고 앱·test bundle 두 architecture가 link됐다.
+- 배운 점: 기존 interface의 의미 보수는 테스트가 compile되는 RED일 수 있으므로, 실행 금지 환경에서는 정적 반례와 compile 건전성을 분리해 보고해야 한다.
+
+### L-20260901-133 — Task 5 검토 첫 compile이 생성 프로젝트 경로 부재로 무효 종료됨
+
+- 상태: 해결
+- 발생 태스크: Task 5 검토 보수 1차 — 실제 3D corner·정확한 3cm/15° 경계
+- 재현: 저장소 worktree 루트에서 `xcodebuild -project PiggyEscape.xcodeproj ... build-for-testing`을 실행한다.
+- 관찰: 루트에 생성물 `PiggyEscape.xcodeproj`가 없어 exit 66과 `xcodebuild: error: 'PiggyEscape.xcodeproj' does not exist.`로 종료됐다. 이어 `PiggyEscape`에서 기본 권한으로 실행한 `tuist generate --no-open`은 사용자 session 상태 경로의 `Permission denied`로 exit 133이었다.
+- 영향: 두 실행 모두 Swift source나 test를 compile하지 않아 RED 또는 GREEN 근거가 아니다.
+- 원인/가설: 생성 Xcode project는 추적하지 않으며 `PiggyEscape` 하위에서 다시 생성해야 하고, Tuist session은 worktree 밖 사용자 상태 경로 쓰기를 요구한다.
+- 조치: `PiggyEscape`에서 session 상태를 쓸 수 있는 권한으로 같은 Tuist 명령을 재실행한 뒤, 생성 project가 있는 같은 디렉터리에서 xcodebuild를 실행했다.
+- 검증: Tuist 재실행은 exit 0, `Project generated`, `✔ Success`였고 후속 RED 상태·GREEN 상태 compile은 모두 source와 test bundle을 끝까지 link했다.
+- 배운 점: compile evidence를 수집하기 전에 현재 디렉터리와 ignored 생성 project 존재를 확인하고, 환경 준비 실패를 제품 RED로 세지 않는다.
+
+### L-20260901-132 — AABB·덧셈·각도 허용오차가 경계 계약을 바꿈
+
+- 상태: 해결
+- 발생 태스크: Task 5 검토 보수 1차 — 실제 3D corner·정확한 3cm/15° 경계
+- 재현: production 수정 전에 world 세 축 AABB는 모두 양수지만 affine rank가 2인 여덟 unique corner, 하나를 복제한 3D box corner, `mesh=Float(bitPattern: 0x3e99999a)`·`pig=Float(bitPattern: 0x3ea8f5c3)`, 그리고 15°보다 0.000002rad 작은 forward를 regression으로 고정한다.
+- 관찰: 기존 sampler는 앞의 두 corner 집합을 허용했다. Float fixture는 `pig > mesh + margin`이 false지만 `pig - mesh > margin`은 true이고, 기존 cosine의 `+0.000001`은 가까운 subthreshold 회전을 movement로 latch하는 분기였다.
+- 영향: 평면/손상 bounds가 유효 silhouette로 사용되거나 정확히 3cm·15°인 사용자 계약이 계산 순서와 임의 허용오차 때문에 달라질 수 있었다.
+- 원인/가설: world AABB의 세 component 크기는 affine rank를 증명하지 않으며, 부동소수점 덧셈과 뺄셈은 경계에서 같은 비교가 아니다. cosine 허용오차도 명시 threshold보다 작은 회전을 수용했다.
+- 조치: 여덟 corner 유일성 및 Double normalized triple product 기반 rank 3을 요구하고, finite `pigDistance - meshDistance > margin`을 사용하며, cosine 비교에서 허용오차를 제거했다. nonfinite 거리 차는 `.invalid`로 방어한다.
+- 검증: 네 regression source가 먼저 추가됐고 수정 뒤 전체 source+test bundle이 fresh generic compile/link에 성공했다. runtime assertion은 L-20260901-134의 실행 제한에 따라 보류한다.
+- 배운 점: 회전된 geometry는 축별 extent가 아니라 affine 독립성을 검증하고, 물리 threshold는 명세에 적힌 산술 순서와 부등호를 그대로 구현한다.
+
 ### L-20260901-131 — Task 5 시작 fetch가 연결 worktree metadata 권한에서 중단됨
 
 - 상태: 해결

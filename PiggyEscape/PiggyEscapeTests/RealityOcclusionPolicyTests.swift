@@ -84,6 +84,43 @@ final class PigOcclusionSamplerTests: XCTestCase {
         ))
     }
 
+    func test_samplerRejectsEightUniqueCornersThatOnlySpanARotatedPlane() {
+        let planeRight = simd_normalize(SIMD3<Float>(1, 1, 0))
+        let planeUp = simd_normalize(SIMD3<Float>(-1, 1, 2))
+        let coefficients: [(Float, Float)] = [
+            (-2, -1), (-2, 1), (-1, -2), (-1, 2),
+            (1, -2), (1, 2), (2, -1), (2, 1),
+        ]
+        let corners = coefficients.map { right, up in
+            planeRight * right + planeUp * up
+        }
+
+        XCTAssertEqual(Set(corners).count, 8)
+        XCTAssertNil(PigOcclusionSampler.samples(
+            boundsCorners: corners,
+            cameraRight: SIMD3<Float>(1, 0, 0),
+            cameraUp: SIMD3<Float>(0, 1, 0)
+        ))
+    }
+
+    func test_samplerRejectsDuplicateCornerEvenWhenWorldExtentsAndRankRemainNonzero() {
+        var corners = makeCorners(
+            center: .zero,
+            axes: (
+                SIMD3<Float>(1, 0, 0),
+                SIMD3<Float>(0, 1, 0),
+                SIMD3<Float>(0, 0, 1)
+            )
+        )
+        corners[7] = corners[6]
+
+        XCTAssertNil(PigOcclusionSampler.samples(
+            boundsCorners: corners,
+            cameraRight: SIMD3<Float>(1, 0, 0),
+            cameraUp: SIMD3<Float>(0, 1, 0)
+        ))
+    }
+
     func test_samplerRejectsNonFiniteZeroLengthAndParallelCameraBasis() {
         let corners = makeCorners(
             center: .zero,
@@ -147,6 +184,23 @@ final class OcclusionSampleStateTests: XCTestCase {
         XCTAssertEqual(OcclusionSampleState.classify(pigDistance: 1, meshDistance: .infinity), .invalid)
         XCTAssertEqual(OcclusionSampleState.classify(pigDistance: -1, meshDistance: nil), .invalid)
         XCTAssertEqual(OcclusionSampleState.classify(pigDistance: 1, meshDistance: -0.1), .invalid)
+    }
+
+    func test_strictMarginUsesFiniteSubtractionInsteadOfRoundedAddition() {
+        let meshDistance = Float(bitPattern: 0x3e99_999a)
+        let pigDistance = Float(bitPattern: 0x3ea8_f5c3)
+        let difference = pigDistance - meshDistance
+
+        XCTAssertFalse(pigDistance > meshDistance + OcclusionSampleState.meshSafetyMargin)
+        XCTAssertGreaterThan(difference, OcclusionSampleState.meshSafetyMargin)
+        XCTAssertTrue(difference.isFinite)
+        XCTAssertEqual(
+            OcclusionSampleState.classify(
+                pigDistance: pigDistance,
+                meshDistance: meshDistance
+            ),
+            .blocked
+        )
     }
 }
 
@@ -418,6 +472,28 @@ final class RealityRevealMonitorObservationTests: XCTestCase {
             pose: shortTurn
         )))
         XCTAssertFalse(rotation.hasMeaningfulViewpointChange)
+    }
+
+    func test_rotationTwoMillionthsOfARadianBelowThresholdDoesNotLatch() {
+        let reference = pose(position: .zero)
+        let angle = RealityRevealMonitor.minimumRotation - 0.000_002
+        let shortTurn = RealityCameraPose(
+            position: .zero,
+            forward: SIMD3<Float>(sin(angle), 0, -cos(angle))
+        )
+        var monitor = RealityRevealMonitor(referencePose: reference)
+
+        XCTAssertFalse(monitor.update(observation(
+            timestamp: 1,
+            states: visibleStates(),
+            pose: shortTurn
+        )))
+        XCTAssertFalse(monitor.update(observation(
+            timestamp: 2,
+            states: visibleStates(),
+            pose: shortTurn
+        )))
+        XCTAssertFalse(monitor.hasMeaningfulViewpointChange)
     }
 
     func test_duplicateAndOlderRevealFramesDoNotAdvanceStability() {
