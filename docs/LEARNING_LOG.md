@@ -28,6 +28,66 @@
 
 ## 항목
 
+### L-20260901-131 — Task 5 시작 fetch가 연결 worktree metadata 권한에서 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 5 — view-space 5점 가림·재발견 순수 정책
+- 재현: 구현 전 `git fetch --prune origin`을 기본 권한으로 실행한다.
+- 관찰: 공용 `.git/worktrees/ch1-reality-escape/FETCH_HEAD`를 열 수 없다는 `Operation not permitted`로 원격 참조 갱신 전에 종료됐다.
+- 영향: 기본 권한 실행만으로는 Task 5 시작 시점의 원격 변경 여부를 확정할 수 없었다. tracked worktree는 base `6a3a94d`에서 깨끗했다.
+- 원인/가설: L-20260830-117과 같은 연결 worktree 공용 Git metadata 쓰기 제약이다.
+- 조치: 동일한 fetch 명령만 공용 metadata에 쓸 수 있는 권한으로 재실행했다.
+- 검증: 권한 있는 재실행은 출력 없이 exit 0으로 완료됐고, 이후 구현은 갱신된 원격 참조와 clean base에서 시작했다.
+- 배운 점: 태스크 시작 fetch 실패는 반복 환경 제약이어도 현재 base와 재시도 성공을 독립적으로 남긴다.
+
+### L-20260901-130 — Task 5 정책 assertion은 Simulator 제외 요청으로 실행하지 않음
+
+- 상태: 보류
+- 발생 태스크: Task 5 — view-space 5점 가림·재발견 순수 정책
+- 재현: `xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/piggyescape-task5-final-compile-20260901 CODE_SIGNING_ALLOWED=NO build-for-testing`
+- 관찰: 앱과 전체 테스트 bundle이 arm64·x86_64로 컴파일되어 exit 0, `** TEST BUILD SUCCEEDED **`로 끝났다. 정책·planner focused 테스트는 정적으로 31개이고 전체 테스트는 정적으로 154개지만, generic destination은 assertion을 실행하지 않는다.
+- 영향: 새 타입·모든 테스트 소스·기존 coordinator 호환 경계의 컴파일 건전성은 확인했으나 5점·3cm·unique timestamp·60 frame·deadline·movement latch assertion의 runtime 성공은 아직 증명되지 않았다.
+- 원인/가설: 사용자가 Simulator를 사용하지 않고 DocC를 우선하도록 명시했으므로 Simulator를 부팅하거나 test action을 실행하지 않았다.
+- 조치: compile-only 결과와 runtime gate를 분리한다. Task 5 테스트 assertion은 사용자가 허용한 실기기 또는 Simulator 실행 환경에서 focused 31개와 전체 suite를 실제 실행할 때까지 `실행 검증 대기`로 유지한다.
+- 검증: build product와 test bundle은 모두 x86_64·arm64 fat binary이며, 생성된 두 architecture의 Swift file list에 `RealityOcclusionPolicy.swift`와 `RealityOcclusionPolicyTests.swift`가 포함됐다. 이 근거를 `TEST SUCCEEDED` 또는 LiDAR 실동작 근거로 표현하지 않는다.
+- 배운 점: generic `build-for-testing`은 테스트 계약이 두 architecture에서 type-check·link된다는 근거이지 assertion 실행 근거가 아니다.
+
+### L-20260901-129 — Task 5 첫 GREEN에서 corner fixture 표현식 type-check가 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 5 — view-space 5점 가림·재발견 순수 정책
+- 재현: 새 production 정책을 추가한 뒤 fresh `/tmp/piggyescape-task5-green-20260901`에서 generic iOS Simulator 전체 `build-for-testing`을 실행한다.
+- 관찰: test helper가 세 겹 `flatMap`과 SIMD 산술을 한 식에 결합해 `the compiler is unable to type-check this expression in reasonable time`를 냈고 exit 65, `** TEST BUILD FAILED **`로 끝났다. production 정책 진단은 없었다.
+- 영향: 앱 소스는 컴파일됐지만 새 테스트 bundle을 끝까지 컴파일·link하지 못해 GREEN 근거가 아니었다.
+- 원인/가설: 여덟 corner fixture 생성에서 generic collection closure와 SIMD operator 추론을 한 표현식에 중첩한 것이 compiler 진단으로 확인된 원인이다.
+- 조치: 동일한 여덟 literal sign 조합과 기대값을 유지하면서 명시적 세 loop, 축별 offset 지역 값, append로 test helper만 분리했다. assertion과 production 동작은 바꾸지 않았다.
+- 검증: 같은 DerivedData와 같은 전체 `build-for-testing` 재실행이 exit 0, `** TEST BUILD SUCCEEDED **`로 끝났다.
+- 배운 점: SIMD fixture도 중첩 higher-order expression보다 명시적 단계로 쓰면 테스트 의도를 유지하면서 Swift type checker의 추론 부담을 줄일 수 있다.
+
+### L-20260901-128 — Task 5 RED 준비의 Tuist 생성이 세션 상태 권한에서 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 5 — view-space 5점 가림·재발견 순수 정책
+- 재현: 새 `RealityOcclusionPolicyTests.swift`를 추가한 뒤 `PiggyEscape`에서 `tuist generate --no-open`을 기본 권한으로 실행한다.
+- 관찰: 사용자 상태 경로 `/Users/yang-eunseo/.local/state/tuist/sessions/...` 쓰기가 `Permission denied`로 거부되어 새 test source를 생성 프로젝트에 포함하기 전에 중단됐다.
+- 영향: 이 실행은 Swift compile과 assertion에 도달하지 않아 Task 5 RED 근거가 아니었다.
+- 원인/가설: L-20260830-118과 같은 프로젝트 밖 Tuist session 경로 권한 제약이다.
+- 조치: 같은 명령만 해당 세션 상태에 쓸 수 있는 권한으로 재실행했다.
+- 검증: 재실행은 `Project generated`와 `✔ Success`로 끝났고, 후속 RED compiler command가 새 테스트 파일과 새 타입 부재를 실제로 보고했다. production 파일 추가 뒤에도 같은 생성 명령을 다시 성공해 새 source를 두 architecture file list에 포함했다.
+- 배운 점: 신규 glob 파일을 쓰는 Task 5도 Tuist 환경 실패와 새 계약의 compiler RED를 별도 근거로 남긴다.
+
+### L-20260901-127 — Task 5 새 5점 정책 타입 부재가 compile RED를 만듦
+
+- 상태: 해결
+- 발생 태스크: Task 5 — view-space 5점 가림·재발견 순수 정책
+- 재현: 모든 Task 5 테스트를 먼저 작성하고, 새 `/tmp/piggyescape-task5-red-20260901`에서 `xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/piggyescape-task5-red-20260901 CODE_SIGNING_ALLOWED=NO build-for-testing`을 실행한다.
+- 관찰: 테스트 target이 `RealityOcclusionObservation`, `PigOcclusionSampleID`, `OcclusionSampleState`를 찾지 못해 exit 65, `** TEST BUILD FAILED **`로 끝났다. 앱 target은 컴파일됐고, 실패는 새 테스트가 요구한 순수 계약 부재에서 발생했다.
+- 영향: 기존 중심 ray 구현에는 회전된 silhouette 5점, strict unique frame 안정성, 60 frame/deadline, 두 번째 hide pose 기반 movement-latched reveal 계약이 없음을 compile 단계에서 확인했다.
+- 원인/가설: Task 4 기준선에는 해당 타입과 interface가 아직 없으며 Task 5가 처음 추가하는 범위다.
+- 조치: `RealityOcclusionPolicy.swift`에 5점 sampler·sample classifier·same-frame observation·stable hide·확장 reveal monitor를 구현하고, 기존 planner의 camera pose/reveal 타입을 새 순수 정책 파일로 이동했다. Task 6 전까지 기존 coordinator가 컴파일되도록 한 점 adapter만 명시적으로 격리했다.
+- 검증: 최종 전체 source+test compile 결과는 L-20260901-130에 기록한다. runtime assertion은 별도 대기다.
+- 배운 점: 센서 입력을 coordinator에 바로 넣기 전에 view-space sampling·frame identity·aggregate stability·movement history를 순수 값과 상태로 분리하면 하드웨어 없이도 계약을 컴파일 가능한 테스트로 고정할 수 있다.
+
 ### L-20260830-126 — finite visual bounds가 균일 스케일 뒤 다른 축에서 overflow함
 
 - 상태: 해결

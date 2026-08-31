@@ -61,28 +61,6 @@ final class RealityHidePlannerTests: XCTestCase {
         )
     }
 
-    func test_revealMonitorFiresOnlyAfterFirstBlockedFrameThenVisibleFrame() {
-        var monitor = RealityRevealMonitor()
-        let blockedPose = RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
-        let movedPose = RealityCameraPose(position: SIMD3(0.15, 0, 0), forward: SIMD3(0, 0, -1))
-
-        XCTAssertFalse(monitor.update(meshDistance: nil, pigDistance: 2, cameraPose: blockedPose))
-        XCTAssertFalse(monitor.update(meshDistance: 1, pigDistance: 2, cameraPose: blockedPose))
-        XCTAssertFalse(monitor.update(meshDistance: nil, pigDistance: 2, cameraPose: movedPose))
-        XCTAssertTrue(monitor.update(meshDistance: nil, pigDistance: 2, cameraPose: movedPose))
-        XCTAssertFalse(monitor.update(meshDistance: nil, pigDistance: 2, cameraPose: movedPose))
-    }
-
-    func test_revealMonitorTreatsThreeCentimeterBoundaryAsVisible() {
-        var monitor = RealityRevealMonitor()
-        let blockedPose = RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
-        let movedPose = RealityCameraPose(position: SIMD3(0.15, 0, 0), forward: SIMD3(0, 0, -1))
-
-        XCTAssertFalse(monitor.update(meshDistance: 1, pigDistance: 2, cameraPose: blockedPose))
-        XCTAssertFalse(monitor.update(meshDistance: 1.97, pigDistance: 2, cameraPose: movedPose))
-        XCTAssertTrue(monitor.update(meshDistance: 1.97, pigDistance: 2, cameraPose: movedPose))
-    }
-
     func test_rotatedFloorRegionProjectsStartAndDestinationUsingTheSnapshotTransform() {
         var transform = matrix_identity_float4x4
         transform.columns.0 = SIMD4(0, 0, -1, 0)
@@ -136,83 +114,6 @@ final class RealityHidePlannerTests: XCTestCase {
             ),
             .rejected(.findFloor)
         )
-    }
-
-    func test_revealMonitorDoesNotRevealForZeroMovementNullHits() {
-        var monitor = RealityRevealMonitor()
-        let pose = RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
-
-        XCTAssertFalse(monitor.update(meshDistance: 1, pigDistance: 2, cameraPose: pose))
-        XCTAssertFalse(monitor.update(meshDistance: nil, pigDistance: 2, cameraPose: pose))
-        XCTAssertFalse(monitor.update(meshDistance: nil, pigDistance: 2, cameraPose: pose))
-    }
-
-    func test_revealMonitorRejectsSubthresholdTranslationAndRotation() {
-        var translationMonitor = RealityRevealMonitor()
-        let blockedPose = RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
-        let shortMove = RealityCameraPose(position: SIMD3(0.149, 0, 0), forward: SIMD3(0, 0, -1))
-
-        XCTAssertFalse(translationMonitor.update(meshDistance: 1, pigDistance: 2, cameraPose: blockedPose))
-        XCTAssertFalse(translationMonitor.update(meshDistance: nil, pigDistance: 2, cameraPose: shortMove))
-        XCTAssertFalse(translationMonitor.update(meshDistance: nil, pigDistance: 2, cameraPose: shortMove))
-
-        var rotationMonitor = RealityRevealMonitor()
-        let shortTurn = RealityCameraPose(position: .zero, forward: SIMD3(0.2, 0, -0.9797959))
-        XCTAssertFalse(rotationMonitor.update(meshDistance: 1, pigDistance: 2, cameraPose: blockedPose))
-        XCTAssertFalse(rotationMonitor.update(meshDistance: nil, pigDistance: 2, cameraPose: shortTurn))
-        XCTAssertFalse(rotationMonitor.update(meshDistance: nil, pigDistance: 2, cameraPose: shortTurn))
-    }
-
-    func test_revealMonitorRequiresTwoStableVisibleFramesAfterExactMovementThreshold() {
-        var monitor = RealityRevealMonitor()
-        let blockedPose = RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
-        let exactMove = RealityCameraPose(position: SIMD3(0.15, 0, 0), forward: SIMD3(0, 0, -1))
-
-        XCTAssertFalse(monitor.update(meshDistance: 1, pigDistance: 2, cameraPose: blockedPose))
-        XCTAssertFalse(monitor.update(meshDistance: nil, pigDistance: 2, cameraPose: exactMove))
-        XCTAssertTrue(monitor.update(meshDistance: nil, pigDistance: 2, cameraPose: exactMove))
-        XCTAssertFalse(monitor.update(meshDistance: nil, pigDistance: 2, cameraPose: exactMove))
-    }
-
-    func test_revealMonitorAcceptsExactRotationThresholdAfterStableFrames() {
-        var monitor = RealityRevealMonitor()
-        let blockedPose = RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
-        let angle: Float = .pi / 12
-        let exactTurn = RealityCameraPose(
-            position: .zero,
-            forward: SIMD3(sin(angle), 0, -cos(angle))
-        )
-
-        XCTAssertFalse(monitor.update(meshDistance: 1, pigDistance: 2, cameraPose: blockedPose))
-        XCTAssertFalse(monitor.update(meshDistance: nil, pigDistance: 2, cameraPose: exactTurn))
-        XCTAssertTrue(monitor.update(meshDistance: nil, pigDistance: 2, cameraPose: exactTurn))
-    }
-
-    func test_revealMonitorResetsVisibleStabilityWhenBlockingReturns() {
-        var monitor = RealityRevealMonitor()
-        let firstBlockingPose = RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
-        let firstMove = RealityCameraPose(position: SIMD3(0.15, 0, 0), forward: SIMD3(0, 0, -1))
-        let secondMove = RealityCameraPose(position: SIMD3(0.3, 0, 0), forward: SIMD3(0, 0, -1))
-
-        XCTAssertFalse(monitor.update(meshDistance: 1, pigDistance: 2, cameraPose: firstBlockingPose))
-        XCTAssertFalse(monitor.update(meshDistance: nil, pigDistance: 2, cameraPose: firstMove))
-        XCTAssertFalse(monitor.update(meshDistance: 1, pigDistance: 2, cameraPose: firstMove))
-        XCTAssertFalse(monitor.update(meshDistance: nil, pigDistance: 2, cameraPose: secondMove))
-        XCTAssertTrue(monitor.update(meshDistance: nil, pigDistance: 2, cameraPose: secondMove))
-    }
-
-    func test_revealMonitorLatchesTheFirstBlockingPoseForItsHideCycle() {
-        var monitor = RealityRevealMonitor()
-        let firstBlockingPose = RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
-        let stillBlockedAfterMoving = RealityCameraPose(
-            position: SIMD3(0.15, 0, 0),
-            forward: SIMD3(0, 0, -1)
-        )
-
-        XCTAssertFalse(monitor.update(meshDistance: 1, pigDistance: 2, cameraPose: firstBlockingPose))
-        XCTAssertFalse(monitor.update(meshDistance: 1, pigDistance: 2, cameraPose: stillBlockedAfterMoving))
-        XCTAssertFalse(monitor.update(meshDistance: nil, pigDistance: 2, cameraPose: stillBlockedAfterMoving))
-        XCTAssertTrue(monitor.update(meshDistance: nil, pigDistance: 2, cameraPose: stillBlockedAfterMoving))
     }
 
     func test_verifiedMeshOcclusionCompletesTheHideAttempt() {
