@@ -247,8 +247,11 @@ git commit -m "Add stable silhouette occlusion policy"
 
 **Files:**
 - Create: `PiggyEscape/PiggyEscape/Sources/Reality/RealityOcclusionObservationProvider.swift`
+- Create: `PiggyEscape/PiggyEscapeTests/RealityOcclusionObservationProviderTests.swift`
 - Modify: `PiggyEscape/PiggyEscape/Sources/Reality/RealityHideARView.swift`
+- Modify: `PiggyEscape/PiggyEscape/Sources/Reality/RealityPigVisualController.swift`
 - Modify: `PiggyEscape/PiggyEscapeTests/RealityHideARViewCoordinatorTests.swift`
+- Modify as needed: `PiggyEscape/PiggyEscapeTests/RealityPigVisualControllerTests.swift`
 - Modify: `docs/WORK_LOG.md`
 
 **Interfaces:**
@@ -256,7 +259,10 @@ git commit -m "Add stable silhouette occlusion policy"
 - hide cycle마다 새 `pigAnchor`, controller, attachment gate, cycle generation
 - `restartHideCycle()`과 완전한 cycle teardown
 - 60 unique frame 또는 1.5초 cancellable deadline
+- controller pending load/movement를 취소하고 모든 비동기 completion을 cycle generation으로 거름
+- movement-finished, retry-started, exhausted, verified-hide, reveal을 별도 coordinator callback으로 노출하고 root 매핑은 Task 7에서 수행
 
+- [ ] 회전된 local visual bounds의 여덟 모서리를 world로 변환하고, 같은 frame의 timestamp·camera pose·5개 projection/hit을 만드는 provider RED 테스트를 추가한다.
 - [ ] 한 center ray만 blocked이고 나머지가 visible이면 hide 완료 callback이 나가지 않는 RED 테스트를 추가한다.
 - [ ] 4/5+center의 서로 다른 두 frame 뒤에만 `onPigReachedTarget`이 한 번 나가는 테스트를 추가한다.
 - [ ] 같은 ARFrame timestamp의 여러 scene update가 한 번만 집계되는지 확인한다.
@@ -269,8 +275,11 @@ git commit -m "Add stable silhouette occlusion policy"
 
 ```bash
 git add PiggyEscape/PiggyEscape/Sources/Reality/RealityOcclusionObservationProvider.swift \
+  PiggyEscape/PiggyEscape/Sources/Reality/RealityPigVisualController.swift \
   PiggyEscape/PiggyEscape/Sources/Reality/RealityHideARView.swift \
+  PiggyEscape/PiggyEscapeTests/RealityOcclusionObservationProviderTests.swift \
   PiggyEscape/PiggyEscapeTests/RealityHideARViewCoordinatorTests.swift \
+  PiggyEscape/PiggyEscapeTests/RealityPigVisualControllerTests.swift \
   docs/WORK_LOG.md docs/LEARNING_LOG.md
 git commit -m "Verify real hiding across the pig silhouette"
 ```
@@ -417,7 +426,7 @@ xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape \
 - [ ] Chapter 1=C3 닫힌 세계, Chapter 2=권한+mesh/floor 준비, Chapter 3=실제 숨기, Chapter 4=체험 기반 비교로 전면 동기화한다.
 - [ ] 각 step을 실행 가능한 `@Code`·실행 확인·실패 복구·해석과 연결한다.
 - [ ] unresolved `doc:SceneGraphDeepDive`, Chapter 4 “Section 2”, 순차 링크와 article link를 고친다.
-- [ ] 모든 snippet을 iOS 17 Simulator SDK로 독립 type-check한다.
+- [ ] 모든 snippet을 Simulator 실행 없이 iPhoneOS SDK의 `arm64-apple-ios17.0` 대상으로 독립 type-check한다.
 - [ ] `tuist generate --no-open`, 앱 build, content verifier, DocC convert를 GREEN으로 만든다.
 - [ ] 문서·snippet·manifest·work log를 커밋한다.
 
