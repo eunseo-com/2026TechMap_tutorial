@@ -88,6 +88,62 @@ final class RealityPigVisualControllerTests: XCTestCase {
         XCTAssertNil(controller.outerEntity.findEntity(named: "RealityPigModel_idle"))
     }
 
+    func test_crossAxisOverflowFailsPoseInstallWithoutReplacingTheCurrentModel() {
+        typealias PendingLoad = (asset: String, completion: (Result<Entity, Error>) -> Void)
+        var pendingLoads: [PendingLoad] = []
+        let controller = RealityPigVisualController.makeForTesting { asset, completion in
+            pendingLoads.append((asset, completion))
+            return nil
+        }
+
+        controller.loadIdlePig()
+        pendingLoads.removeFirst().completion(.success(ModelEntity(mesh: .generateBox(size: 0.3))))
+        let installedIdle = controller.outerEntity.findEntity(named: "RealityPigModel_idle")
+        var result: RealityPigVisualController.PoseResult?
+
+        controller.showSurprised { result = $0 }
+        pendingLoads.removeFirst().completion(.success(makeFiniteCrossAxisOverflowModel()))
+
+        guard case let .failure(error)? = result else {
+            return XCTFail("expected cross-axis overflow install failure")
+        }
+        XCTAssertEqual(error, .invalidVisualBounds(.surprised))
+        XCTAssertTrue(controller.outerEntity.findEntity(named: "RealityPigModel_idle") === installedIdle)
+        XCTAssertNil(controller.outerEntity.findEntity(named: "RealityPigModel_surprised"))
+        XCTAssertEqual(controller.currentPose, .idle)
+    }
+
+    func test_postScaleTransformOverflowFailsPoseInstallWithoutReplacingTheCurrentModel() {
+        typealias PendingLoad = (asset: String, completion: (Result<Entity, Error>) -> Void)
+        var pendingLoads: [PendingLoad] = []
+        let controller = RealityPigVisualController.makeForTesting { asset, completion in
+            pendingLoads.append((asset, completion))
+            return nil
+        }
+
+        controller.loadIdlePig()
+        pendingLoads.removeFirst().completion(.success(ModelEntity(mesh: .generateBox(size: 0.3))))
+        let installedIdle = controller.outerEntity.findEntity(named: "RealityPigModel_idle")
+        var result: RealityPigVisualController.PoseResult?
+
+        controller.showSurprised { result = $0 }
+        pendingLoads.removeFirst().completion(.success(makePostScaleTransformOverflowModel()))
+
+        guard case let .failure(error)? = result else {
+            let installed = controller.outerEntity.findEntity(named: "RealityPigModel_surprised")
+            let bounds = installed?.visualBounds(recursive: true, relativeTo: controller.outerEntity)
+            return XCTFail(
+                "expected post-scale transform overflow install failure; "
+                    + "scale=\(String(describing: installed?.scale)), "
+                    + "bounds=\(String(describing: bounds))"
+            )
+        }
+        XCTAssertEqual(error, .invalidVisualBounds(.surprised))
+        XCTAssertTrue(controller.outerEntity.findEntity(named: "RealityPigModel_idle") === installedIdle)
+        XCTAssertNil(controller.outerEntity.findEntity(named: "RealityPigModel_surprised"))
+        XCTAssertEqual(controller.currentPose, .idle)
+    }
+
     func test_testingWalkMovesStableOuterEntityAndFinishesIdle() {
         let controller = RealityPigVisualController.makeForTesting()
         let outerEntity = controller.outerEntity
@@ -119,6 +175,23 @@ final class RealityPigVisualControllerTests: XCTestCase {
 
         XCTAssertNil(model.components[CollisionComponent.self])
     }
+}
+
+private func makeFiniteCrossAxisOverflowModel() -> Entity {
+    let container = Entity()
+    let offset = Float.greatestFiniteMagnitude * 0.75
+    for x in [-offset, offset] {
+        let child = ModelEntity(mesh: .generateBox(width: 0.2, height: 0.2, depth: 0.09))
+        child.position.x = x
+        container.addChild(child)
+    }
+    return container
+}
+
+private func makePostScaleTransformOverflowModel() -> Entity {
+    let model = ModelEntity(mesh: .generateBox(width: 1e-30, height: 0.2, depth: 0.09))
+    model.scale.x = Float.greatestFiniteMagnitude * 0.75
+    return model
 }
 
 private func completePoseLoad(

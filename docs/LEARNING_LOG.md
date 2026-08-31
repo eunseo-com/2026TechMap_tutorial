@@ -28,6 +28,18 @@
 
 ## 항목
 
+### L-20260830-126 — finite visual bounds가 균일 스케일 뒤 다른 축에서 overflow함
+
+- 상태: 해결
+- 발생 태스크: Task 4 검토 보수 2차 — scaled·normalized bounds 계약
+- 재현: 높이 0.09m, X축 min/max가 각각 `±Float.greatestFiniteMagnitude * 0.75`인 finite bounds와 같은 경계를 가진 pose 후보를 만들고, policy rejection 및 기존 모델 보존 typed failure를 실제 iPhone에서 확인한다.
+- 관찰: 첫 RED test fixture는 `Result<Void, ...>`를 `XCTAssertEqual`로 비교해 `Type 'Void' cannot conform to 'Equatable'` compile error가 났다. assertion을 failure pattern match로 고친 test-only 재실행은 `uniformScale`이 throw하지 않고 controller도 후보를 설치해, 11 tests·2 failures, exit 65, `** TEST FAILED **`로 의도한 결함을 재현했다.
+- 영향: 입력 min/max와 계산 scale이 각각 finite여도 다른 축의 scaled min/max가 infinity가 될 수 있고, 실제 post-scale bounds를 검증하지 않은 설치가 non-finite transform을 성공 상태로 남길 수 있었다.
+- 원인/가설: policy는 height와 division 결과만 검증하고 scaled bounds 전체를 검증하지 않았다. controller도 `model.scale` 변경 뒤 얻은 `normalizedBounds.center`와 `min.y`를 검증 없이 position에 적용했다.
+- 조치: policy가 반환 전 모든 scaled min/max의 finite·축 순서·positive height·0.18m 일치를 검증한다. controller도 RealityKit에서 다시 잰 실제 normalized bounds에 같은 계약을 적용한 뒤에만 최종 position 정렬과 기존 모델 교체를 수행한다. 실패 후보만 제거하므로 현재 모델과 pose는 보존된다.
+- 검증: 잘못된 fixture compile RED bundle은 `/tmp/piggyescape-task4-review2-red/Logs/Test/Test-PiggyEscape-2026.08.30_03-17-34-+0900.xcresult`, 유효 RED bundle은 `/tmp/piggyescape-task4-review2-red-2/Logs/Test/Test-PiggyEscape-2026.08.30_03-18-07-+0900.xcresult`다. 보수 도중의 source는 실제 iPhone 16 Pro iOS 26.6에서 policy·visual focused 11/11·전체 140/140 runtime GREEN이었다. bundle은 각각 `/tmp/piggyescape-task4-review2-focused-green-device/Logs/Test/Test-PiggyEscape-2026.08.30_03-21-43-+0900.xcresult`, `/tmp/piggyescape-task4-review2-full-green-device/Logs/Test/Test-PiggyEscape-2026.08.30_03-22-04-+0900.xcresult`다. 이후 최종 source·test가 다시 수정됐으므로 이 runtime 결과를 현재 diff의 성공 근거로 사용하지 않는다. 최종 diff는 새 `/tmp/piggyescape-task4-fix2-fresh-build`에서 generic iOS Simulator 전체 `build-for-testing`이 exit 0, `** TEST BUILD SUCCEEDED **`였고, 이는 compile-only 근거다. 현재 diff의 assertion 실행은 사용자의 Simulator 제외·DocC 우선 요청에 따라 보류한다. 기본 권한의 첫 물리 GREEN 시도 exit 70과 종료 후 partial `devicectl diagnose` 경고는 각각 환경 제약과 L-20260830-124로 분리한다.
+- 배운 점: 부동소수점 transform 정책은 입력과 scalar만이 아니라 변환된 모든 경계 성분과 프레임워크가 실제로 반환한 post-transform bounds를 함께 검증해야 한다.
+
 ### L-20260830-125 — near-zero visual height가 infinite 돼지 scale로 성공 처리됨
 
 - 상태: 해결

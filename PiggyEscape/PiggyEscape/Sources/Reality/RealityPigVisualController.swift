@@ -186,6 +186,10 @@ final class RealityPigVisualController {
             model.scale *= SIMD3(repeating: baselineScale)
 
             let normalizedBounds = model.visualBounds(recursive: true, relativeTo: outerEntity)
+            try PigScalePolicy.validateNormalizedBounds(
+                visualBoundsMin: normalizedBounds.min,
+                visualBoundsMax: normalizedBounds.max
+            )
             model.position += SIMD3(
                 -normalizedBounds.center.x,
                 -normalizedBounds.min.y,

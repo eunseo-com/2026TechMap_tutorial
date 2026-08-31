@@ -45,4 +45,15 @@ final class PigScalePolicyTests: XCTestCase {
             XCTAssertEqual(error as? PigScalePolicyError, .invalidVisualBounds)
         }
     }
+
+    func test_finiteBoundsThatOverflowAnotherAxisAfterScalingAreRejected() {
+        XCTAssertThrowsError(
+            try PigScalePolicy.uniformScale(
+                visualBoundsMin: SIMD3(-Float.greatestFiniteMagnitude * 0.75, 0, -0.5),
+                visualBoundsMax: SIMD3(Float.greatestFiniteMagnitude * 0.75, 0.09, 0.5)
+            )
+        ) { error in
+            XCTAssertEqual(error as? PigScalePolicyError, .invalidVisualBounds)
+        }
+    }
 }
