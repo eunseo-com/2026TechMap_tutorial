@@ -348,7 +348,7 @@ struct RealityRevealMonitor {
         let referenceForward = simd_normalize(referencePose.forward)
         let currentForward = simd_normalize(currentPose.forward)
         let directionsDot = simd_clamp(simd_dot(referenceForward, currentForward), -1, 1)
-        return directionsDot <= cos(Self.minimumRotation)
+        return directionsDot <= cos(Self.minimumRotation).nextUp
     }
 }
 

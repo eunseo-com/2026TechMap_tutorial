@@ -28,6 +28,18 @@
 
 ## 항목
 
+### L-20260901-135 — exact 15° forward 정규화가 cosine보다 한 Float ULP 커짐
+
+- 상태: 해결
+- 발생 태스크: Task 5 검토 보수 2차 — exact 15° Float 경계
+- 재현: `angle = Float.pi / 12`로 `(sin(angle), 0, -cos(angle))` forward를 만들고 monitor와 같이 정규화한 뒤 reference forward와 dot을 비교한다.
+- 관찰: 정규화된 dot bit pattern은 `0x3f7746eb`, `cos(minimumRotation)`은 `0x3f7746ea`여서 수학적으로 exact 15°인 기존 fixture가 strict `<= cos` 비교에서는 거절된다. 반면 15°보다 0.000002rad 작은 fixture는 이 한 ULP 상한보다도 크다.
+- 영향: 문서 계약상 포함돼야 하는 exact 15° 회전이 movement latch를 만들지 못할 수 있었다.
+- 원인/가설: Float 삼각함수 결과로 만든 벡터를 다시 정규화하면서 발생한 한 representable-step 반올림 차이다.
+- 조치: 비교 상한만 `cos(Self.minimumRotation).nextUp`으로 바꿨다. 이전 임의 `0.000001` 허용오차는 복원하지 않았다.
+- 검증: 기존 `test_exactFifteenDegreeRotationLatchesMovement`와 `test_rotationTwoMillionthsOfARadianBelowThresholdDoesNotLatch`를 그대로 유지했다. RED 상태 `/tmp/piggyescape-task5-fix2-red-compile-20260901`와 수정 뒤 fresh `/tmp/piggyescape-task5-fix2-green-20260901`에서 전체 source+test bundle이 각각 exit 0, `** TEST BUILD SUCCEEDED **`였다. 사용자 지시에 따라 assertion runtime은 실행하지 않았다.
+- 배운 점: 각도 경계의 Float 보정은 임의 epsilon이 아니라 fixture 계산에서 필요한 최소 representable step으로 제한한다.
+
 ### L-20260901-134 — Task 5 검토 regression은 compile되지만 runtime assertion은 보류됨
 
 - 상태: 보류
