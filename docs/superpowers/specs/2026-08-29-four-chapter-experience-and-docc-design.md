@@ -182,8 +182,10 @@ Chapter 1의 학습 결론은 “이 장면의 나무와 숨기 규칙은 개발
 2. 허용되면 유효한 레이아웃의 `ARView`에서 world tracking을 한 번 시작한다.
 3. LiDAR 메시 재구성 지원을 확인하고 수평·수직 평면, 분류된 바닥, 메시 업데이트를 관찰한다. 지원 여부 확인은 준비 완료와 구분한다.
 4. **최소 한 개의 `ARMeshAnchor`와 최소 한 개의 분류된 수평 floor를 모두 관찰했을 때만** `realityReady`가 된다. 화면에는 “공간 형태”와 “바닥”의 준비 상태를 따로 보여준다.
-5. 두 항목이 준비되면 스캔 완료 설명과 “숨바꼭질 시작” CTA가 나타난다. CTA 전에는 AR 탭을 무시한다. Chapter 3의 각 타깃은 선택 지점 근처의 floor를 다시 검증한다.
-6. CTA를 누르면 같은 세션에서 Chapter 3의 `waitingForRealTarget`으로 전이한다.
+5. 스캔 중에는 `ARView.DebugOptions.showSceneUnderstanding`으로 **ARKit이 실제로 관찰한 scene-understanding mesh만** 시각화한다. 화면 장식이 물체 종류를 판별한 것처럼 보이지 않도록 가짜 bounding box나 추정 semantic label은 만들지 않는다.
+6. 메시·바닥 진행은 각각 독립 상태로 표시한다. 둘이 처음 준비된 순간에는 완료 피드백을 한 번만 내고, Reduce Motion에서는 움직이는 sweep 대신 정적인 준비 상태와 색·아이콘 변화만 사용한다.
+7. 두 항목이 준비되면 스캔 완료 설명과 “숨바꼭질 시작” CTA가 나타난다. CTA 전에는 AR 탭을 무시한다. Chapter 3에서 유효한 표면을 수락하면 실제 hit 위치에 짧은 확인 marker를 표시하고, 각 타깃의 floor를 다시 검증한다.
+8. CTA를 누르면 같은 세션에서 Chapter 3의 `waitingForRealTarget`으로 전이한다. scene-understanding mesh 디버그 표시는 Chapter 3 진입 때 제거해 돼지와 실제 물체를 가리지 않는다.
 
 권한 거부 화면은 “설정 열기”와 “차이 먼저 보기”를 제공한다. 설정을 실제로 연 경우에만 다음 active에서 권한을 한 번 다시 읽는다. 시스템 제한 상태는 `cameraRestricted`로 구분하고 변경할 수 없는 Settings 버튼을 보여 주지 않는다. LiDAR 미지원 화면은 지원 기기 조건과 이유를 설명하고 Chapter 4로 진행할 수 있게 한다.
 
@@ -326,6 +328,7 @@ AR session을 정리한 뒤 SwiftUI 비교 화면을 표시한다. 비교의 첫
 - Dynamic Type에서 패널은 돼지를 가리는 고정 높이 대신 내용 크기와 safe area를 사용한다.
 - 상태가 바뀔 때 핵심 안내를 접근성 announcement로 한 번 전달하되 매 frame 반복하지 않는다.
 - Reduce Motion에서는 돼지·화면 확대를 생략하고 모델·텍스트 상태 변화만 사용한다.
+- Chapter 2의 스캔 sweep·pulse는 Reduce Motion에서 정적인 상태 표시로 대체하고, 실제 mesh 표시와 준비 여부 자체는 유지한다.
 - 텍스트는 배경과 4.5:1 이상의 대비를 유지하며 색만으로 상태를 구분하지 않는다.
 
 ## 9. 공개 DocC 단일 원본
@@ -402,6 +405,8 @@ Tutorials/SceneKitToRealityKit.docc/
 ### Coordinator·통합 XCTest
 
 - mesh만 또는 floor만 관찰했을 때는 Chapter 2 준비가 끝나지 않고, 둘을 모두 관찰한 뒤 한 번만 `realityReady`가 됨
+- Chapter 2의 mesh 시각화가 실제 scene-understanding debug option과 scanning 상태에만 묶이고, Chapter 3 진입 때 제거됨
+- mesh·floor 진행 표시, 준비 완료 one-shot, Reduce Motion 정적 대안, 유효 표면 marker가 서로의 hit testing을 가로채지 않음
 - Chapter 2 CTA 전 AR 탭 무시, CTA 뒤 한 번 수락
 - 같은 `ARView`·session이 Chapter 2→3 전환에서 유지됨
 - 시작점·첫 목적지·retry 후보가 같은 floor region의 inset 안에 있을 때만 cycle이 진행됨

@@ -281,6 +281,7 @@ git commit -m "Verify real hiding across the pig silhouette"
 
 **Files:**
 - Create: `PiggyEscape/PiggyEscape/Sources/Escape/ChapterProgressView.swift`
+- Create: `PiggyEscape/PiggyEscape/Sources/Escape/RealityScanFeedbackView.swift`
 - Create: `PiggyEscape/PiggyEscape/Sources/Escape/EscapeRootCoordinator.swift`
 - Modify: `PiggyEscape/PiggyEscape/Sources/Escape/EscapeRootView.swift`
 - Modify: `PiggyEscape/PiggyEscapeTests/EscapeRootCoordinatorTests.swift`
@@ -291,11 +292,14 @@ git commit -m "Verify real hiding across the pig silhouette"
 - 상태에서 파생한 1/4…4/4 진행 표시
 - Chapter 2·3의 동일 structural path `RealityHideARView`
 - CTA 전 preparing, CTA 뒤 selectingTarget
+- scanning 동안 실제 scene-understanding mesh만 표시하고 mesh/floor 진행·one-shot 완료·accepted surface marker를 분리
 - 정보 overlay는 hit testing false, CTA safe-area 영역만 true
 - scan 20초, interruption 10초의 주입 가능한 scheduler
 
 - [ ] Chapter 1 발견·0.70초 fade 뒤 Chapter 2, ready CTA 뒤 Chapter 3 전이 RED 테스트를 추가한다.
 - [ ] Chapter 2→3에서 AR view identity/session start count가 1인 테스트를 추가한다.
+- [ ] scanning에서만 `showSceneUnderstanding`이 켜지고 Chapter 3 전환 때 꺼지는지, mesh/floor 진행과 완료 피드백이 실제 readiness에만 반응하는지 테스트한다.
+- [ ] 유효 표면 marker가 실제 accepted hit 위치에만 잠시 나타나며, Reduce Motion에서는 sweep/pulse 없이 정적 상태를 쓰는지 테스트한다.
 - [ ] 상태별 interaction mode, 새로운 정확한 안내 문자열, 44pt CTA와 overlay hit-test 계약을 테스트한다.
 - [ ] denied만 Settings를 보이고 restricted/lidar는 보이지 않는지, 모든 오류가 retry 또는 skip-to-comparison을 제공하는지 테스트한다.
 - [ ] scan timeout, session failure, interruption 복구와 stale experience/cycle callback 무시를 controlled scheduler로 테스트한다.
@@ -307,6 +311,7 @@ git commit -m "Verify real hiding across the pig silhouette"
 
 ```bash
 git add PiggyEscape/PiggyEscape/Sources/Escape/ChapterProgressView.swift \
+  PiggyEscape/PiggyEscape/Sources/Escape/RealityScanFeedbackView.swift \
   PiggyEscape/PiggyEscape/Sources/Escape/EscapeRootCoordinator.swift \
   PiggyEscape/PiggyEscape/Sources/Escape/EscapeRootView.swift \
   PiggyEscape/PiggyEscapeTests/EscapeRootCoordinatorTests.swift \
@@ -407,7 +412,7 @@ xcodebuild -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape \
 **Contract:** 하나의 root catalog만 빌드·배포되며 네 장이 production 상태·수치·오류·replay와 의미적으로 같다.
 
 - [ ] `Project.swift`의 app sources에서 `PiggyEscape/Tutorials/**`를 제거하는 manifest test 또는 generated source-list 확인을 먼저 추가한다.
-- [ ] content verifier가 4 tutorial, 4 article, 기대 snippet inventory, 0.18m/0.90m/5점/0.15m·15°/2 frame/replay 문구를 요구하도록 작성하고 현재 불일치 RED를 확인한다.
+- [ ] content verifier가 4 tutorial, 4 article, 기대 snippet inventory, 실제 scene-understanding mesh와 mesh/floor 분리 진행, 0.18m/0.90m/5점/0.15m·15°/2 frame/replay 문구를 요구하도록 작성하고 현재 불일치 RED를 확인한다.
 - [ ] 앱 내부 catalog를 정확한 tracked path만 제거한다. 루트 catalog는 보존한다.
 - [ ] Chapter 1=C3 닫힌 세계, Chapter 2=권한+mesh/floor 준비, Chapter 3=실제 숨기, Chapter 4=체험 기반 비교로 전면 동기화한다.
 - [ ] 각 step을 실행 가능한 `@Code`·실행 확인·실패 복구·해석과 연결한다.
