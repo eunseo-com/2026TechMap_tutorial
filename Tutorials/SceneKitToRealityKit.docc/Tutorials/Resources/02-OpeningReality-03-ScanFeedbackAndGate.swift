@@ -8,7 +8,7 @@
 // Contract tests: PiggyEscape/PiggyEscapeTests/RealityEnvironmentReadinessTests.swift
 // Contract tests: PiggyEscape/PiggyEscapeTests/RealityHideARViewCoordinatorTests.swift
 // Implementation status: integrated
-// Verification: standalone type-check와 generic build 완료; XCTest 실행 검증 대기; LiDAR 실기기 대기
+// Verification: standalone iPhoneOS type-check·generic build·물리 iPhone 기준 186/186 통과; 추가 Reduce Motion 2개 compile·sign 통과/runtime은 device unlock 대기; UI test 0개; LiDAR 관찰·동일 기기 캡처·Swift 6 strict·배포 대기
 
 import RealityKit
 import simd

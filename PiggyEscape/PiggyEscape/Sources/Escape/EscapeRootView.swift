@@ -34,6 +34,7 @@ struct EscapeRootView: View {
 
             if coordinator.showsClosedWorldView {
                 C3ClosedWorldSceneView(
+                    reduceMotionEnabled: accessibilityReduceMotion,
                     onNarrationFinished: coordinator.closedWorldNarrationDidFinish,
                     onDiscovered: beginClosedWorldFade
                 )

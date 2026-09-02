@@ -47,13 +47,16 @@ private final class C3TaskAutoDiscoveryCancellable: C3AutoDiscoveryCancellable {
 }
 
 struct C3ClosedWorldSceneView: UIViewRepresentable {
+    private let reduceMotionEnabled: Bool
     private let onNarrationFinished: () -> Void
     private let onDiscovered: () -> Void
 
     init(
+        reduceMotionEnabled: Bool = false,
         onNarrationFinished: @escaping () -> Void = {},
         onDiscovered: @escaping () -> Void = {}
     ) {
+        self.reduceMotionEnabled = reduceMotionEnabled
         self.onNarrationFinished = onNarrationFinished
         self.onDiscovered = onDiscovered
     }
@@ -93,19 +96,24 @@ struct C3ClosedWorldSceneView: UIViewRepresentable {
         return view
     }
 
-    func updateUIView(_ uiView: SCNView, context: Context) {}
+    func updateUIView(_ uiView: SCNView, context: Context) {
+        context.coordinator.world.updateReduceMotionEnabled(reduceMotionEnabled)
+    }
 
     static func dismantleUIView(_ uiView: SCNView, coordinator: Coordinator) {
         coordinator.cancelAutomaticDiscovery()
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onDiscovered: onDiscovered)
+        Coordinator(
+            onDiscovered: onDiscovered,
+            reduceMotionEnabled: reduceMotionEnabled
+        )
     }
 
     @MainActor
     final class Coordinator: NSObject {
-        let world = C3ClosedWorld()
+        let world: C3ClosedWorld
         let overlay = NarrationOverlayScene(size: UIScreen.main.bounds.size)
         weak var scnView: SCNView?
 
@@ -115,8 +123,10 @@ struct C3ClosedWorldSceneView: UIViewRepresentable {
 
         init(
             onDiscovered: @escaping () -> Void,
+            reduceMotionEnabled: Bool = false,
             autoDiscoveryScheduler: C3AutoDiscoveryScheduling? = nil
         ) {
+            self.world = C3ClosedWorld(reduceMotionEnabled: reduceMotionEnabled)
             self.onDiscovered = onDiscovered
             self.autoDiscoveryScheduler = autoDiscoveryScheduler ?? C3TaskAutoDiscoveryScheduler()
         }

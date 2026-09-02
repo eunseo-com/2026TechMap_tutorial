@@ -110,7 +110,7 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
             monotonicNow: { 0 },
             onRevealed: { revealCount += 1 }
         )
-        coordinator.acceptHideTarget(destination: SIMD3(0, 0, -2), initialPosition: SIMD3(0, 0, -0.8))
+        _ = coordinator.acceptHideTarget(destination: SIMD3(0, 0, -2), initialPosition: SIMD3(0, 0, -0.8))
         let blockedPose = RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
         let movedPose = RealityCameraPose(position: SIMD3(0.16, 0, 0), forward: SIMD3(0, 0, -1))
         recordStableHide(in: coordinator, referencePose: blockedPose)
@@ -207,7 +207,7 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
             visualController: RealityPigVisualController.makeForTesting(),
             monotonicNow: { 0 }
         )
-        coordinator.acceptHideTarget(destination: SIMD3(0, 0, -2), initialPosition: SIMD3(0, 0, -0.8))
+        _ = coordinator.acceptHideTarget(destination: SIMD3(0, 0, -2), initialPosition: SIMD3(0, 0, -0.8))
         let blockingPose = RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
         let movedPose = RealityCameraPose(position: SIMD3(0.16, 0, 0), forward: SIMD3(0, 0, -1))
         recordStableHide(in: coordinator, referencePose: blockingPose)
@@ -224,7 +224,7 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
             visualController: RealityPigVisualController.makeForTesting(),
             monotonicNow: { 0 }
         )
-        coordinator.acceptHideTarget(destination: SIMD3(0, 0, -2), initialPosition: SIMD3(0, 0, -0.8))
+        _ = coordinator.acceptHideTarget(destination: SIMD3(0, 0, -2), initialPosition: SIMD3(0, 0, -0.8))
         let blockedPose = RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
         let movedPose = RealityCameraPose(position: SIMD3(0.16, 0, 0), forward: SIMD3(0, 0, -1))
         recordStableHide(in: coordinator, referencePose: blockedPose)
@@ -284,7 +284,7 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
         )
 
         XCTAssertFalse(visualController.outerEntity.isEnabled)
-        coordinator.acceptHideTarget(
+        _ = coordinator.acceptHideTarget(
             destination: SIMD3(0.6, 0, -1.7),
             initialPosition: SIMD3(0, 0, -0.8)
         )
@@ -331,7 +331,7 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
             onMessage: { messages.append($0) }
         )
 
-        coordinator.acceptHideTarget(destination: SIMD3(0, 0, -1), initialPosition: SIMD3(0, 0, -0.2))
+        _ = coordinator.acceptHideTarget(destination: SIMD3(0, 0, -1), initialPosition: SIMD3(0, 0, -0.2))
         XCTAssertEqual(coordinator.status, .walking)
         loader.failNext()
 
@@ -354,7 +354,7 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
             onError: { errorCount += 1 }
         )
 
-        coordinator.acceptHideTarget(destination: SIMD3(0, 0, -1), initialPosition: SIMD3(0, 0, -0.2))
+        _ = coordinator.acceptHideTarget(destination: SIMD3(0, 0, -1), initialPosition: SIMD3(0, 0, -0.2))
         loader.succeedNext()
         XCTAssertEqual(coordinator.status, .walking)
         loader.failNext()
@@ -377,7 +377,7 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
             onRevealed: { revealCount += 1 },
             onError: { errorCount += 1 }
         )
-        coordinator.acceptHideTarget(destination: SIMD3(0, 0, -1), initialPosition: SIMD3(0, 0, -0.2))
+        _ = coordinator.acceptHideTarget(destination: SIMD3(0, 0, -1), initialPosition: SIMD3(0, 0, -0.2))
         loader.succeedNext()
         loader.succeedNext()
         let blockedPose = RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
@@ -408,7 +408,7 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
             onPigReachedTarget: { reachedCount += 1 }
         )
 
-        coordinator.acceptHideTarget(
+        _ = coordinator.acceptHideTarget(
             destination: SIMD3(0, 0, -1),
             initialPosition: SIMD3(0, 0, -0.44)
         )
@@ -492,7 +492,7 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
             onPigReachedTarget: { reachedCount += 1 }
         )
 
-        coordinator.acceptHideTarget(
+        _ = coordinator.acceptHideTarget(
             destination: SIMD3(0, 0, -1),
             initialPosition: SIMD3(0, 0, -0.44)
         )
@@ -528,7 +528,7 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
             onMessage: { messages.append($0) }
         )
 
-        coordinator.acceptHideTarget(
+        _ = coordinator.acceptHideTarget(
             destination: SIMD3(0, 0, -1),
             initialPosition: SIMD3(0, 0, -0.44)
         )
@@ -584,7 +584,7 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
             monotonicNow: { 0 }
         )
 
-        coordinator.acceptHideTarget(destination: SIMD3(0, 0, -1), initialPosition: SIMD3(0, 0, -0.4))
+        _ = coordinator.acceptHideTarget(destination: SIMD3(0, 0, -1), initialPosition: SIMD3(0, 0, -0.4))
         let firstAnchor = coordinator.currentPigAnchorIdentifier
         coordinator.restartHideCycle()
 
@@ -592,7 +592,7 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
         XCTAssertFalse(firstVisual.outerEntity.isEnabled)
         XCTAssertEqual(coordinator.status, .waitingForTarget)
 
-        coordinator.acceptHideTarget(destination: SIMD3(0, 0, -1.2), initialPosition: SIMD3(0, 0, -0.6))
+        _ = coordinator.acceptHideTarget(destination: SIMD3(0, 0, -1.2), initialPosition: SIMD3(0, 0, -0.6))
 
         XCTAssertTrue(coordinator.hasActiveHideCycle)
         XCTAssertNotEqual(coordinator.currentPigAnchorIdentifier, firstAnchor)

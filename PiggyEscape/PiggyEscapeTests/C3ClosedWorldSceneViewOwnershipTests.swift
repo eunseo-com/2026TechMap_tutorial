@@ -4,6 +4,28 @@ import SceneKit
 
 @MainActor
 final class C3ClosedWorldSceneViewOwnershipTests: XCTestCase {
+    func test_reduceMotionKeepsSurpriseContentWithoutScaleAction() {
+        let coordinator = C3ClosedWorldSceneView(
+            reduceMotionEnabled: true
+        ).makeCoordinator()
+
+        coordinator.world.performSurpriseReaction()
+
+        XCTAssertEqual(coordinator.world.currentPose, .surprised)
+        XCTAssertEqual(coordinator.world.lastCaption, "아, 들켰네… 제대로 숨고 싶은데.")
+        XCTAssertNil(coordinator.world.pigContainer.action(forKey: "escapePig.surpriseScale"))
+    }
+
+    func test_standardMotionRunsSurpriseScaleAction() {
+        let coordinator = C3ClosedWorldSceneView(
+            reduceMotionEnabled: false
+        ).makeCoordinator()
+
+        coordinator.world.performSurpriseReaction()
+
+        XCTAssertNotNil(coordinator.world.pigContainer.action(forKey: "escapePig.surpriseScale"))
+    }
+
     func test_coordinatorIsReleasedWhenWorldOutlivesInstalledCallbacks() {
         weak var releasedCoordinator: C3ClosedWorldSceneView.Coordinator?
         var retainedWorld: C3ClosedWorld?

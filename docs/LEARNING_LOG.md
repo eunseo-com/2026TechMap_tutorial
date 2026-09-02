@@ -28,16 +28,52 @@
 
 ## 항목
 
+### L-20260903-146 — 연결 worktree의 기본 권한은 Git index lock 생성을 막음
+
+- 상태: 해결
+- 발생 태스크: Task 13 최종 리뷰 보수 commit
+- 재현: 수정 범위 15개 파일을 명시한 `git add`를 worktree 기본 권한으로 실행한다.
+- 관찰: 공용 metadata의 `.git/worktrees/ch1-reality-escape/index.lock` 생성이 `Operation not permitted`로 실패해 exit 128이었다. working tree 파일에는 변화가 없었다.
+- 영향: 검증된 수정이 아직 index에 올라가지 않았고 commit을 만들 수 없다.
+- 원인/가설: 연결 worktree의 Git metadata가 작업 디렉터리 바깥 공용 `.git` 아래 있어 기본 filesystem sandbox의 쓰기 범위를 벗어난다.
+- 조치: 같은 명시적 파일 목록의 `git add`와 이후 commit만 승인된 권한으로 재실행한다. 다른 파일·브랜치·원격은 건드리지 않는다.
+- 검증: 승인 실행 뒤 staged 목록을 `git diff --cached --name-only`로 확인하고 commit 후 worktree 상태를 재확인한다.
+- 배운 점: source 수정 권한과 연결 worktree의 index/commit 권한은 분리되므로 staging failure를 source failure로 해석하지 않는다.
+
+### L-20260903-145 — 로컬 Ruby가 `Array#filter_map`을 지원하지 않음
+
+- 상태: 해결
+- 발생 태스크: Task 13 최종 리뷰 보수 — Pages workflow gate 검증
+- 재현: Ruby로 workflow의 run step 순서를 파싱하면서 `steps.filter_map { ... }`을 호출한다.
+- 관찰: YAML parse와 step 출력은 성공했지만 semantic assertion one-liner가 `undefined method 'filter_map' for Array`로 exit 1이었다.
+- 영향: workflow 자체 오류가 아니라 로컬 Ruby 호환성 때문에 gate-order assertion이 실행되지 않았다.
+- 원인/가설: 이 호스트의 Ruby는 `Array#filter_map` 도입 전 버전이다.
+- 조치: 같은 YAML 구조 검사를 `map { ... }.compact`로 다시 작성한다.
+- 검증: `map { ... }.compact` 호환 one-liner가 content→build→site 순서와 `scripts/verify-docc-content.sh` path filter를 확인하고 exit 0으로 끝났다.
+- 배운 점: 저장소 검증용 임시 명령도 macOS 기본 Ruby 버전을 가정하지 말고 오래 지원된 collection API를 사용한다.
+
+### L-20260903-144 — available 실기기도 잠금 상태면 XCTest 실행 직전에 멈춤
+
+- 상태: 보류
+- 발생 태스크: Task 13 최종 리뷰 보수 — Chapter 1 Reduce Motion
+- 재현: `cd PiggyEscape && xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'platform=iOS,id=00008140-0008385214C0801C' -derivedDataPath /tmp/piggyescape-reduce-motion-focused-20260903 -only-testing:PiggyEscapeTests/C3ClosedWorldSceneViewOwnershipTests DEVELOPMENT_TEAM=GMLPV8QDSK CODE_SIGN_STYLE=Automatic -allowProvisioningUpdates test`
+- 관찰: read-only CoreDevice 목록은 iPhone을 `available (paired)`로 표시했고 app·test bundle arm64 compile, provisioning, signing까지 성공했다. 실행 직전 Xcode가 `Unlock YES iPhone to Continue`로 대기해 60초 뒤 수동 중단했으며 exit 75, 실행 테스트 0건이었다.
+- 영향: 기준 commit의 physical unit suite 186/186은 유효하지만, 새 Reduce Motion 2개를 포함한 현재 정적 188개 전체 runtime green은 아직 주장할 수 없다.
+- 원인/가설: signing이나 source 문제가 아니라 테스트 시작 시점의 device lock 상태다. `available`은 `unlocked`를 보장하지 않는다.
+- 조치: 잠금 우회나 기기 설정 변경 없이 대기 실행을 중단했다. 기기가 unlocked 상태일 때 새 DerivedData로 focused 2개와 전체 188개를 다시 실행한다.
+- 검증: 같은 변경의 generic iPhoneOS `build-for-testing`은 exit 0이고, 실제 기기용 app·test bundle도 compile·sign까지 완료했다. assertion runtime은 잠금 해제 뒤 재검증 대기다.
+- 배운 점: physical XCTest 전에는 paired availability뿐 아니라 현재 unlock 상태도 확인하고, compile/sign 근거와 assertion 실행 근거를 분리한다.
+
 ### L-20260903-142 — Swift 6 strict diagnostic은 cancellation handle 격리에서 계속 중단됨
 
 - 상태: 보류
 - 발생 태스크: Task 13 — 전체 회귀·실기기·공개 배포
 - 재현: `cd PiggyEscape && xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -configuration Debug -destination 'generic/platform=iOS' -derivedDataPath /tmp/piggyescape-task13-swift6-20260903 SWIFT_VERSION=6 SWIFT_STRICT_CONCURRENCY=complete CODE_SIGNING_ALLOWED=NO build`
-- 관찰: generic iPhoneOS arm64 compile이 `C3ClosedWorldSceneView.swift:125:30`에서 `cannot access property 'autoDiscoveryTask' with a non-Sendable type '(any C3AutoDiscoveryCancellable)?' from nonisolated deinit` 오류로 exit 65, `** BUILD FAILED **`가 됐다.
+- 관찰: 최신 보수 뒤 fresh generic iPhoneOS arm64 compile도 `C3ClosedWorldSceneView.swift:135:30`에서 `cannot access property 'autoDiscoveryTask' with a non-Sendable type '(any C3AutoDiscoveryCancellable)?' from nonisolated deinit` 오류로 exit 65, `** BUILD FAILED **`가 됐다.
 - 영향: Swift 5 설정의 앱·unit-test bundle compile/link 성공과 별개로 Swift 6 strict concurrency 지원을 주장할 수 없다. Task 9에서 요구한 ownership test와 UI fixture도 아직 없다.
 - 원인/가설: `Coordinator`의 nonisolated `deinit`이 `Sendable`이 아닌 취소 handle을 직접 접근한다는 compiler 진단이 L-20260829-109의 보류 원인과 일치한다.
 - 조치: Task 13 범위를 넘는 Swift 6 concurrency 보수나 UI fixture 구현은 하지 않고, 별도 Task 9 범위로 보류한다.
-- 검증: 같은 HEAD의 Swift 5 generic iPhoneOS Debug·Release build 및 `build-for-testing`은 각각 exit 0이었다. strict diagnostic은 수정 뒤 같은 command로 다시 실행하기 전까지 실패 상태다.
+- 검증: Reduce Motion 보수까지 포함한 같은 worktree의 Swift 5 generic iPhoneOS Release build와 `build-for-testing`은 각각 exit 0이었다. strict diagnostic 재실행은 동일 경계에서 exit 65였다.
 - 배운 점: language-mode preparation gate의 fresh failure는 production Swift 5 build 성공과 분리해 기록하고, Task 9 계약이 없는 상태에서 임의로 동시성 수명을 바꾸지 않는다.
 
 ### L-20260903-143 — 실기기 XCTest는 bootstrap·assertion·후속 연결 상태를 구분해야 함

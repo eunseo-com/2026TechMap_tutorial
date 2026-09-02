@@ -26,8 +26,10 @@ final class C3ClosedWorld {
     private var experience = EscapeExperienceMachine()
     private var treeHideDestination: SCNVector3?
     private var hasDiscovered = false
+    private var reduceMotionEnabled: Bool
 
-    init() {
+    init(reduceMotionEnabled: Bool = false) {
+        self.reduceMotionEnabled = reduceMotionEnabled
         let island = C3IslandBuilder.build()
         guard let inSceneHideTree = island.childNode(withName: "HideTree", recursively: true) else {
             preconditionFailure("C3 closed world requires the in-scene HideTree")
@@ -89,14 +91,20 @@ final class C3ClosedWorld {
     func performSurpriseReaction() {
         setPose(.surprised)
         lastCaption = "아, 들켰네… 제대로 숨고 싶은데."
-        surprisePeakScale = 1.5
+        surprisePeakScale = reduceMotionEnabled ? 1 : 1.5
 
-        let grow = SCNAction.scale(to: 1.5, duration: 0.16)
-        grow.timingMode = .easeOut
-        let restore = SCNAction.scale(to: 1.0, duration: 0.34)
-        restore.timingMode = .easeInEaseOut
-        pigContainer.runAction(.sequence([grow, restore]), forKey: "escapePig.surpriseScale")
+        if !reduceMotionEnabled {
+            let grow = SCNAction.scale(to: 1.5, duration: 0.16)
+            grow.timingMode = .easeOut
+            let restore = SCNAction.scale(to: 1.0, duration: 0.34)
+            restore.timingMode = .easeInEaseOut
+            pigContainer.runAction(.sequence([grow, restore]), forKey: "escapePig.surpriseScale")
+        }
         onSurpriseCaption?(lastCaption)
+    }
+
+    func updateReduceMotionEnabled(_ enabled: Bool) {
+        reduceMotionEnabled = enabled
     }
 
     func zoom(by factor: Float) {
