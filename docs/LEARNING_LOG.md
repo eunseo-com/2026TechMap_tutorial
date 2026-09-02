@@ -40,29 +40,37 @@
 - 검증: 같은 HEAD의 Swift 5 generic iPhoneOS Debug·Release build 및 `build-for-testing`은 각각 exit 0이었다. strict diagnostic은 수정 뒤 같은 command로 다시 실행하기 전까지 실패 상태다.
 - 배운 점: language-mode preparation gate의 fresh failure는 production Swift 5 build 성공과 분리해 기록하고, Task 9 계약이 없는 상태에서 임의로 동시성 수명을 바꾸지 않는다.
 
-### L-20260903-141 — CoreDevice service 초기화 시간 초과로 실기기 준비 상태를 증명할 수 없음
-
-- 상태: 실기기 대기
-- 발생 태스크: Task 13 — 전체 회귀·실기기·공개 배포
-- 재현: `xcrun devicectl list devices`
-- 관찰: `Failed to load provisioning parameter list` 뒤 `Timed out waiting for CoreDeviceService to fully initialize`와 `com.apple.coredevice.devicectl error 1 (0x01)`이 출력돼 물리 기기 목록·신뢰·잠금 해제·LiDAR 적합성을 확인할 수 없었다.
-- 영향: 기기에 설치·launch·XCTest 실행이나 카메라 권한, mesh/floor readiness, 실제 가림·재발견·replay와 증거 캡처를 시작할 근거가 없다.
-- 원인/가설: CoreDeviceService XPC connection이 invalidated된 환경 문제로 보이며, 기기 연결 상태나 LiDAR 지원 여부를 이 출력만으로 단정할 수 없다.
-- 조치: 기기 설정을 바꾸거나 reset하지 않았고, `devicectl`이 준비된 기기를 명시할 때까지 실기기 실행을 보류했다.
-- 검증: 새 generic iPhoneOS Debug·Release build 및 `build-for-testing`은 device lookup과 별개로 exit 0이다. 실제 LiDAR 수용 항목은 관찰하지 않았다.
-- 배운 점: 물리 기기 runtime 검증은 device tool이 신뢰·잠금 해제된 대상을 명시한 뒤에만 시도하며, generic build나 Simulator 결과로 대체하지 않는다.
-
-### L-20260903-140 — 연결 worktree의 fetch가 공용 Git metadata 권한에서 중단됨
+### L-20260903-143 — 실기기 XCTest는 bootstrap·assertion·후속 연결 상태를 구분해야 함
 
 - 상태: 보류
 - 발생 태스크: Task 13 — 전체 회귀·실기기·공개 배포
+- 관찰: ready device의 첫 full `PiggyEscapeTests`는 test runner가 code 0으로 종료해 bootstrap system failure 1개(total 1, passed 0, failed 1)로 끝났다. 새 DerivedData rerun은 185개 중 182개 통과·3개 assertion failure를 분리했다. cycle anchor의 `ObjectIdentifier` 재사용, retry exhaustion의 scan 안내 누락, 실제 RealityKit의 large finite post-scale bounds와 다른 fixture 기대가 각각 원인이었다. 보수 뒤 physical focused 3/3은 exit 0으로 통과했다.
+- 영향: focused green만으로 current full 185 green을 주장할 수 없다. final full rerun은 기기가 `unavailable`, `ddiServicesAvailable: false`, `tunnelState: unavailable`로 전이해 Xcode destination wait timeout(exit 70)으로 test 시작 전에 끝났다.
+- 조치: 기기 설정·data를 바꾸지 않고 physical path를 중단했다. available·DDI usable 상태 복귀 뒤 새 DerivedData full suite로 같은 세 경계와 전체 회귀를 확인한다.
+- 배운 점: XCTest bootstrap failure, 실제 assertion failure, post-run diagnostic warning, device connectivity timeout은 서로 다른 근거이며 서로 대체할 수 없다.
+
+### L-20260903-141 — 제한된 CoreDevice 조회 실패는 실기기 부재의 증거가 아니었음
+
+- 상태: 해결
+- 발생 태스크: Task 13 — 전체 회귀·실기기·공개 배포
+- 재현: `xcrun devicectl list devices`
+- 관찰: 제한된 최초 조회는 `Timed out waiting for CoreDeviceService to fully initialize`로 exit 1이었다. 후속 승인된 read-only `devicectl list devices`는 paired physical iPhone 16 Pro(iPhone17,1)를, `device info details`는 iOS 26.6, booted, `unlockedSinceBoot: true`, `passcodeRequired: false`, Developer Mode enabled, DDI `isUsable: true`, tunnel connected를 확인했다.
+- 영향: signed app install·launch와 physical XCTest가 안전 범위에서 가능해졌다. 다만 final rerun 시 device는 별도로 unavailable로 전이했다(L-20260903-143).
+- 조치: 기기 설정·data는 바꾸지 않았고 documented signing override로만 app/test bundle을 실행했다.
+- 검증: app install와 process launch는 exit 0이고 지속 process를 확인했다. visual/LiDAR acceptance는 사용자 상호작용·capture가 없어 관찰하지 않았다.
+- 배운 점: 제한된 환경의 CoreDevice 초기화 오류는 transient host condition일 수 있으므로, 승인된 read-only 재확인 결과로 device availability 판단을 정정해야 한다.
+
+### L-20260903-140 — 연결 worktree의 제한된 fetch 실패는 승인된 원격 확인으로 해소됨
+
+- 상태: 해결
+- 발생 태스크: Task 13 — 전체 회귀·실기기·공개 배포
 - 재현: `git fetch --prune origin`
 - 관찰: `/Users/yang-eunseo/Downloads/SpatialComputing_TechMap/.git/worktrees/ch1-reality-escape/FETCH_HEAD`를 열 수 없어 `Operation not permitted`로 종료했다. 이어 `git status --short`에는 tracked 또는 untracked 변경이 없었다.
-- 영향: 이 기본 권한 실행만으로는 Task 13 시작 시점의 원격 참조 갱신을 확인할 수 없다.
+- 영향: 이 기본 권한 실행만으로는 원격 참조를 갱신할 수 없었지만, remote freshness 자체가 미확정이라는 결론은 유지되지 않는다.
 - 원인/가설: L-20260901-131과 같은 연결 worktree 공용 Git metadata 쓰기 제약이다.
-- 조치: remote state를 변경하거나 권한을 우회하지 않았고, 현재 `ch1-reality-escape` HEAD `b1cac04`의 clean tree에서 비원격 검증만 진행했다.
-- 검증: source 변경 없이 generic iPhoneOS builds와 DocC gates를 별도로 실행했다. remote fetch는 metadata 쓰기가 가능한 환경에서 재시도해야 한다.
-- 배운 점: fetch 권한 실패는 source/build failure와 분리하고, 성공하지 않은 remote freshness를 추정하지 않는다.
+- 조치: controller의 승인된 `git fetch --prune origin`이 exit 0으로 완료했다. 이는 remote 내용을 작업 트리에 merge하거나 push하지 않는 fetch-only 확인이다.
+- 검증: Task 13 최초 commit 전 `origin/main...HEAD`는 behind 0/ahead 69이고 `origin/main`은 ancestor였으며, `origin/ch1-reality-escape...HEAD`는 behind 0/ahead 34였다.
+- 배운 점: fetch 권한 실패는 source/build failure와 분리하되, 후속 승인된 fetch가 성공하면 이전 remote-unknown 기록을 정확한 topology로 정정한다.
 
 ### L-20260903-139 — DocC compile 성공만으로 브라우저 문구와 hosting 경로를 보장할 수 없음
 
