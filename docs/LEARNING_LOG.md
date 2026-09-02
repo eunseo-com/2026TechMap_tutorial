@@ -28,6 +28,42 @@
 
 ## 항목
 
+### L-20260903-139 — DocC compile 성공만으로 브라우저 문구와 hosting 경로를 보장할 수 없음
+
+- 상태: 해결
+- 발생 태스크: Task 12 — DocC 접근성·Pages build/verify·브라우저 검증
+- 재현: hosting base path를 붙여 DocC archive를 정적 사이트로 만든 뒤 overview를 desktop·mobile 브라우저에서 연다.
+- 관찰: compiler는 성공했지만 render runtime의 영어 기본 locale과 복수형 placeholder가 화면에 남을 수 있었고, 문서 링크에 hosting base path가 중복될 여지도 있었다.
+- 영향: 정적 파일 존재 검사만 통과하고도 공개 화면에 `{count}` 같은 placeholder가 보이거나 문서 링크가 404가 될 수 있었다.
+- 원인/가설: compiler가 생성한 navigation JSON과 browser runtime의 locale·pluralization·base-path 처리는 서로 다른 검증 경계다.
+- 조치: build 단계에서 locale과 알려진 plural template을 결정적으로 보정하고, JSON 제목·`doc:` 링크·route·asset을 별도 verifier로 검사했다. 마지막으로 desktop·mobile 브라우저에서 실제 동작 이름, 링크, 이미지, console과 요청 상태를 확인했다.
+- 검증: overview·Chapter 1·2 모바일 렌더링과 desktop overview가 정상이고, `ko-KR`, 한국어 동작 제목, 미해결 `doc:` 0건, console 오류·경고 0건, 전체 정적 요청 200을 확인했다.
+- 배운 점: DocC 공개 품질은 compiler exit뿐 아니라 archive 의미 검사, hosting base path를 포함한 정적 사이트 검사, 실제 브라우저 렌더링의 세 경계로 나눠 확인한다.
+
+### L-20260903-138 — launch screen 선언 누락이 현대 iPhone에서도 legacy 호환 viewport를 만들 수 있음
+
+- 상태: 해결
+- 발생 태스크: Task 8 통합 보수 — 화면 비율과 safe area
+- 재현: 기존 앱을 세로 iPhone 화면에서 열어 카메라·SceneKit content가 화면 중앙의 약 3:2 영역에만 보이고 상하가 검게 남는지 확인한다.
+- 관찰: SwiftUI의 safe-area 처리만으로 설명하기 어려운 레터박스가 첨부 화면에 있었고, 생성 Info.plist에는 launch storyboard와 `UILaunchScreen` 선언이 모두 없었다.
+- 영향: 돼지가 실제 크기보다 훨씬 크게 보이고 AR 화면의 유효 영역이 줄어, 물체를 탭하고 옆으로 이동해 찾는 행동 자체가 어려웠다.
+- 원인/가설: launch screen 메타데이터가 없는 앱이 legacy compatibility viewport로 시작한 것이 첨부 화면과 가장 일치했다.
+- 조치: Tuist target Info.plist에 빈 `UILaunchScreen` dictionary를 추가하고, 전체 화면을 무조건 확장하던 root safe-area modifier는 제거해 C3·AR 배경 계층에서만 확장하도록 분리했다.
+- 검증: Tuist 재생성 뒤 생성 Info.plist에 `UILaunchScreen` dictionary가 포함됐고 최신 generic iPhoneOS build가 exit 0이었다. 실제 화면 비율은 Simulator를 실행하지 않았으므로 `실기기 대기`다.
+- 배운 점: 현대 SwiftUI 레이아웃의 레터박스처럼 보여도 먼저 생성된 앱 메타데이터의 launch-screen 계약과 compatibility mode를 확인한다.
+
+### L-20260903-137 — accepted marker의 cylinder 생성 API가 배포 하한보다 높음
+
+- 상태: 해결
+- 발생 태스크: Task 7 — 실제 스캔 피드백과 Chapter 2–3 root routing
+- 재현: `xcodebuild -workspace PiggyEscape.xcworkspace -scheme PiggyEscape -destination 'generic/platform=iOS' -derivedDataPath /tmp/piggyescape-task7-compile-20260903 CODE_SIGNING_ALLOWED=NO build-for-testing -quiet`
+- 관찰: `MeshResource.generateCylinder(height:radius:)`가 iOS 18 이상에서만 제공되어 iOS 17 deployment target의 `RealityAcceptedSurfaceMarker.swift` compile이 실패했다.
+- 영향: 실제 인식 지점 marker를 추가한 앱 타깃과 test bundle이 link되지 않았다.
+- 원인/가설: marker의 얇은 원판 형태를 만들 때 배포 하한에서 사용할 수 없는 최신 RealityKit convenience API를 선택했다.
+- 조치: iOS 17에서 제공되는 sphere mesh를 Y축 0.08 배율로 납작하게 만들고, pulse도 같은 축 비율을 유지하도록 바꿨다.
+- 검증: 같은 generic iPhoneOS arm64 `build-for-testing` 재실행이 exit 0으로 끝났다. Simulator와 XCTest runtime은 실행하지 않았고 실제 marker 위치·normal 정렬·pulse는 `실기기 대기`다.
+- 배운 점: RealityKit primitive convenience API도 deployment availability를 먼저 확인하고, 낮은 배포 하한에서는 기존 primitive와 transform 조합을 우선한다.
+
 ### L-20260901-136 — Task 6 RED 준비의 Tuist 세션 기록이 권한으로 중단됨
 
 - 상태: 해결

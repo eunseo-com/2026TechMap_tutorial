@@ -164,6 +164,16 @@ final class RealityPigVisualControllerTests: XCTestCase {
         XCTAssertTrue(completed)
     }
 
+    func test_walkFacesTheStableOuterEntityTowardItsDestination() {
+        let controller = RealityPigVisualController.makeForTesting()
+
+        controller.walk(to: SIMD3(1, 0, 0)) { _ in }
+
+        let facing = controller.outerEntity.orientation.act(SIMD3<Float>(0, 0, 1))
+        XCTAssertEqual(facing.x, 1, accuracy: 0.0001)
+        XCTAssertEqual(facing.z, 0, accuracy: 0.0001)
+    }
+
     func test_idlePigDoesNotGenerateCollisionShapesBecauseRealWorldMeshHandlesTaps() {
         let model = ModelEntity(mesh: .generateBox(size: 1))
         let controller = RealityPigVisualController.makeForTesting { _, completion in

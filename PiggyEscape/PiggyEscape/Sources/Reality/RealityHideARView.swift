@@ -114,6 +114,9 @@ final class RealityARSessionContainer: UIView {
 
 struct RealityHideARView: UIViewRepresentable {
     let interactionMode: RealityHideInteractionMode
+    let hideCycleResetSequence: Int
+    let scanPresentation: RealityScanPresentation
+    let onScanUpdate: (RealityScanUpdate) -> Void
     let onScanningReady: () -> Void
     let onTargetAccepted: () -> Void
     let onMovementFinished: () -> Void
@@ -123,10 +126,19 @@ struct RealityHideARView: UIViewRepresentable {
     let onRevealed: () -> Void
     let onError: () -> Void
     let onUnavailable: () -> Void
+    let onSessionFailed: () -> Void
+    let onSessionInterrupted: () -> Void
+    let onSessionInterruptionEnded: () -> Void
     let onMessage: (String) -> Void
 
     init(
         interactionMode: RealityHideInteractionMode = .preparing,
+        hideCycleResetSequence: Int = 0,
+        scanPresentation: RealityScanPresentation = RealityScanPresentation(
+            showsSceneUnderstanding: false,
+            reduceMotion: false
+        ),
+        onScanUpdate: @escaping (RealityScanUpdate) -> Void = { _ in },
         onScanningReady: @escaping () -> Void,
         onTargetAccepted: @escaping () -> Void,
         onMovementFinished: @escaping () -> Void = {},
@@ -136,9 +148,15 @@ struct RealityHideARView: UIViewRepresentable {
         onRevealed: @escaping () -> Void,
         onError: @escaping () -> Void,
         onUnavailable: @escaping () -> Void,
+        onSessionFailed: @escaping () -> Void = {},
+        onSessionInterrupted: @escaping () -> Void = {},
+        onSessionInterruptionEnded: @escaping () -> Void = {},
         onMessage: @escaping (String) -> Void
     ) {
         self.interactionMode = interactionMode
+        self.hideCycleResetSequence = hideCycleResetSequence
+        self.scanPresentation = scanPresentation
+        self.onScanUpdate = onScanUpdate
         self.onScanningReady = onScanningReady
         self.onTargetAccepted = onTargetAccepted
         self.onMovementFinished = onMovementFinished
@@ -148,6 +166,9 @@ struct RealityHideARView: UIViewRepresentable {
         self.onRevealed = onRevealed
         self.onError = onError
         self.onUnavailable = onUnavailable
+        self.onSessionFailed = onSessionFailed
+        self.onSessionInterrupted = onSessionInterrupted
+        self.onSessionInterruptionEnded = onSessionInterruptionEnded
         self.onMessage = onMessage
     }
 
@@ -155,6 +176,9 @@ struct RealityHideARView: UIViewRepresentable {
         Coordinator(
             meshSupport: SystemRealityMeshSupport(),
             interactionMode: interactionMode,
+            hideCycleResetSequence: hideCycleResetSequence,
+            scanPresentation: scanPresentation,
+            onScanUpdate: onScanUpdate,
             onScanningReady: onScanningReady,
             onTargetAccepted: onTargetAccepted,
             onMovementFinished: onMovementFinished,
@@ -164,6 +188,9 @@ struct RealityHideARView: UIViewRepresentable {
             onRevealed: onRevealed,
             onError: onError,
             onUnavailable: onUnavailable,
+            onSessionFailed: onSessionFailed,
+            onSessionInterrupted: onSessionInterrupted,
+            onSessionInterruptionEnded: onSessionInterruptionEnded,
             onMessage: onMessage
         )
     }
@@ -178,6 +205,8 @@ struct RealityHideARView: UIViewRepresentable {
 
     func updateUIView(_ uiView: RealityARSessionContainer, context: Context) {
         context.coordinator.interactionMode = interactionMode
+        context.coordinator.synchronizeHideCycle(resetSequence: hideCycleResetSequence)
+        context.coordinator.updateScanPresentation(scanPresentation)
     }
 
     static func dismantleUIView(_ uiView: RealityARSessionContainer, coordinator: Coordinator) {
@@ -215,10 +244,12 @@ struct RealityHideARView: UIViewRepresentable {
         private let meshSupport: any RealityMeshSupporting
         private let observationProvider: any RealityOcclusionObservationProviding
         private let deadlineScheduler: any RealityDeadlineScheduling
+        private let acceptedSurfaceMarker: any AcceptedSurfaceMarking
         private let monotonicNow: @MainActor () -> TimeInterval
         private let visualControllerFactory: @MainActor () -> RealityPigVisualController
         private var seededVisualController: RealityPigVisualController?
         private let onScanningReady: () -> Void
+        private let onScanUpdate: (RealityScanUpdate) -> Void
         private let onTargetAccepted: () -> Void
         private let onMovementFinished: () -> Void
         private let onOcclusionRetryStarted: () -> Void
@@ -227,6 +258,9 @@ struct RealityHideARView: UIViewRepresentable {
         private let onRevealed: () -> Void
         private let onError: () -> Void
         private let onUnavailable: () -> Void
+        private let onSessionFailed: () -> Void
+        private let onSessionInterrupted: () -> Void
+        private let onSessionInterruptionEnded: () -> Void
         private let onMessage: (String) -> Void
 
         private weak var arView: ARView?
@@ -236,12 +270,16 @@ struct RealityHideARView: UIViewRepresentable {
         private weak var tapRecognizer: UITapGestureRecognizer?
         private var hasAttachedToARView = false
         private var didReceiveCameraFrame = false
+        private var shouldResumeScanningAfterInterruption = false
+        private var isSessionInterrupted = false
 
         private(set) var didStartMeshSession = false
         private(set) var status = RealityHideARStatus.waitingForTarget
         private(set) var cycleGeneration = 0
         private(set) var cycleCreationCount = 0
         var interactionMode: RealityHideInteractionMode
+        private(set) var hideCycleResetSequence: Int
+        private(set) var scanPresentation: RealityScanPresentation
 
         var hasActiveHideCycle: Bool { cycle != nil }
         var currentPigAnchorIdentifier: ObjectIdentifier? {
@@ -259,8 +297,15 @@ struct RealityHideARView: UIViewRepresentable {
             visualControllerFactory: (@MainActor () -> RealityPigVisualController)? = nil,
             observationProvider: (any RealityOcclusionObservationProviding)? = nil,
             deadlineScheduler: (any RealityDeadlineScheduling)? = nil,
+            acceptedSurfaceMarker: (any AcceptedSurfaceMarking)? = nil,
             monotonicNow: (@MainActor () -> TimeInterval)? = nil,
             interactionMode: RealityHideInteractionMode = .preparing,
+            hideCycleResetSequence: Int = 0,
+            scanPresentation: RealityScanPresentation = RealityScanPresentation(
+                showsSceneUnderstanding: false,
+                reduceMotion: false
+            ),
+            onScanUpdate: @escaping (RealityScanUpdate) -> Void = { _ in },
             onScanningReady: @escaping () -> Void = {},
             onTargetAccepted: @escaping () -> Void = {},
             onMovementFinished: @escaping () -> Void = {},
@@ -270,6 +315,9 @@ struct RealityHideARView: UIViewRepresentable {
             onRevealed: @escaping () -> Void = {},
             onError: @escaping () -> Void = {},
             onUnavailable: @escaping () -> Void = {},
+            onSessionFailed: @escaping () -> Void = {},
+            onSessionInterrupted: @escaping () -> Void = {},
+            onSessionInterruptionEnded: @escaping () -> Void = {},
             onMessage: @escaping (String) -> Void = { _ in }
         ) {
             self.meshSupport = meshSupport
@@ -277,8 +325,12 @@ struct RealityHideARView: UIViewRepresentable {
             self.visualControllerFactory = visualControllerFactory ?? { RealityPigVisualController() }
             self.observationProvider = observationProvider ?? RealityOcclusionObservationProvider()
             self.deadlineScheduler = deadlineScheduler ?? RealityDeadlineScheduler()
+            self.acceptedSurfaceMarker = acceptedSurfaceMarker ?? RealityAcceptedSurfaceMarker()
             self.monotonicNow = monotonicNow ?? { ProcessInfo.processInfo.systemUptime }
             self.interactionMode = interactionMode
+            self.hideCycleResetSequence = hideCycleResetSequence
+            self.scanPresentation = scanPresentation
+            self.onScanUpdate = onScanUpdate
             self.onScanningReady = onScanningReady
             self.onTargetAccepted = onTargetAccepted
             self.onMovementFinished = onMovementFinished
@@ -288,6 +340,9 @@ struct RealityHideARView: UIViewRepresentable {
             self.onRevealed = onRevealed
             self.onError = onError
             self.onUnavailable = onUnavailable
+            self.onSessionFailed = onSessionFailed
+            self.onSessionInterrupted = onSessionInterrupted
+            self.onSessionInterruptionEnded = onSessionInterruptionEnded
             self.onMessage = onMessage
         }
 
@@ -295,6 +350,8 @@ struct RealityHideARView: UIViewRepresentable {
             guard !hasAttachedToARView else { return }
             hasAttachedToARView = true
             self.arView = arView
+            acceptedSurfaceMarker.attach(to: arView)
+            applyScanPresentation(to: arView)
             guard startMeshSessionIfSupported(in: arView) else { return }
 
             let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
@@ -325,6 +382,28 @@ struct RealityHideARView: UIViewRepresentable {
             }
         }
 
+        func updateScanPresentation(_ presentation: RealityScanPresentation) {
+            guard scanPresentation != presentation else { return }
+            scanPresentation = presentation
+            if let arView {
+                applyScanPresentation(to: arView)
+            }
+        }
+
+        func synchronizeHideCycle(resetSequence: Int) {
+            guard hideCycleResetSequence != resetSequence else { return }
+            hideCycleResetSequence = resetSequence
+            restartHideCycle()
+        }
+
+        private func applyScanPresentation(to arView: ARView) {
+            if scanPresentation.showsSceneUnderstanding {
+                arView.debugOptions.insert(.showSceneUnderstanding)
+            } else {
+                arView.debugOptions.remove(.showSceneUnderstanding)
+            }
+        }
+
         @discardableResult
         func processRevealObservation(_ observation: RealityOcclusionObservation) -> Bool {
             guard status == .hidden,
@@ -348,11 +427,13 @@ struct RealityHideARView: UIViewRepresentable {
                       let cycle = self.cycle else { return }
                 switch result {
                 case .success:
-                    cycle.visualController.playSurpriseScale()
+                    if !self.scanPresentation.reduceMotion {
+                        cycle.visualController.playSurpriseScale()
+                    }
                     self.status = .revealed
                     self.onRevealed()
                 case .failure:
-                    self.reportVisualFailure(recoveringTo: .hidden)
+                    self.reportVisualFailure(recoveringTo: .waitingForTarget)
                 }
             }
             return true
@@ -360,16 +441,12 @@ struct RealityHideARView: UIViewRepresentable {
 
         @discardableResult
         func processScanningObservation(hasMesh: Bool, hasFloor: Bool) -> Bool {
-            var becameReady = false
-            if hasMesh {
-                becameReady = environmentReadiness.observeMesh()
-            }
-            if hasFloor {
-                becameReady = environmentReadiness.observeClassifiedFloor() || becameReady
-            }
-            guard becameReady else {
-                return false
-            }
+            guard let update = environmentReadiness.observe(
+                hasMesh: hasMesh,
+                hasClassifiedFloor: hasFloor
+            ) else { return false }
+            onScanUpdate(update)
+            guard update.becameReady else { return false }
             scanningSubscription?.cancel()
             scanningSubscription = nil
             onScanningReady()
@@ -378,8 +455,23 @@ struct RealityHideARView: UIViewRepresentable {
 
         @discardableResult
         func processTargetSelection(plan: RealityHidePlan) -> Bool {
-            guard interactionMode == .selectingTarget else { return false }
+            guard !isSessionInterrupted,
+                  interactionMode == .selectingTarget else { return false }
             return acceptHideTarget(plan: plan)
+        }
+
+        @discardableResult
+        func processTargetSelection(
+            plan: RealityHidePlan,
+            acceptedHit: RealitySurfaceHit
+        ) -> Bool {
+            guard processTargetSelection(plan: plan) else { return false }
+            acceptedSurfaceMarker.show(
+                point: acceptedHit.point,
+                normal: acceptedHit.normal,
+                animated: !scanPresentation.reduceMotion
+            )
+            return true
         }
 
         @discardableResult
@@ -532,11 +624,11 @@ struct RealityHideARView: UIViewRepresentable {
         private func recoverFromUnverifiedHide() {
             teardownCurrentCycle()
             status = .waitingForTarget
-            onMessage(RealityAvailabilityMessage.scanFirst)
         }
 
         private func teardownCurrentCycle() {
             cycleGeneration += 1
+            acceptedSurfaceMarker.cancel()
             guard let cycle else { return }
             cycle.deadline?.cancel()
             cycle.deadline = nil
@@ -615,18 +707,40 @@ struct RealityHideARView: UIViewRepresentable {
             arView.session.delegate = self
             arView.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
             didStartMeshSession = true
-            onMessage(RealitySessionDiagnostic.starting.message)
             return true
         }
 
         private func recordCameraFrame() {
             guard !didReceiveCameraFrame else { return }
             didReceiveCameraFrame = true
-            onMessage(RealitySessionDiagnostic.cameraFrameReceived.message)
         }
 
-        private func recordSessionFailure(_ error: Error) {
-            onMessage(RealitySessionDiagnostic.failed(error.localizedDescription).message)
+        private func recordSessionFailure(_: Error) {
+            scanningSubscription?.cancel()
+            scanningSubscription = nil
+            teardownCurrentCycle()
+            onSessionFailed()
+        }
+
+        private func recordSessionInterrupted() {
+            isSessionInterrupted = true
+            shouldResumeScanningAfterInterruption = !environmentReadiness.isReady
+            scanningSubscription?.cancel()
+            scanningSubscription = nil
+            if hasActiveHideCycle {
+                restartHideCycle()
+            }
+            onSessionInterrupted()
+        }
+
+        private func recordSessionInterruptionEnded() {
+            isSessionInterrupted = false
+            if shouldResumeScanningAfterInterruption,
+               let arView {
+                beginScanningReadiness(in: arView)
+            }
+            shouldResumeScanningAfterInterruption = false
+            onSessionInterruptionEnded()
         }
 
         private func reportUnavailable() {
@@ -637,6 +751,7 @@ struct RealityHideARView: UIViewRepresentable {
         @objc
         private func handleTap(_ recognizer: UITapGestureRecognizer) {
             guard recognizer.state == .ended,
+                  !isSessionInterrupted,
                   interactionMode == .selectingTarget,
                   status == .waitingForTarget,
                   let arView,
@@ -665,7 +780,13 @@ struct RealityHideARView: UIViewRepresentable {
             case let .rejected(rejection):
                 onMessage(message(for: rejection))
             case let .accepted(plan):
-                _ = processTargetSelection(plan: plan)
+                _ = processTargetSelection(
+                    plan: plan,
+                    acceptedHit: RealitySurfaceHit(
+                        point: surfaceHit.point,
+                        normal: -plan.retreatDirection
+                    )
+                )
             }
         }
 
@@ -746,6 +867,18 @@ extension RealityHideARView.Coordinator: ARSessionDelegate {
     nonisolated func session(_ session: ARSession, didFailWithError error: Error) {
         Task { @MainActor [weak self] in
             self?.recordSessionFailure(error)
+        }
+    }
+
+    nonisolated func sessionWasInterrupted(_ session: ARSession) {
+        Task { @MainActor [weak self] in
+            self?.recordSessionInterrupted()
+        }
+    }
+
+    nonisolated func sessionInterruptionEnded(_ session: ARSession) {
+        Task { @MainActor [weak self] in
+            self?.recordSessionInterruptionEnded()
         }
     }
 }

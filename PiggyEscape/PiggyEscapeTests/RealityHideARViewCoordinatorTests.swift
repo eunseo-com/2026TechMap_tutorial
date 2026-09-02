@@ -141,6 +141,66 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
         XCTAssertEqual(visualController.surpriseRestoreScale, 1.0, accuracy: 0.0001)
     }
 
+    func test_reduceMotionRevealChangesPoseWithoutPlayingThePigScalePulse() {
+        let visualController = RealityPigVisualController.makeForTesting()
+        let coordinator = RealityHideARView.Coordinator(
+            meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
+            visualController: visualController,
+            monotonicNow: { 0 },
+            scanPresentation: RealityScanPresentation(
+                showsSceneUnderstanding: false,
+                reduceMotion: true
+            )
+        )
+        _ = coordinator.acceptHideTarget(
+            destination: SIMD3(0, 0, -2),
+            initialPosition: SIMD3(0, 0, -0.8)
+        )
+        let blockedPose = RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
+        let movedPose = RealityCameraPose(position: SIMD3(0.16, 0, 0), forward: SIMD3(0, 0, -1))
+        recordStableHide(in: coordinator, referencePose: blockedPose)
+
+        XCTAssertFalse(coordinator.processRevealObservation(observation(
+            timestamp: 3,
+            states: visibleSamples(),
+            pose: movedPose
+        )))
+        XCTAssertTrue(coordinator.processRevealObservation(observation(
+            timestamp: 4,
+            states: visibleSamples(),
+            pose: movedPose
+        )))
+        XCTAssertEqual(visualController.currentPose, .surprised)
+        XCTAssertEqual(visualController.surprisePeakScale, 1, accuracy: 0.0001)
+        XCTAssertEqual(visualController.surpriseRestoreScale, 1, accuracy: 0.0001)
+    }
+
+    func test_markerOnlyShowsForAnAcceptedSelectionAndCancelsWithItsCycle() {
+        let marker = TrackingAcceptedSurfaceMarker()
+        let coordinator = RealityHideARView.Coordinator(
+            meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
+            visualController: RealityPigVisualController.makeForTesting(),
+            acceptedSurfaceMarker: marker
+        )
+        let plan = makeHidePlan(
+            destination: SIMD3(0, 0, -1),
+            initialPosition: SIMD3(0, 0, -0.4)
+        )
+        let hit = RealitySurfaceHit(point: SIMD3(0, 0.4, -0.7), normal: SIMD3(0, 0, 1))
+
+        XCTAssertFalse(coordinator.processTargetSelection(plan: plan, acceptedHit: hit))
+        XCTAssertEqual(marker.showCount, 0)
+
+        coordinator.interactionMode = .selectingTarget
+        XCTAssertTrue(coordinator.processTargetSelection(plan: plan, acceptedHit: hit))
+        XCTAssertEqual(marker.showCount, 1)
+        XCTAssertEqual(marker.lastPoint, hit.point)
+        XCTAssertEqual(marker.lastNormal, hit.normal)
+
+        coordinator.restartHideCycle()
+        XCTAssertEqual(marker.cancelCount, 1)
+    }
+
     func test_invalidRevealObservationResetsVisibleStabilityButKeepsTheBlockingPose() {
         let coordinator = RealityHideARView.Coordinator(
             meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
@@ -305,7 +365,7 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
         XCTAssertEqual(errorCount, 1)
     }
 
-    func test_surprisedLoadFailureRestoresHiddenStateWithoutReportingReveal() {
+    func test_surprisedLoadFailureTearsDownTheCycleWithoutRetryingInTheBackground() {
         let loader = ControlledRealityEntityLoader()
         let visualController = RealityPigVisualController.makeForTesting(entityLoader: loader.load)
         var errorCount = 0
@@ -330,12 +390,13 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.status, .revealing)
         loader.failNext()
 
-        XCTAssertEqual(coordinator.status, .hidden)
-        XCTAssertTrue(visualController.outerEntity.isEnabled)
+        XCTAssertEqual(coordinator.status, .waitingForTarget)
+        XCTAssertFalse(coordinator.hasActiveHideCycle)
+        XCTAssertFalse(visualController.outerEntity.isEnabled)
         XCTAssertEqual(revealCount, 0)
         XCTAssertEqual(errorCount, 1)
         XCTAssertFalse(coordinator.processRevealObservation(observation(timestamp: 5, states: visibleSamples(), pose: movedPose)))
-        XCTAssertTrue(coordinator.processRevealObservation(observation(timestamp: 6, states: visibleSamples(), pose: movedPose)))
+        XCTAssertFalse(coordinator.processRevealObservation(observation(timestamp: 6, states: visibleSamples(), pose: movedPose)))
     }
 
     func test_hideMovementDoesNotReachTheTargetUntilMeshOcclusionIsVerified() {
@@ -538,6 +599,33 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.cycleCreationCount, 2)
     }
 
+    func test_rootCycleResetSequenceTearsDownTheActiveCoordinatorCycleOnce() {
+        let visualController = RealityPigVisualController.makeForTesting()
+        let coordinator = RealityHideARView.Coordinator(
+            meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
+            visualController: visualController,
+            monotonicNow: { 0 },
+            hideCycleResetSequence: 4
+        )
+
+        _ = coordinator.acceptHideTarget(
+            destination: SIMD3(0, 0, -1),
+            initialPosition: SIMD3(0, 0, -0.4)
+        )
+        let generationBeforeReset = coordinator.cycleGeneration
+
+        coordinator.synchronizeHideCycle(resetSequence: 5)
+
+        XCTAssertEqual(coordinator.status, .waitingForTarget)
+        XCTAssertFalse(coordinator.hasActiveHideCycle)
+        XCTAssertFalse(visualController.outerEntity.isEnabled)
+        XCTAssertGreaterThan(coordinator.cycleGeneration, generationBeforeReset)
+
+        let generationAfterReset = coordinator.cycleGeneration
+        coordinator.synchronizeHideCycle(resetSequence: 5)
+        XCTAssertEqual(coordinator.cycleGeneration, generationAfterReset)
+    }
+
     func test_verifiedHideRestartAndStopCancelTheirAttemptDeadlines() {
         let scheduler = TrackingRealityDeadlineScheduler()
         let coordinator = RealityHideARView.Coordinator(
@@ -621,6 +709,26 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
 
 private struct FakeRealityMeshSupport: RealityMeshSupporting {
     let supportsMeshWithClassification: Bool
+}
+
+@MainActor
+private final class TrackingAcceptedSurfaceMarker: AcceptedSurfaceMarking {
+    private(set) var showCount = 0
+    private(set) var cancelCount = 0
+    private(set) var lastPoint: SIMD3<Float>?
+    private(set) var lastNormal: SIMD3<Float>?
+
+    func attach(to arView: ARView) {}
+
+    func show(point: SIMD3<Float>, normal: SIMD3<Float>, animated: Bool) {
+        showCount += 1
+        lastPoint = point
+        lastNormal = normal
+    }
+
+    func cancel() {
+        cancelCount += 1
+    }
 }
 
 @MainActor

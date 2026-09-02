@@ -25,7 +25,7 @@ final class EscapeRootCoordinatorTests: XCTestCase {
         XCTAssertEqual(authorizer.requestCount, 1)
     }
 
-    func test_authorizedCameraStartsRealityThenMeshSupportEnablesTargetSelection() {
+    func test_authorizedCameraKeepsTheSameRealitySurfaceUntilTheReadyCTAStartsChapterThree() {
         let authorizer = FakeCameraAuthorizer()
         let coordinator = makeCoordinator(authorizer: authorizer)
         reachCameraRequest(coordinator)
@@ -35,11 +35,106 @@ final class EscapeRootCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.machine.state, .scanningReality)
         XCTAssertTrue(coordinator.showsRealityView)
         XCTAssertFalse(coordinator.showsClosedWorldView)
-        XCTAssertEqual(coordinator.message, RealityAvailabilityMessage.scanFirst)
+        XCTAssertEqual(coordinator.message, EscapeRootMessage.scanning)
+        XCTAssertEqual(coordinator.realityInteractionMode, .preparing)
+        let realitySurfaceID = coordinator.realitySurfaceID
 
         coordinator.realityScanningDidBecomeReady()
+
+        XCTAssertEqual(coordinator.machine.state, .realityReady)
+        XCTAssertEqual(coordinator.realityInteractionMode, .preparing)
+        XCTAssertEqual(coordinator.realitySurfaceID, realitySurfaceID)
+
+        coordinator.startRealHide()
+
         XCTAssertEqual(coordinator.machine.state, .waitingForRealTarget)
+        XCTAssertEqual(coordinator.realityInteractionMode, .selectingTarget)
+        XCTAssertEqual(coordinator.realitySurfaceID, realitySurfaceID)
         XCTAssertEqual(coordinator.message, RealityAvailabilityMessage.selectVerticalSide)
+    }
+
+    func test_scanProgressSeparatesMeshAndFloorAndReportsCompletionOnce() {
+        let authorizer = FakeCameraAuthorizer()
+        let coordinator = makeCoordinator(authorizer: authorizer)
+        reachCameraRequest(coordinator)
+        authorizer.resolve(.authorized)
+
+        coordinator.realityScanDidUpdate(RealityScanUpdate(
+            progress: RealityScanProgress(hasMesh: true, hasClassifiedFloor: false),
+            becameReady: false
+        ))
+        XCTAssertEqual(coordinator.scanProgress, RealityScanProgress(
+            hasMesh: true,
+            hasClassifiedFloor: false
+        ))
+        XCTAssertEqual(coordinator.scanCompletionSequence, 0)
+
+        coordinator.realityScanDidUpdate(RealityScanUpdate(
+            progress: RealityScanProgress(hasMesh: true, hasClassifiedFloor: true),
+            becameReady: true
+        ))
+        coordinator.realityScanDidUpdate(RealityScanUpdate(
+            progress: RealityScanProgress(hasMesh: true, hasClassifiedFloor: true),
+            becameReady: false
+        ))
+
+        XCTAssertEqual(coordinator.scanCompletionSequence, 1)
+    }
+
+    func test_readyMessageReturnsAfterATemporarySessionInterruption() {
+        let authorizer = FakeCameraAuthorizer()
+        let coordinator = makeCoordinator(authorizer: authorizer)
+        reachCameraRequest(coordinator)
+        authorizer.resolve(.authorized)
+        coordinator.realityScanningDidBecomeReady()
+
+        coordinator.realitySessionWasInterrupted()
+        XCTAssertEqual(coordinator.machine.state, .realityReady)
+        XCTAssertEqual(coordinator.message, EscapeRootMessage.sessionInterrupted)
+
+        coordinator.realitySessionInterruptionEnded()
+        XCTAssertEqual(coordinator.machine.state, .realityReady)
+        XCTAssertEqual(coordinator.message, EscapeRootMessage.realityReady)
+    }
+
+    func test_scanningInterruptionPausesItsDeadlineAndStartsOneFreshDeadlineAfterRecovery() {
+        let authorizer = FakeCameraAuthorizer()
+        let scheduler = RecordingRealityDeadlineScheduler()
+        let coordinator = makeCoordinator(
+            authorizer: authorizer,
+            deadlineScheduler: scheduler
+        )
+        reachCameraRequest(coordinator)
+        authorizer.resolve(.authorized)
+
+        XCTAssertEqual(scheduler.scheduledDurations, [20])
+        coordinator.realitySessionWasInterrupted()
+        XCTAssertEqual(scheduler.cancelCount, 1)
+        XCTAssertEqual(scheduler.scheduledDurations, [20, 10])
+
+        coordinator.realitySessionInterruptionEnded()
+        XCTAssertEqual(scheduler.cancelCount, 2)
+        XCTAssertEqual(scheduler.scheduledDurations, [20, 10, 20])
+        XCTAssertEqual(coordinator.machine.state, .scanningReality)
+    }
+
+    func test_interruptionBlocksTheReadyCTAUntilTrackingReturns() {
+        let authorizer = FakeCameraAuthorizer()
+        let coordinator = makeCoordinator(authorizer: authorizer)
+        reachCameraRequest(coordinator)
+        authorizer.resolve(.authorized)
+        coordinator.realityScanningDidBecomeReady()
+
+        coordinator.realitySessionWasInterrupted()
+        XCTAssertTrue(coordinator.isSessionInterrupted)
+        XCTAssertEqual(coordinator.realityInteractionMode, .preparing)
+        coordinator.startRealHide()
+        XCTAssertEqual(coordinator.machine.state, .realityReady)
+
+        coordinator.realitySessionInterruptionEnded()
+        coordinator.startRealHide()
+        XCTAssertEqual(coordinator.machine.state, .waitingForRealTarget)
+        XCTAssertEqual(coordinator.realityInteractionMode, .selectingTarget)
     }
 
     func test_deniedCameraShowsRecoveryAndOpensSettingsOnlyAfterTap() {
@@ -91,7 +186,7 @@ final class EscapeRootCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(coordinator.machine.state, .scanningReality)
         XCTAssertTrue(coordinator.showsRealityView)
-        XCTAssertEqual(coordinator.message, RealityAvailabilityMessage.scanFirst)
+        XCTAssertEqual(coordinator.message, EscapeRootMessage.scanning)
         XCTAssertEqual(authorizer.requestCount, 1)
         XCTAssertEqual(authorizer.authorizationQueryCount, 1)
         XCTAssertEqual(settings.openCount, 1)
@@ -201,11 +296,15 @@ final class EscapeRootCoordinatorTests: XCTestCase {
         reachCameraRequest(coordinator)
         authorizer.resolve(.authorized)
         coordinator.realityScanningDidBecomeReady()
+        coordinator.startRealHide()
 
         coordinator.realityTargetDidBecomeAccepted()
         XCTAssertEqual(coordinator.machine.state, .walkingBehindRealObject)
 
-        coordinator.realityPigDidReachTarget()
+        coordinator.realityMovementDidFinish()
+        XCTAssertEqual(coordinator.machine.state, .verifyingOcclusion)
+
+        coordinator.realityOcclusionDidBecomeVerified()
         XCTAssertEqual(coordinator.machine.state, .hiddenInReality)
         XCTAssertEqual(coordinator.message, EscapeRootMessage.findPig)
 
@@ -219,10 +318,93 @@ final class EscapeRootCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.realitySurpriseSequence, 1)
     }
 
+    func test_completedHideMovesThroughComparisonCompletionAndFullReset() {
+        let authorizer = FakeCameraAuthorizer()
+        let coordinator = makeCoordinator(authorizer: authorizer)
+        reachDiscoveredReality(coordinator, authorizer: authorizer)
+        let previousRealitySurfaceID = coordinator.realitySurfaceID
+
+        coordinator.reviewDifferences()
+
+        XCTAssertEqual(coordinator.machine.state, .comparison(.completedHide))
+        XCTAssertEqual(coordinator.comparisonReason, .completedHide)
+        XCTAssertTrue(coordinator.chapterThreeRetryAvailability.isAvailable)
+        XCTAssertFalse(coordinator.showsRealityView)
+
+        coordinator.finishTutorial()
+        XCTAssertEqual(coordinator.machine.state, .completed(.completedHide))
+
+        coordinator.resetExperience()
+        XCTAssertEqual(coordinator.machine.state, .openingNarration)
+        XCTAssertNil(coordinator.comparisonReason)
+        XCTAssertTrue(coordinator.showsClosedWorldView)
+        XCTAssertGreaterThan(coordinator.realitySurfaceID, previousRealitySurfaceID)
+    }
+
+    func test_replayStartsAVisibleFreshHideCycleOnTheSameRealitySurface() {
+        let authorizer = FakeCameraAuthorizer()
+        let coordinator = makeCoordinator(authorizer: authorizer)
+        reachDiscoveredReality(coordinator, authorizer: authorizer)
+        let surfaceID = coordinator.realitySurfaceID
+        let resetSequence = coordinator.hideCycleResetSequence
+
+        coordinator.replayRealHide()
+
+        XCTAssertEqual(coordinator.machine.state, .waitingForRealTarget)
+        XCTAssertEqual(coordinator.realitySurfaceID, surfaceID)
+        XCTAssertGreaterThan(coordinator.hideCycleResetSequence, resetSequence)
+        XCTAssertEqual(coordinator.realityInteractionMode, .selectingTarget)
+    }
+
+    func test_lidarSkipPreservesReasonAndCannotPretendToRetryChapterThree() {
+        let authorizer = FakeCameraAuthorizer()
+        let coordinator = makeCoordinator(authorizer: authorizer)
+        reachCameraRequest(coordinator)
+        authorizer.resolve(.authorized)
+        coordinator.realityMeshDidBecomeUnavailable()
+
+        coordinator.skipToComparison()
+
+        XCTAssertEqual(coordinator.machine.state, .comparison(.lidarUnavailable))
+        XCTAssertEqual(coordinator.comparisonReason, .lidarUnavailable)
+        XCTAssertFalse(coordinator.chapterThreeRetryAvailability.isAvailable)
+        XCTAssertEqual(
+            coordinator.chapterThreeRetryAvailability.unavailableReason,
+            "LiDAR 지원 기기에서 다시 시도할 수 있어."
+        )
+
+        coordinator.retryChapterThree()
+        XCTAssertEqual(coordinator.machine.state, .comparison(.lidarUnavailable))
+
+        coordinator.realityScanningDidBecomeReady()
+        XCTAssertEqual(coordinator.machine.state, .comparison(.lidarUnavailable))
+    }
+
+    func test_retryableComparisonStartsANewRealityGeneration() {
+        let authorizer = FakeCameraAuthorizer()
+        let coordinator = makeCoordinator(authorizer: authorizer)
+        reachCameraRequest(coordinator)
+        authorizer.resolve(.authorized)
+        let previousRealitySurfaceID = coordinator.realitySurfaceID
+        coordinator.realitySessionDidFail()
+        coordinator.skipToComparison()
+
+        XCTAssertEqual(coordinator.machine.state, .comparison(.sessionFailed))
+        XCTAssertTrue(coordinator.chapterThreeRetryAvailability.isAvailable)
+
+        coordinator.retryChapterThree()
+
+        XCTAssertEqual(coordinator.machine.state, .scanningReality)
+        XCTAssertTrue(coordinator.showsRealityView)
+        XCTAssertGreaterThan(coordinator.realitySurfaceID, previousRealitySurfaceID)
+        XCTAssertEqual(coordinator.message, EscapeRootMessage.scanning)
+    }
+
     func test_outOfOrderRealityCallbacksDoNotSkipStates() {
         let coordinator = makeCoordinator(authorizer: FakeCameraAuthorizer())
 
-        coordinator.realityPigDidReachTarget()
+        coordinator.realityMovementDidFinish()
+        coordinator.realityOcclusionDidBecomeVerified()
         coordinator.realityPigDidBecomeRevealed()
 
         XCTAssertEqual(coordinator.machine.state, .openingNarration)
@@ -252,10 +434,13 @@ final class EscapeRootCoordinatorTests: XCTestCase {
         reachCameraRequest(coordinator)
         authorizer.resolve(.authorized)
         coordinator.realityScanningDidBecomeReady()
+        coordinator.startRealHide()
         coordinator.realityTargetDidBecomeAccepted()
-        coordinator.realityPigDidReachTarget()
+        coordinator.realityMovementDidFinish()
+        coordinator.realityOcclusionDidBecomeVerified()
 
         XCTAssertEqual(coordinator.machine.state, .hiddenInReality)
+        coordinator.realityErrorDidOccur()
         coordinator.realityMessageDidChange(RealityAvailabilityMessage.pigAssetLoadFailed)
 
         XCTAssertEqual(coordinator.machine.state, .realityAssetFailed)
@@ -299,11 +484,13 @@ final class EscapeRootCoordinatorTests: XCTestCase {
 
     private func makeCoordinator(
         authorizer: FakeCameraAuthorizer,
-        settings: FakeSettingsOpener? = nil
+        settings: FakeSettingsOpener? = nil,
+        deadlineScheduler: (any RealityDeadlineScheduling)? = nil
     ) -> EscapeRootCoordinator {
         EscapeRootCoordinator(
             cameraAuthorizer: authorizer,
-            settingsOpener: settings ?? FakeSettingsOpener()
+            settingsOpener: settings ?? FakeSettingsOpener(),
+            deadlineScheduler: deadlineScheduler
         )
     }
 
@@ -311,6 +498,20 @@ final class EscapeRootCoordinatorTests: XCTestCase {
         coordinator.closedWorldNarrationDidFinish()
         coordinator.closedWorldDiscoveryDidOccur()
         coordinator.closedWorldFadeDidFinish()
+    }
+
+    private func reachDiscoveredReality(
+        _ coordinator: EscapeRootCoordinator,
+        authorizer: FakeCameraAuthorizer
+    ) {
+        reachCameraRequest(coordinator)
+        authorizer.resolve(.authorized)
+        coordinator.realityScanningDidBecomeReady()
+        coordinator.startRealHide()
+        coordinator.realityTargetDidBecomeAccepted()
+        coordinator.realityMovementDidFinish()
+        coordinator.realityOcclusionDidBecomeVerified()
+        coordinator.realityPigDidBecomeRevealed()
     }
 }
 
@@ -365,5 +566,37 @@ private final class FakeSettingsOpener: AppSettingsOpening {
 
     func openAppSettings() {
         openCount += 1
+    }
+}
+
+@MainActor
+private final class RecordingRealityDeadlineScheduler: RealityDeadlineScheduling {
+    private(set) var scheduledDurations: [TimeInterval] = []
+    private(set) var cancelCount = 0
+
+    func schedule<Owner: AnyObject>(
+        _ deadline: RealityDeadline,
+        owner: Owner,
+        operation: @escaping @MainActor (Owner) -> Void
+    ) -> any RealityDeadlineCancellable {
+        scheduledDurations.append(deadline.duration)
+        return RecordingRealityDeadlineCancellation { [weak self] in
+            self?.cancelCount += 1
+        }
+    }
+}
+
+@MainActor
+private final class RecordingRealityDeadlineCancellation: RealityDeadlineCancellable {
+    private var onCancel: (() -> Void)?
+
+    init(onCancel: @escaping () -> Void) {
+        self.onCancel = onCancel
+    }
+
+    func cancel() {
+        let onCancel = onCancel
+        self.onCancel = nil
+        onCancel?()
     }
 }

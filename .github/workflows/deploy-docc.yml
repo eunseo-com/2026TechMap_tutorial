@@ -7,6 +7,7 @@ on:
       - "Tutorials/SceneKitToRealityKit.docc/**"
       - "Web/index.html"
       - "scripts/build-docc-site.sh"
+      - "scripts/verify-docc-site.sh"
       - ".github/workflows/deploy-docc.yml"
   workflow_dispatch:
 
@@ -26,12 +27,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
       - name: Build DocC archive
-        run: bash scripts/build-docc-site.sh site
-      - name: Verify archive
-        run: test -f site/index.html && test -f site/data/tutorials/scenekittorealitykit.json
+        run: bash scripts/build-docc-site.sh "$RUNNER_TEMP/docc-site"
+      - name: Verify DocC routes, links, locale, and accessibility metadata
+        run: bash scripts/verify-docc-site.sh "$RUNNER_TEMP/docc-site"
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: site
+          path: ${{ runner.temp }}/docc-site
   deploy:
     environment:
       name: github-pages

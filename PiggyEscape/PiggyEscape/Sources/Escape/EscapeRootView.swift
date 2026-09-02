@@ -1,310 +1,5 @@
-import AVFoundation
 import SwiftUI
 import UIKit
-
-enum CameraAuthorizationResult: Equatable {
-    case authorized
-    case denied
-    case restricted
-    case notDetermined
-}
-
-@MainActor
-protocol CameraAuthorizing {
-    func currentVideoAuthorization() -> CameraAuthorizationResult
-    func requestVideoAccess(
-        _ completion: @escaping @MainActor (CameraAuthorizationResult) -> Void
-    )
-}
-
-struct SystemCameraAuthorizer: CameraAuthorizing {
-    func currentVideoAuthorization() -> CameraAuthorizationResult {
-        switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized:
-            .authorized
-        case .denied:
-            .denied
-        case .restricted:
-            .restricted
-        case .notDetermined:
-            .notDetermined
-        @unknown default:
-            .restricted
-        }
-    }
-
-    func requestVideoAccess(
-        _ completion: @escaping @MainActor (CameraAuthorizationResult) -> Void
-    ) {
-        let authorization = currentVideoAuthorization()
-        switch authorization {
-        case .authorized, .denied, .restricted:
-            completion(authorization)
-        case .notDetermined:
-            AVCaptureDevice.requestAccess(for: .video) { granted in
-                let result: CameraAuthorizationResult
-                if granted {
-                    result = .authorized
-                } else if AVCaptureDevice.authorizationStatus(for: .video) == .restricted {
-                    result = .restricted
-                } else {
-                    result = .denied
-                }
-                Task { @MainActor in completion(result) }
-            }
-        }
-    }
-}
-
-@MainActor
-protocol MainActorCallbackDeferring {
-    @discardableResult
-    func enqueue(_ operation: @escaping @MainActor () -> Void) -> Task<Void, Never>
-}
-
-struct TaskMainActorCallbackDeferrer: MainActorCallbackDeferring {
-    @discardableResult
-    func enqueue(_ operation: @escaping @MainActor () -> Void) -> Task<Void, Never> {
-        Task { @MainActor in
-            await Task.yield()
-            guard !Task.isCancelled else { return }
-            operation()
-        }
-    }
-}
-
-@MainActor
-final class RealityCallbackRelay: ObservableObject {
-    private let deferrer: any MainActorCallbackDeferring
-    private var generation = 0
-    private var isActive = true
-    private var pendingTasks: [UUID: Task<Void, Never>] = [:]
-
-    init() {
-        deferrer = TaskMainActorCallbackDeferrer()
-    }
-
-    init(deferrer: any MainActorCallbackDeferring) {
-        self.deferrer = deferrer
-    }
-
-    func activate() {
-        guard !isActive else { return }
-        generation &+= 1
-        isActive = true
-    }
-
-    func invalidate() {
-        generation &+= 1
-        isActive = false
-        pendingTasks.values.forEach { $0.cancel() }
-        pendingTasks.removeAll()
-    }
-
-    func schedule(_ operation: @escaping @MainActor () -> Void) {
-        guard isActive else { return }
-        let callbackGeneration = generation
-        let identifier = UUID()
-        let task = deferrer.enqueue { [weak self] in
-            guard let self else { return }
-            self.pendingTasks[identifier] = nil
-            guard self.isActive, self.generation == callbackGeneration else { return }
-            operation()
-        }
-        pendingTasks[identifier] = task
-    }
-}
-
-@MainActor
-protocol AppSettingsOpening {
-    func openAppSettings()
-}
-
-struct SystemAppSettingsOpener: AppSettingsOpening {
-    func openAppSettings() {
-        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-        UIApplication.shared.open(url)
-    }
-}
-
-enum EscapeRootMessage {
-    static let surprised = "아, 들켰네… 제대로 숨고 싶은데."
-    static let cameraDenied = "카메라 권한이 필요해. 설정에서 카메라를 허용해줘."
-    static let cameraRestricted = "이 기기에서는 카메라 사용이 제한되어 있어. 설정을 확인해줘."
-    static let walkingToRealObject = "피기가 숨으러 가고 있어."
-    static let findPig = "직접 움직여서 피기를 찾아봐."
-}
-
-enum EscapeRootMotion {
-    static let closedWorldFadeDuration: TimeInterval = 0.70
-    static let surpriseGrowDuration: TimeInterval = 0.16
-    static let surpriseRestoreDuration: TimeInterval = 0.34
-    static func realityPeakScale(reduceMotion: Bool) -> CGFloat {
-        reduceMotion ? 1 : 1.12
-    }
-}
-
-@MainActor
-final class EscapeRootCoordinator: ObservableObject {
-    @Published private(set) var machine = EscapeExperienceMachine()
-    @Published private(set) var message: String?
-    @Published private(set) var isClosedWorldFading = false
-    @Published private(set) var cameraAuthorizationResult: CameraAuthorizationResult?
-    @Published private(set) var realitySurpriseSequence = 0
-    @Published private(set) var realityErrorCount = 0
-
-    var showsRealityView: Bool {
-        switch machine.state {
-        case .scanningReality, .realityReady, .waitingForRealTarget,
-             .walkingBehindRealObject, .verifyingOcclusion, .hiddenInReality,
-             .discoveredInReality, .realityAssetFailed:
-            true
-        default:
-            false
-        }
-    }
-
-    var showsClosedWorldView: Bool {
-        !showsRealityView
-    }
-
-    var showsSettingsRecovery: Bool {
-        machine.state == .cameraDenied
-    }
-
-    private let cameraAuthorizer: any CameraAuthorizing
-    private let settingsOpener: any AppSettingsOpening
-    private var hasRequestedCamera = false
-
-    init() {
-        cameraAuthorizer = SystemCameraAuthorizer()
-        settingsOpener = SystemAppSettingsOpener()
-    }
-
-    init(
-        cameraAuthorizer: any CameraAuthorizing,
-        settingsOpener: any AppSettingsOpening
-    ) {
-        self.cameraAuthorizer = cameraAuthorizer
-        self.settingsOpener = settingsOpener
-    }
-
-    func closedWorldNarrationDidFinish() {
-        _ = machine.send(.narrationFinished)
-    }
-
-    @discardableResult
-    func closedWorldDiscoveryDidOccur() -> Bool {
-        synchronizeClosedWorldProgress()
-        guard machine.send(.closedWorldPigDiscovered) else { return false }
-        message = EscapeRootMessage.surprised
-        isClosedWorldFading = true
-        return true
-    }
-
-    func closedWorldFadeDidFinish() {
-        guard !hasRequestedCamera,
-              machine.send(.closedWorldFadeFinished) else { return }
-        hasRequestedCamera = true
-        cameraAuthorizer.requestVideoAccess { [weak self] result in
-            self?.cameraAuthorizationDidResolve(result)
-        }
-    }
-
-    func realityScanningDidBecomeReady() {
-        guard machine.send(.environmentReady),
-              machine.send(.startRealHide) else { return }
-        message = RealityAvailabilityMessage.selectVerticalSide
-    }
-
-    func realityMeshDidBecomeUnavailable() {
-        guard machine.send(.meshUnsupported) else { return }
-        message = RealityAvailabilityMessage.unavailable
-    }
-
-    func realityTargetDidBecomeAccepted() {
-        guard machine.send(.realTargetAccepted) else { return }
-        message = EscapeRootMessage.walkingToRealObject
-    }
-
-    func realityPigDidReachTarget() {
-        guard machine.send(.movementFinished),
-              machine.send(.occlusionVerified) else { return }
-        message = EscapeRootMessage.findPig
-    }
-
-    func realityPigDidBecomeRevealed() {
-        guard machine.send(.realityPigDiscovered) else { return }
-        message = EscapeRootMessage.surprised
-        realitySurpriseSequence += 1
-    }
-
-    func realityErrorDidOccur() {
-        realityErrorCount += 1
-    }
-
-    func realityMessageDidChange(_ message: String) {
-        if message == RealityAvailabilityMessage.pigAssetLoadFailed {
-            _ = machine.send(.realityAssetLoadFailed)
-        }
-        self.message = message
-    }
-
-    func openSettingsForRecovery() {
-        guard machine.send(.openSettings) else { return }
-        settingsOpener.openAppSettings()
-    }
-
-    func applicationDidBecomeActive() {
-        guard machine.state == .cameraDenied,
-              machine.isCameraAuthorizationRecheckArmed else { return }
-        let result = cameraAuthorizer.currentVideoAuthorization()
-        cameraAuthorizationResult = result
-        switch result {
-        case .authorized:
-            guard machine.send(.cameraAuthorized) else { return }
-            message = RealityAvailabilityMessage.scanFirst
-        case .denied:
-            guard machine.send(.cameraAuthorizationDenied) else { return }
-            message = EscapeRootMessage.cameraDenied
-        case .restricted:
-            guard machine.send(.cameraAuthorizationRestricted) else { return }
-            message = EscapeRootMessage.cameraRestricted
-        case .notDetermined:
-            message = EscapeRootMessage.cameraDenied
-        }
-    }
-
-    private func synchronizeClosedWorldProgress() {
-        if machine.state == .openingNarration {
-            _ = machine.send(.narrationFinished)
-        }
-        if machine.state == .readyForPigTap {
-            _ = machine.send(.pigTapped)
-        }
-        if machine.state == .walkingBehindTree {
-            _ = machine.send(.pigReachedTree)
-        }
-    }
-
-    private func cameraAuthorizationDidResolve(_ result: CameraAuthorizationResult) {
-        guard machine.state == .requestingCameraPermission else { return }
-        cameraAuthorizationResult = result
-        switch result {
-        case .authorized:
-            guard machine.send(.cameraAuthorized) else { return }
-            message = RealityAvailabilityMessage.scanFirst
-        case .denied:
-            guard machine.send(.cameraAuthorizationDenied) else { return }
-            message = EscapeRootMessage.cameraDenied
-        case .restricted:
-            guard machine.send(.cameraAuthorizationRestricted) else { return }
-            message = EscapeRootMessage.cameraRestricted
-        case .notDetermined:
-            return
-        }
-    }
-}
 
 struct EscapeRootView: View {
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
@@ -335,21 +30,14 @@ struct EscapeRootView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.64, green: 0.93, blue: 0.99),
-                    Color(red: 0.41, green: 0.80, blue: 0.92)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            background
 
             if coordinator.showsClosedWorldView {
                 C3ClosedWorldSceneView(
                     onNarrationFinished: coordinator.closedWorldNarrationDidFinish,
                     onDiscovered: beginClosedWorldFade
                 )
+                .ignoresSafeArea()
                 .opacity(coordinator.isClosedWorldFading ? 0 : 1)
                 .allowsHitTesting(!coordinator.isClosedWorldFading)
                 .animation(
@@ -359,40 +47,43 @@ struct EscapeRootView: View {
             }
 
             if coordinator.showsRealityView {
-                RealityHideARView(
-                    onScanningReady: {
-                        scheduleRealityCallback { $0.realityScanningDidBecomeReady() }
-                    },
-                    onTargetAccepted: {
-                        scheduleRealityCallback { $0.realityTargetDidBecomeAccepted() }
-                    },
-                    onPigReachedTarget: {
-                        scheduleRealityCallback { $0.realityPigDidReachTarget() }
-                    },
-                    onRevealed: {
-                        scheduleRealityCallback { $0.realityPigDidBecomeRevealed() }
-                    },
-                    onError: {
-                        scheduleRealityCallback { $0.realityErrorDidOccur() }
-                    },
-                    onUnavailable: {
-                        scheduleRealityCallback { $0.realityMeshDidBecomeUnavailable() }
-                    },
-                    onMessage: { message in
-                        scheduleRealityCallback { $0.realityMessageDidChange(message) }
-                    }
-                )
-                .scaleEffect(realityScreenScale)
-                .clipped()
-                .transition(.opacity)
+                realityView
+                    .ignoresSafeArea()
             }
 
+            chapterFourView
+
+            VStack(spacing: 12) {
+                ChapterProgressView(chapter: coordinator.machine.state.chapter)
+
+                if coordinator.showsSceneUnderstanding {
+                    RealityScanFeedbackView(
+                        progress: coordinator.scanProgress,
+                        presentation: coordinator.scanPresentation(
+                            reduceMotion: accessibilityReduceMotion
+                        )
+                    )
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .allowsHitTesting(false)
+
             messageOverlay
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            actionBar
         }
         .animation(.easeInOut(duration: 0.22), value: coordinator.showsRealityView)
         .onChange(of: coordinator.realitySurpriseSequence) { _, sequence in
             guard sequence > 0 else { return }
             performRealitySurprise()
+        }
+        .onChange(of: coordinator.message) { _, message in
+            guard let message else { return }
+            UIAccessibility.post(notification: .announcement, argument: message)
         }
         .onChange(of: coordinator.showsRealityView) { _, showsRealityView in
             if showsRealityView {
@@ -415,6 +106,100 @@ struct EscapeRootView: View {
         }
     }
 
+    private var background: some View {
+        LinearGradient(
+            colors: [
+                Color(red: 0.64, green: 0.93, blue: 0.99),
+                Color(red: 0.41, green: 0.80, blue: 0.92)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea()
+    }
+
+    private var realityView: some View {
+        let surfaceID = coordinator.realitySurfaceID
+        return RealityHideARView(
+            interactionMode: coordinator.realityInteractionMode,
+            hideCycleResetSequence: coordinator.hideCycleResetSequence,
+            scanPresentation: coordinator.scanPresentation(
+                reduceMotion: accessibilityReduceMotion
+            ),
+            onScanUpdate: { update in
+                scheduleRealityCallback(for: surfaceID) { $0.realityScanDidUpdate(update) }
+            },
+            onScanningReady: {
+                scheduleRealityCallback(for: surfaceID) { $0.realityScanningDidBecomeReady() }
+            },
+            onTargetAccepted: {
+                scheduleRealityCallback(for: surfaceID) { $0.realityTargetDidBecomeAccepted() }
+            },
+            onMovementFinished: {
+                scheduleRealityCallback(for: surfaceID) { $0.realityMovementDidFinish() }
+            },
+            onOcclusionRetryStarted: {
+                scheduleRealityCallback(for: surfaceID) { $0.realityOcclusionRetryDidStart() }
+            },
+            onOcclusionExhausted: {
+                scheduleRealityCallback(for: surfaceID) { $0.realityOcclusionDidExhaust() }
+            },
+            onPigReachedTarget: {
+                scheduleRealityCallback(for: surfaceID) { $0.realityOcclusionDidBecomeVerified() }
+            },
+            onRevealed: {
+                scheduleRealityCallback(for: surfaceID) { $0.realityPigDidBecomeRevealed() }
+            },
+            onError: {
+                scheduleRealityCallback(for: surfaceID) { $0.realityErrorDidOccur() }
+            },
+            onUnavailable: {
+                scheduleRealityCallback(for: surfaceID) { $0.realityMeshDidBecomeUnavailable() }
+            },
+            onSessionFailed: {
+                scheduleRealityCallback(for: surfaceID) { $0.realitySessionDidFail() }
+            },
+            onSessionInterrupted: {
+                scheduleRealityCallback(for: surfaceID) { $0.realitySessionWasInterrupted() }
+            },
+            onSessionInterruptionEnded: {
+                scheduleRealityCallback(for: surfaceID) { $0.realitySessionInterruptionEnded() }
+            },
+            onMessage: { message in
+                scheduleRealityCallback(for: surfaceID) { $0.realityMessageDidChange(message) }
+            }
+        )
+        .id(surfaceID)
+        .scaleEffect(realityScreenScale)
+        .clipped()
+        .transition(.opacity)
+    }
+
+    @ViewBuilder
+    private var chapterFourView: some View {
+        switch coordinator.machine.state {
+        case .comparison(let reason):
+            ComparisonView(
+                reason: reason,
+                retryAvailability: coordinator.chapterThreeRetryAvailability,
+                onFinish: coordinator.finishTutorial,
+                onRetryChapterThree: coordinator.retryChapterThree,
+                onReset: coordinator.resetExperience
+            )
+
+        case .completed(let reason):
+            TutorialCompletionView(
+                reason: reason,
+                retryAvailability: coordinator.chapterThreeRetryAvailability,
+                onRetryChapterThree: coordinator.retryChapterThree,
+                onReset: coordinator.resetExperience
+            )
+
+        default:
+            EmptyView()
+        }
+    }
+
     @ViewBuilder
     private var messageOverlay: some View {
         if let message = coordinator.message,
@@ -422,42 +207,114 @@ struct EscapeRootView: View {
            coordinator.machine.state != .requestingCameraPermission {
             VStack {
                 Spacer()
-                VStack(spacing: 12) {
-                    Text(message)
-                        .font(.system(size: 20, weight: .heavy, design: .rounded))
-                        .foregroundStyle(.white)
-                        .multilineTextAlignment(.center)
-                        .shadow(color: .black.opacity(0.18), radius: 2, y: 1)
-
-                    if coordinator.showsSettingsRecovery {
-                        Button("설정 열기", action: coordinator.openSettingsForRecovery)
-                            .font(.system(size: 17, weight: .bold, design: .rounded))
-                            .foregroundStyle(.black)
-                            .padding(.horizontal, 20)
-                            .frame(minHeight: 44)
-                            .background(Color.yellow, in: Capsule())
-                            .accessibilityHint("앱의 카메라 권한 설정을 엽니다")
+                Text(message)
+                    .font(.title3.weight(.heavy))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .shadow(color: .black.opacity(0.18), radius: 2, y: 1)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 18)
+                    .frame(maxWidth: 520)
+                    .background {
+                        RoundedRectangle(cornerRadius: 24)
+                            .fill(.ultraThinMaterial)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 24)
+                                    .fill(.black.opacity(0.34))
+                            }
                     }
-                }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 18)
-                .frame(maxWidth: 520)
-                .background {
-                    RoundedRectangle(cornerRadius: 24)
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 24)
-                                .fill(.black.opacity(0.34))
-                        }
-                }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 36)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 18)
             }
+            .allowsHitTesting(false)
             .transition(
                 accessibilityReduceMotion
                     ? .opacity
                     : .opacity.combined(with: .scale(scale: 0.96))
             )
+        }
+    }
+
+    @ViewBuilder
+    private var actionBar: some View {
+        switch coordinator.machine.state {
+        case .realityReady:
+            RootCTAButton(
+                title: "숨바꼭질 시작",
+                accessibilityHint: "실제 물체를 선택하는 단계로 이동합니다",
+                isDisabled: coordinator.isSessionInterrupted,
+                action: coordinator.startRealHide
+            )
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+
+        case .cameraDenied:
+            RootActionBar {
+                RootCTAButton(
+                    title: "설정 열기",
+                    accessibilityHint: "앱의 카메라 권한 설정을 엽니다",
+                    action: coordinator.openSettingsForRecovery
+                )
+                RootSecondaryButton(
+                    title: "차이 먼저 보기",
+                    accessibilityHint: "현실 체험을 건너뛰고 두 세계 비교를 엽니다",
+                    action: coordinator.skipToComparison
+                )
+            }
+
+        case .cameraRestricted, .lidarUnavailable:
+            RootActionBar {
+                RootCTAButton(
+                    title: "차이 먼저 보기",
+                    accessibilityHint: "현실 체험을 건너뛰고 두 세계 비교를 엽니다",
+                    action: coordinator.skipToComparison
+                )
+            }
+
+        case .sessionFailed, .scanTimedOut:
+            RootActionBar {
+                RootCTAButton(
+                    title: "다시 스캔",
+                    accessibilityHint: "새 AR 세션으로 공간 스캔을 다시 시작합니다",
+                    action: coordinator.retryReality
+                )
+                RootSecondaryButton(
+                    title: "차이 먼저 보기",
+                    accessibilityHint: "스캔을 건너뛰고 두 세계 비교를 엽니다",
+                    action: coordinator.skipToComparison
+                )
+            }
+
+        case .realityAssetFailed:
+            RootActionBar {
+                RootCTAButton(
+                    title: "피기 다시 불러오기",
+                    accessibilityHint: "같은 AR 세션에서 새 숨기 cycle을 준비합니다",
+                    action: coordinator.retryReality
+                )
+                RootSecondaryButton(
+                    title: "차이 먼저 보기",
+                    accessibilityHint: "피기 불러오기를 건너뛰고 두 세계 비교를 엽니다",
+                    action: coordinator.skipToComparison
+                )
+            }
+
+        case .discoveredInReality:
+            RootActionBar {
+                RootSecondaryButton(
+                    title: "한 번 더 숨기",
+                    accessibilityHint: "같은 공간에서 새 숨기 cycle을 시작합니다",
+                    action: coordinator.replayRealHide
+                )
+                RootCTAButton(
+                    title: "두 세계 비교",
+                    accessibilityHint: "SceneKit과 RealityKit 비교 화면을 엽니다",
+                    action: coordinator.reviewDifferences
+                )
+            }
+
+        default:
+            EmptyView()
         }
     }
 
@@ -491,11 +348,89 @@ struct EscapeRootView: View {
     }
 
     private func scheduleRealityCallback(
+        for surfaceID: Int,
         _ operation: @escaping @MainActor (EscapeRootCoordinator) -> Void
     ) {
         realityCallbacks.schedule { [weak coordinator] in
-            guard let coordinator else { return }
+            guard let coordinator,
+                  coordinator.showsRealityView,
+                  coordinator.realitySurfaceID == surfaceID else { return }
             operation(coordinator)
         }
+    }
+}
+
+private struct RootActionBar<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                content
+            }
+            VStack(spacing: 10) {
+                content
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 12)
+        .background(.ultraThinMaterial)
+    }
+}
+
+private struct RootCTAButton: View {
+    let title: String
+    var accessibilityHint: String?
+    var isDisabled: Bool
+    let action: () -> Void
+
+    init(
+        title: String,
+        accessibilityHint: String? = nil,
+        isDisabled: Bool = false,
+        action: @escaping () -> Void
+    ) {
+        self.title = title
+        self.accessibilityHint = accessibilityHint
+        self.isDisabled = isDisabled
+        self.action = action
+    }
+
+    var body: some View {
+        Button(title, action: action)
+            .font(.headline)
+            .foregroundStyle(.black)
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .padding(.horizontal, 18)
+            .background(Color.yellow, in: Capsule())
+            .accessibilityHint(accessibilityHint ?? "")
+            .disabled(isDisabled)
+            .opacity(isDisabled ? 0.52 : 1)
+    }
+}
+
+private struct RootSecondaryButton: View {
+    let title: String
+    var accessibilityHint: String?
+    let action: () -> Void
+
+    init(
+        title: String,
+        accessibilityHint: String? = nil,
+        action: @escaping () -> Void
+    ) {
+        self.title = title
+        self.accessibilityHint = accessibilityHint
+        self.action = action
+    }
+
+    var body: some View {
+        Button(title, action: action)
+            .font(.headline)
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .padding(.horizontal, 18)
+            .background(.black.opacity(0.44), in: Capsule())
+            .accessibilityHint(accessibilityHint ?? "")
     }
 }

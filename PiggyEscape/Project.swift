@@ -10,9 +10,10 @@ let project = Project(
             bundleId: "com.techmap.piggyescape",
             deploymentTargets: .iOS("17.0"),
             infoPlist: .extendingDefault(with: [
-                "NSCameraUsageDescription": "피기가 현실의 물체 뒤에 숨을 수 있도록 카메라를 사용합니다."
+                "NSCameraUsageDescription": "피기가 현실의 물체 뒤에 숨을 수 있도록 카메라를 사용합니다.",
+                "UILaunchScreen": .dictionary([:])
             ]),
-            sources: ["PiggyEscape/Sources/**", "PiggyEscape/Tutorials/**"],
+            sources: ["PiggyEscape/Sources/**"],
             resources: ["PiggyEscape/Resources/**"]
         ),
         .target(

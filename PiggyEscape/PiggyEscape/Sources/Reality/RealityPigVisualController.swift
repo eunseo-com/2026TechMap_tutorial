@@ -63,6 +63,7 @@ final class RealityPigVisualController {
 
     func walk(to destination: SIMD3<Float>, completion: @escaping (PoseResult) -> Void) {
         movementCompletion?.cancel()
+        face(toward: destination)
         setPose(.running) { [weak self] result in
             guard let self else { return }
             guard case .success = result else {
@@ -147,6 +148,16 @@ final class RealityPigVisualController {
         movementCompletion = nil
         surpriseRestoreCompletion?.cancel()
         surpriseRestoreCompletion = nil
+    }
+
+    private func face(toward destination: SIMD3<Float>) {
+        let delta = destination - worldPosition
+        guard delta.allFinite,
+              abs(delta.x) > 0.0001 || abs(delta.z) > 0.0001 else { return }
+        outerEntity.orientation = simd_quatf(
+            angle: atan2(delta.x, delta.z),
+            axis: SIMD3(0, 1, 0)
+        )
     }
 
     private func setPose(_ pose: C3PigPose, completion: @escaping (PoseResult) -> Void) {
@@ -245,5 +256,11 @@ final class RealityPigVisualController {
                 },
                 receiveValue: { completion(.success($0)) }
             )
+    }
+}
+
+private extension SIMD3 where Scalar == Float {
+    var allFinite: Bool {
+        x.isFinite && y.isFinite && z.isFinite
     }
 }
