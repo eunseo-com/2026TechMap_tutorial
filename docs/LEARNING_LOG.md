@@ -28,6 +28,42 @@
 
 ## 항목
 
+### L-20260903-142 — Swift 6 strict diagnostic은 cancellation handle 격리에서 계속 중단됨
+
+- 상태: 보류
+- 발생 태스크: Task 13 — 전체 회귀·실기기·공개 배포
+- 재현: `cd PiggyEscape && xcodebuild -project PiggyEscape.xcodeproj -scheme PiggyEscape -configuration Debug -destination 'generic/platform=iOS' -derivedDataPath /tmp/piggyescape-task13-swift6-20260903 SWIFT_VERSION=6 SWIFT_STRICT_CONCURRENCY=complete CODE_SIGNING_ALLOWED=NO build`
+- 관찰: generic iPhoneOS arm64 compile이 `C3ClosedWorldSceneView.swift:125:30`에서 `cannot access property 'autoDiscoveryTask' with a non-Sendable type '(any C3AutoDiscoveryCancellable)?' from nonisolated deinit` 오류로 exit 65, `** BUILD FAILED **`가 됐다.
+- 영향: Swift 5 설정의 앱·unit-test bundle compile/link 성공과 별개로 Swift 6 strict concurrency 지원을 주장할 수 없다. Task 9에서 요구한 ownership test와 UI fixture도 아직 없다.
+- 원인/가설: `Coordinator`의 nonisolated `deinit`이 `Sendable`이 아닌 취소 handle을 직접 접근한다는 compiler 진단이 L-20260829-109의 보류 원인과 일치한다.
+- 조치: Task 13 범위를 넘는 Swift 6 concurrency 보수나 UI fixture 구현은 하지 않고, 별도 Task 9 범위로 보류한다.
+- 검증: 같은 HEAD의 Swift 5 generic iPhoneOS Debug·Release build 및 `build-for-testing`은 각각 exit 0이었다. strict diagnostic은 수정 뒤 같은 command로 다시 실행하기 전까지 실패 상태다.
+- 배운 점: language-mode preparation gate의 fresh failure는 production Swift 5 build 성공과 분리해 기록하고, Task 9 계약이 없는 상태에서 임의로 동시성 수명을 바꾸지 않는다.
+
+### L-20260903-141 — CoreDevice service 초기화 시간 초과로 실기기 준비 상태를 증명할 수 없음
+
+- 상태: 실기기 대기
+- 발생 태스크: Task 13 — 전체 회귀·실기기·공개 배포
+- 재현: `xcrun devicectl list devices`
+- 관찰: `Failed to load provisioning parameter list` 뒤 `Timed out waiting for CoreDeviceService to fully initialize`와 `com.apple.coredevice.devicectl error 1 (0x01)`이 출력돼 물리 기기 목록·신뢰·잠금 해제·LiDAR 적합성을 확인할 수 없었다.
+- 영향: 기기에 설치·launch·XCTest 실행이나 카메라 권한, mesh/floor readiness, 실제 가림·재발견·replay와 증거 캡처를 시작할 근거가 없다.
+- 원인/가설: CoreDeviceService XPC connection이 invalidated된 환경 문제로 보이며, 기기 연결 상태나 LiDAR 지원 여부를 이 출력만으로 단정할 수 없다.
+- 조치: 기기 설정을 바꾸거나 reset하지 않았고, `devicectl`이 준비된 기기를 명시할 때까지 실기기 실행을 보류했다.
+- 검증: 새 generic iPhoneOS Debug·Release build 및 `build-for-testing`은 device lookup과 별개로 exit 0이다. 실제 LiDAR 수용 항목은 관찰하지 않았다.
+- 배운 점: 물리 기기 runtime 검증은 device tool이 신뢰·잠금 해제된 대상을 명시한 뒤에만 시도하며, generic build나 Simulator 결과로 대체하지 않는다.
+
+### L-20260903-140 — 연결 worktree의 fetch가 공용 Git metadata 권한에서 중단됨
+
+- 상태: 보류
+- 발생 태스크: Task 13 — 전체 회귀·실기기·공개 배포
+- 재현: `git fetch --prune origin`
+- 관찰: `/Users/yang-eunseo/Downloads/SpatialComputing_TechMap/.git/worktrees/ch1-reality-escape/FETCH_HEAD`를 열 수 없어 `Operation not permitted`로 종료했다. 이어 `git status --short`에는 tracked 또는 untracked 변경이 없었다.
+- 영향: 이 기본 권한 실행만으로는 Task 13 시작 시점의 원격 참조 갱신을 확인할 수 없다.
+- 원인/가설: L-20260901-131과 같은 연결 worktree 공용 Git metadata 쓰기 제약이다.
+- 조치: remote state를 변경하거나 권한을 우회하지 않았고, 현재 `ch1-reality-escape` HEAD `b1cac04`의 clean tree에서 비원격 검증만 진행했다.
+- 검증: source 변경 없이 generic iPhoneOS builds와 DocC gates를 별도로 실행했다. remote fetch는 metadata 쓰기가 가능한 환경에서 재시도해야 한다.
+- 배운 점: fetch 권한 실패는 source/build failure와 분리하고, 성공하지 않은 remote freshness를 추정하지 않는다.
+
 ### L-20260903-139 — DocC compile 성공만으로 브라우저 문구와 hosting 경로를 보장할 수 없음
 
 - 상태: 해결

@@ -36,9 +36,9 @@
 
 ## 검증 상태
 
-- 자동 검증: 현재 HEAD에는 정적 집계상 112개 XCTest가 있으나 최신 변경 뒤 전체 실행 근거는 아직 없다. 구현 계획의 첫 기준선과 최종 게이트에서 실제 실행 수·`TEST SUCCEEDED`, Debug/Release build, DocC와 snippet 검증을 새로 기록한다.
-- 언어 모드: 현재 일반 Simulator build는 설정된 Swift 5 모드에서 성공했다. Swift 6 strict concurrency는 알려진 격리 오류가 있으므로 지원 완료로 주장하지 않는다.
-- 실기기 검증: 카메라 권한·Settings 복구, 0.18m 크기, 다섯 점 LiDAR mesh 가림, 0.15m/15° 이동 재발견, replay와 증거 스크린샷은 관찰 전까지 `실기기 대기`다. 자동 테스트나 Simulator 결과로 대체하지 않는다.
+- 자동 검증: 현재 HEAD에는 정적 집계상 185개 XCTest가 있으며, 2026-09-03에 새 generic iPhoneOS Debug·Release build와 `build-for-testing` compile/link가 모두 성공했다. 실제 XCTest는 연결·신뢰·잠금 해제된 물리 기기가 없어서 0개 실행했고, Task 9가 보류되어 UI test target·fixture도 없다. `TEST SUCCEEDED`를 주장하지 않는다.
+- 언어 모드: 프로젝트 설정은 Swift 5다. 2026-09-03 Swift 6 strict concurrency diagnostic은 `C3ClosedWorldSceneView.swift:125`의 non-Sendable `C3AutoDiscoveryCancellable`을 nonisolated `deinit`에서 접근하는 오류로 실패했으므로 지원 완료로 주장하지 않는다.
+- 실기기 검증: 물리 기기 전용 `devicectl` 조회가 CoreDevice service 초기화 시간 초과로 기기 목록을 만들지 못했다. 카메라 권한·Settings 복구, 0.18m 크기, 다섯 점 LiDAR mesh 가림, 0.15m/15° 이동 재발견, replay와 증거 스크린샷은 관찰 전까지 `실기기 대기`다. 자동 테스트나 Simulator 결과로 대체하지 않는다.
 
 ## C3 참고 원본
 
