@@ -28,6 +28,30 @@
 
 ## 항목
 
+### L-20260903-148 — paired·DDI-ready 실기기도 현재 passcodeRequired면 XCTest를 시작하지 않음
+
+- 상태: 실기기 대기
+- 발생 태스크: Task 9 Swift 6 준비 — C3 cancellation lifetime
+- 재현: `xcrun devicectl device info details --device 00008140-0008385214C0801C`와 `xcrun devicectl device info lockState --device 00008140-0008385214C0801C`를 read-only로 실행한다.
+- 관찰: 제한된 details 조회는 CoreDeviceService 초기화 timeout으로 exit 1이었다. 승인된 read-only 재확인은 paired physical iPhone 16 Pro, iOS 26.6, Developer Mode enabled, DDI available, tunnel connected를 확인했고 lock state는 `unlockedSinceBoot: true`, `passcodeRequired: true`였다.
+- 영향: 새 Sendable/deinit 회귀와 기존 Reduce Motion 회귀의 physical assertion runtime을 이번 범위에서 실행할 수 없다. production·test bundle compile 결과와 runtime 결과를 분리해야 한다.
+- 원인/가설: 기기는 연결·개발 준비 상태지만 현재 잠겨 있다. source, signing 또는 destination 부재가 원인이 아니다.
+- 조치: 잠금 우회, Simulator 대체, 무기한 대기 없이 physical focused 실행을 생략했다. UI target·fixture·XCUITest도 명시적 no-Simulator 범위에 따라 계속 보류한다.
+- 검증: 이번 Task 9 physical runtime은 0건이다. 잠금 해제 뒤 `C3ClosedWorldSceneViewOwnershipTests` focused 9개와 full 190개 suite를 새 DerivedData로 실행한다.
+- 배운 점: `paired`, DDI usable, tunnel connected만으로 테스트 실행 가능성을 판단하지 말고 바로 전 read-only `lockState`의 `passcodeRequired`를 gate로 사용한다.
+
+### L-20260903-147 — cancellation existential의 Sendable 소거가 nonisolated deinit을 막음
+
+- 상태: 해결
+- 발생 태스크: Task 9 Swift 6 준비 — C3 cancellation lifetime
+- 재현: compile-time Sendable 계약과 실제 coordinator deinit 취소 회귀를 먼저 추가한 뒤 `xcodebuild -quiet -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'generic/platform=iOS' -derivedDataPath /tmp/piggyescape-task9-red-swift6-20260903 CODE_SIGNING_ALLOWED=NO SWIFT_VERSION=6 SWIFT_STRICT_CONCURRENCY=complete build-for-testing`을 실행한다.
+- 관찰: fresh app compile이 `C3ClosedWorldSceneView.swift:135:30`의 `cannot access property 'autoDiscoveryTask' with a non-Sendable type '(any C3AutoDiscoveryCancellable)?' from nonisolated deinit`로 exit 65, `TEST BUILD FAILED`가 됐다. note는 cancellation 프로토콜이 `Sendable`이 아님을 직접 가리켰다.
+- 영향: Swift 5 production 동작과 별개로 Swift 6 strict preparation gate가 막혔고, coordinator 파괴 시 pending 예약을 취소하는 필수 cleanup을 제거해서는 해결할 수 없었다.
+- 원인/가설: `@MainActor Coordinator`가 실제로는 immutable `Task<Void, Never>` wrapper를 보관하지만, 이를 `Sendable`을 보장하지 않는 프로토콜 existential로 지워 nonisolated deinit에서 안전한 storage임을 compiler가 증명할 수 없었다. 프로토콜에 checked `Sendable` 계약 한 줄만 추가한 뒤 같은 경계가 통과해 가설을 확인했다.
+- 조치: production `C3AutoDiscoveryCancellable`을 `AnyObject & Sendable` 계약으로 만들고 immutable Task wrapper의 compiler-checked conformance를 사용했다. deinit과 dismantle cleanup, MainActor scheduling/callback, Reduce Motion 동작은 유지했다. mutable test double만 `@unchecked Sendable`이며 생성·보관·취소·fire와 coordinator release가 모두 `@MainActor` test/scheduler 안에서 일어난다는 제한을 코드에 명시했다.
+- 검증: production 변경 뒤 fresh generic iPhoneOS Swift 6 strict `build-for-testing`이 exit 0으로 app·unit-test target을 compile/link했고, fresh Swift 5 generic iPhoneOS `build-for-testing`도 exit 0이었다. test source는 compile-time Sendable 계약, 반복 dismantle과 실제 coordinator deinit의 정확히 한 번 취소를 포함한다. 물리 runtime은 L-20260903-148의 잠금 때문에 0건이다.
+- 배운 점: actor-isolated owner의 deinit cleanup은 구체 storage를 non-Sendable existential로 지우지 않아야 한다. 실제 immutable Sendable 자원은 checked 프로토콜 계약으로 보존하고, cleanup 제거나 unsafe isolation suppression으로 compiler만 침묵시키지 않는다.
+
 ### L-20260903-146 — 연결 worktree의 기본 권한은 Git index lock 생성을 막음
 
 - 상태: 해결

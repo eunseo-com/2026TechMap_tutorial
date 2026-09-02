@@ -36,9 +36,9 @@
 
 ## 검증 상태
 
-- 자동 검증: 현재 worktree에는 정적 집계상 188개 XCTest가 있다. `2c4d854`에서 cycle UUID identity, exhaustion message의 root ownership, large-finite transform characterization을 보수한 뒤 physical focused 4/4와 full suite 186/186이 exit 0으로 통과했다. 이후 Chapter 1 Reduce Motion 회귀 2개를 추가했고 generic iPhoneOS `build-for-testing`과 실제 기기용 compile·sign은 성공했지만, 실행 직전 iPhone이 잠겨 focused runtime은 0건·exit 75로 중단했다. 따라서 현재 188개 full green은 잠금 해제 뒤 재검증 대기다. Task 9가 보류되어 UI test target·fixture도 없다.
-- 언어 모드: 프로젝트 설정은 Swift 5다. 2026-09-03 최신 Swift 6 strict concurrency diagnostic은 `C3ClosedWorldSceneView.swift:135`의 non-Sendable `C3AutoDiscoveryCancellable`을 nonisolated `deinit`에서 접근하는 오류로 실패했으므로 지원 완료로 주장하지 않는다.
-- 실기기 검증: 승인된 read-only 확인은 paired physical iPhone 16 Pro(iPhone17,1), iOS 26.6, Developer Mode와 DDI를 확인했다. signed app install·launch와 기준 186개 unit suite는 통과했으나 새 Reduce Motion focused 실행 때는 기기가 잠겨 있었다. 사용자 상호작용이나 capture가 없으므로 visual/LiDAR acceptance는 주장하지 않는다. 카메라 권한·Settings 복구, 0.18m 크기, 다섯 점 LiDAR mesh 가림, 0.15m/15° 이동 재발견, replay와 증거 스크린샷은 여전히 `실기기 대기`다.
+- 자동 검증: 현재 worktree에는 정적 집계상 190개 XCTest가 있다. `2c4d854` 기준 physical focused 4/4와 full suite 186/186은 exit 0으로 통과했다. 이후 Chapter 1 Reduce Motion 2개와 C3 cancellation handle의 compile-time Sendable·실제 coordinator deinit 취소 회귀 2개를 추가했다. 현재 Swift 5와 Swift 6 strict의 fresh generic iPhoneOS `build-for-testing`은 모두 exit 0이지만, 최신 read-only 잠금 상태가 `passcodeRequired: true`라 새 4개를 포함한 runtime은 이번 범위에서 0건이다. Task 9의 UI test target·launch fixture·XCUITest는 명시적 no-Simulator 범위에 따라 계속 보류한다.
+- 언어 모드: 프로젝트 설정은 Swift 5를 유지한다. `C3AutoDiscoveryCancellable`이 checked `Sendable` 계약을 가지며 immutable `Task<Void, Never>` production wrapper와 nonisolated `deinit` 정리를 함께 보존한다. 2026-09-03 fresh generic iPhoneOS Swift 6 strict app·unit-test bundle compile/link가 exit 0이므로 이 preparation diagnostic은 닫혔지만 프로젝트 언어 모드를 Swift 6으로 전환한 것은 아니다.
+- 실기기 검증: 최신 read-only 확인은 paired physical iPhone 16 Pro(iPhone17,1), iOS 26.6, Developer Mode·DDI usable을 확인했지만 현재 `passcodeRequired: true`다. 잠금 우회 없이 focused 실행을 생략했으므로 이번 Task 9 runtime은 0건이며, 기준 186/186만 유효하다. 사용자 상호작용이나 capture가 없으므로 visual/LiDAR acceptance는 주장하지 않는다. 카메라 권한·Settings 복구, 0.18m 크기, 다섯 점 LiDAR mesh 가림, 0.15m/15° 이동 재발견, replay와 증거 스크린샷은 여전히 `실기기 대기`다.
 
 ## C3 참고 원본
 

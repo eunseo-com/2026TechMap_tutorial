@@ -2,7 +2,7 @@ import SceneKit
 import SpriteKit
 import SwiftUI
 
-protocol C3AutoDiscoveryCancellable: AnyObject {
+protocol C3AutoDiscoveryCancellable: AnyObject, Sendable {
     func cancel()
 }
 

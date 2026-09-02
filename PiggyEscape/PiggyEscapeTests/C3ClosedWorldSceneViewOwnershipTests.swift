@@ -4,6 +4,10 @@ import SceneKit
 
 @MainActor
 final class C3ClosedWorldSceneViewOwnershipTests: XCTestCase {
+    func test_autoDiscoveryCancellationHandleIsSendable() {
+        requireSendable((any C3AutoDiscoveryCancellable).self)
+    }
+
     func test_reduceMotionKeepsSurpriseContentWithoutScaleAction() {
         let coordinator = C3ClosedWorldSceneView(
             reduceMotionEnabled: true
@@ -88,9 +92,40 @@ final class C3ClosedWorldSceneViewOwnershipTests: XCTestCase {
         prepareTreeArrival(for: coordinator)
 
         C3ClosedWorldSceneView.dismantleUIView(SCNView(), coordinator: coordinator)
+        C3ClosedWorldSceneView.dismantleUIView(SCNView(), coordinator: coordinator)
         scheduler.fireAll()
 
+        XCTAssertEqual(scheduler.cancellationCounts, [1])
         XCTAssertEqual(coordinator.world.currentPose, .idle)
+        XCTAssertEqual(discoveries, 0)
+    }
+
+    func test_coordinatorDeinitCancelsPendingAutomaticDiscoveryExactlyOnce() {
+        let scheduler = ControlledAutoDiscoveryScheduler()
+        var retainedWorld: C3ClosedWorld?
+        weak var releasedCoordinator: C3ClosedWorldSceneView.Coordinator?
+        var discoveries = 0
+
+        autoreleasepool {
+            var coordinator: C3ClosedWorldSceneView.Coordinator? = .init(
+                onDiscovered: { discoveries += 1 },
+                autoDiscoveryScheduler: scheduler
+            )
+            coordinator?.installCallbacks()
+            if let coordinator {
+                prepareTreeArrival(for: coordinator)
+                retainedWorld = coordinator.world
+            }
+            releasedCoordinator = coordinator
+            coordinator = nil
+        }
+
+        XCTAssertNil(releasedCoordinator)
+        XCTAssertEqual(scheduler.cancellationCounts, [1])
+
+        scheduler.fireAll()
+
+        XCTAssertEqual(retainedWorld?.currentPose, .idle)
         XCTAssertEqual(discoveries, 0)
     }
 
@@ -121,12 +156,15 @@ final class C3ClosedWorldSceneViewOwnershipTests: XCTestCase {
     }
 }
 
+private func requireSendable<T: Sendable>(_: T.Type) {}
+
 @MainActor
 private final class ControlledAutoDiscoveryScheduler: C3AutoDiscoveryScheduling {
     private(set) var delays: [TimeInterval] = []
     private var tasks: [ControlledAutoDiscoveryTask] = []
 
     var scheduledCount: Int { tasks.count }
+    var cancellationCounts: [Int] { tasks.map(\.cancelCallCount) }
 
     @discardableResult
     func schedule(
@@ -144,8 +182,12 @@ private final class ControlledAutoDiscoveryScheduler: C3AutoDiscoveryScheduling 
     }
 }
 
-private final class ControlledAutoDiscoveryTask: C3AutoDiscoveryCancellable {
+// This mutable test double is created, retained, cancelled, and fired only by
+// the @MainActor scheduler and tests above. Production cancellation storage
+// remains checked Sendable.
+private final class ControlledAutoDiscoveryTask: C3AutoDiscoveryCancellable, @unchecked Sendable {
     private var isCancelled = false
+    private(set) var cancelCallCount = 0
     private let operation: @MainActor () -> Void
 
     init(operation: @escaping @MainActor () -> Void) {
@@ -153,6 +195,7 @@ private final class ControlledAutoDiscoveryTask: C3AutoDiscoveryCancellable {
     }
 
     func cancel() {
+        cancelCallCount += 1
         isCancelled = true
     }
 
