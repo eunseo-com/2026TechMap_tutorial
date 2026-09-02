@@ -219,6 +219,7 @@ struct RealityHideARView: UIViewRepresentable {
         private final class HideCycle {
             let generation: Int
             let anchor: AnchorEntity
+            let anchorIdentifier = UUID()
             let visualController: RealityPigVisualController
             var attachmentGate = RealityPigSceneAttachmentGate()
             var attempt: RealityHideAttempt
@@ -282,8 +283,8 @@ struct RealityHideARView: UIViewRepresentable {
         private(set) var scanPresentation: RealityScanPresentation
 
         var hasActiveHideCycle: Bool { cycle != nil }
-        var currentPigAnchorIdentifier: ObjectIdentifier? {
-            cycle.map { ObjectIdentifier($0.anchor) }
+        var currentPigAnchorIdentifier: UUID? {
+            cycle?.anchorIdentifier
         }
         var currentHideAttempt: RealityHideAttempt? { cycle?.attempt }
 

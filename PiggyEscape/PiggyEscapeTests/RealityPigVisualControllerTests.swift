@@ -113,7 +113,7 @@ final class RealityPigVisualControllerTests: XCTestCase {
         XCTAssertEqual(controller.currentPose, .idle)
     }
 
-    func test_postScaleTransformOverflowFailsPoseInstallWithoutReplacingTheCurrentModel() {
+    func test_largeFinitePostScaleTransformKeepsTheNormalizedHeight() {
         typealias PendingLoad = (asset: String, completion: (Result<Entity, Error>) -> Void)
         var pendingLoads: [PendingLoad] = []
         let controller = RealityPigVisualController.makeForTesting { asset, completion in
@@ -127,21 +127,18 @@ final class RealityPigVisualControllerTests: XCTestCase {
         var result: RealityPigVisualController.PoseResult?
 
         controller.showSurprised { result = $0 }
-        pendingLoads.removeFirst().completion(.success(makePostScaleTransformOverflowModel()))
+        pendingLoads.removeFirst().completion(.success(makeLargeFiniteAnisotropicTransformModel()))
 
-        guard case let .failure(error)? = result else {
-            let installed = controller.outerEntity.findEntity(named: "RealityPigModel_surprised")
-            let bounds = installed?.visualBounds(recursive: true, relativeTo: controller.outerEntity)
-            return XCTFail(
-                "expected post-scale transform overflow install failure; "
-                    + "scale=\(String(describing: installed?.scale)), "
-                    + "bounds=\(String(describing: bounds))"
-            )
+        guard case .success? = result,
+              let installed = controller.outerEntity.findEntity(named: "RealityPigModel_surprised") else {
+            return XCTFail("expected a finite post-scale transform to install")
         }
-        XCTAssertEqual(error, .invalidVisualBounds(.surprised))
-        XCTAssertTrue(controller.outerEntity.findEntity(named: "RealityPigModel_idle") === installedIdle)
-        XCTAssertNil(controller.outerEntity.findEntity(named: "RealityPigModel_surprised"))
-        XCTAssertEqual(controller.currentPose, .idle)
+        let bounds = installed.visualBounds(recursive: true, relativeTo: controller.outerEntity)
+        XCTAssertEqual(bounds.max.y - bounds.min.y, PigScalePolicy.targetHeight, accuracy: 0.001)
+        XCTAssertTrue(bounds.min.x.isFinite)
+        XCTAssertTrue(bounds.max.x.isFinite)
+        XCTAssertFalse(controller.outerEntity.findEntity(named: "RealityPigModel_idle") === installedIdle)
+        XCTAssertEqual(controller.currentPose, .surprised)
     }
 
     func test_testingWalkMovesStableOuterEntityAndFinishesIdle() {
@@ -198,7 +195,7 @@ private func makeFiniteCrossAxisOverflowModel() -> Entity {
     return container
 }
 
-private func makePostScaleTransformOverflowModel() -> Entity {
+private func makeLargeFiniteAnisotropicTransformModel() -> Entity {
     let model = ModelEntity(mesh: .generateBox(width: 1e-30, height: 0.2, depth: 0.09))
     model.scale.x = Float.greatestFiniteMagnitude * 0.75
     return model

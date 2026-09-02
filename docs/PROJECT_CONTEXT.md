@@ -36,9 +36,9 @@
 
 ## 검증 상태
 
-- 자동 검증: 현재 HEAD에는 정적 집계상 185개 XCTest가 있으며, 2026-09-03에 새 generic iPhoneOS Debug·Release build와 `build-for-testing` compile/link가 모두 성공했다. 물리 iPhone 16 Pro(iOS 26.6)가 paired·unlocked·DDI usable 상태일 때 최초 full run은 bootstrap system failure 1개로 중단됐고, 재실행은 185개 중 182개 통과·3개 실패였다. 그 세 경계를 보수한 working tree에서 physical focused 3/3은 통과했지만, final full rerun은 기기가 `unavailable`·DDI service false·tunnel unavailable로 바뀌어 destination 대기 timeout(exit 70)으로 시작 전 중단됐다. 따라서 full 185 green은 주장하지 않는다. Task 9가 보류되어 UI test target·fixture도 없다.
+- 자동 검증: 현재 HEAD에는 정적 집계상 186개 XCTest가 있으며, 2026-09-03에 새 generic iPhoneOS Debug·Release build와 `build-for-testing` compile/link가 모두 성공했다. 물리 iPhone 16 Pro(iOS 26.6)가 paired·unlocked·DDI usable 상태일 때 최초 full run은 bootstrap system failure 1개로 중단됐고, 재실행은 185개 중 182개 통과·3개 실패였다. cycle UUID identity, exhaustion message의 root ownership, large-finite transform characterization을 보수한 뒤 physical focused 4/4와 새 full suite 186/186이 exit 0으로 통과했다. Task 9가 보류되어 UI test target·fixture도 없다.
 - 언어 모드: 프로젝트 설정은 Swift 5다. 2026-09-03 Swift 6 strict concurrency diagnostic은 `C3ClosedWorldSceneView.swift:125`의 non-Sendable `C3AutoDiscoveryCancellable`을 nonisolated `deinit`에서 접근하는 오류로 실패했으므로 지원 완료로 주장하지 않는다.
-- 실기기 검증: 초기 제한된 조회 실패와 달리 승인된 read-only 확인은 paired physical iPhone 16 Pro(iPhone17,1), iOS 26.6, booted·unlocked·Developer Mode enabled·DDI usable을 확인했다. signed app install·launch와 지속 process는 확인했으나, 사용자 상호작용이나 capture가 없으므로 visual/LiDAR acceptance는 주장하지 않는다. final test 때 기기는 `unavailable`로 전이했고, 카메라 권한·Settings 복구, 0.18m 크기, 다섯 점 LiDAR mesh 가림, 0.15m/15° 이동 재발견, replay와 증거 스크린샷은 여전히 `실기기 대기`다.
+- 실기기 검증: 초기 제한된 조회 실패와 달리 승인된 read-only 확인은 paired physical iPhone 16 Pro(iPhone17,1), iOS 26.6, booted·unlocked·Developer Mode enabled·DDI usable을 확인했다. signed app install·launch와 186개 unit suite는 통과했으나, 사용자 상호작용이나 capture가 없으므로 visual/LiDAR acceptance는 주장하지 않는다. 카메라 권한·Settings 복구, 0.18m 크기, 다섯 점 LiDAR mesh 가림, 0.15m/15° 이동 재발견, replay와 증거 스크린샷은 여전히 `실기기 대기`다.
 
 ## C3 참고 원본
 

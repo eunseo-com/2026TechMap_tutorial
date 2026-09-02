@@ -544,7 +544,7 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
         XCTAssertFalse(visualController.outerEntity.isEnabled)
         XCTAssertEqual(retryCount, 2)
         XCTAssertEqual(exhaustedCount, 1)
-        XCTAssertEqual(messages, [RealityAvailabilityMessage.scanFirst])
+        XCTAssertEqual(messages, [])
     }
 
     func test_outOfInsetRetryReturnsToSelectionWithoutMovingPastTheAcceptedDestination() {

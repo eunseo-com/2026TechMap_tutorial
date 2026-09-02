@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 @testable import PiggyEscape
 
@@ -316,6 +317,30 @@ final class EscapeRootCoordinatorTests: XCTestCase {
 
         coordinator.realityPigDidBecomeRevealed()
         XCTAssertEqual(coordinator.realitySurpriseSequence, 1)
+    }
+
+    func test_occlusionExhaustionReturnsToTargetSelectionWithOneApprovedMessageMutation() {
+        let authorizer = FakeCameraAuthorizer()
+        let coordinator = makeCoordinator(authorizer: authorizer)
+        reachCameraRequest(coordinator)
+        authorizer.resolve(.authorized)
+        coordinator.realityScanningDidBecomeReady()
+        coordinator.startRealHide()
+        coordinator.realityTargetDidBecomeAccepted()
+        coordinator.realityMovementDidFinish()
+
+        var messages: [String?] = []
+        let observation = coordinator.$message
+            .dropFirst()
+            .sink { messages.append($0) }
+
+        coordinator.realityOcclusionDidExhaust()
+        coordinator.realityOcclusionDidExhaust()
+
+        XCTAssertEqual(coordinator.machine.state, .waitingForRealTarget)
+        XCTAssertEqual(coordinator.message, "물체를 더 스캔하거나 다른 옆면을 선택해줘.")
+        XCTAssertEqual(messages, ["물체를 더 스캔하거나 다른 옆면을 선택해줘."])
+        _ = observation
     }
 
     func test_completedHideMovesThroughComparisonCompletionAndFullReset() {

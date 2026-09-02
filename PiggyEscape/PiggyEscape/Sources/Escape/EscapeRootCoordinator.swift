@@ -131,7 +131,7 @@ enum EscapeRootMessage {
     static let walkingToRealObject = "피기가 숨으러 가고 있어."
     static let verifyingOcclusion = "실제 물체 뒤에 잘 숨었는지 확인하고 있어."
     static let findPig = "옆으로 움직이거나 카메라 방향을 바꿔 피기를 찾아봐."
-    static let selectAnotherTarget = "충분히 가려지지 않았어. 다른 물체의 옆면을 골라줘."
+    static let selectAnotherTarget = "물체를 더 스캔하거나 다른 옆면을 선택해줘."
     static let scanTimedOut = "공간 형태와 바닥을 함께 읽지 못했어. 다시 스캔해봐."
     static let sessionFailed = "AR 세션을 이어갈 수 없어. 다시 스캔하거나 차이를 먼저 볼 수 있어."
     static let sessionInterrupted = "카메라 추적이 잠시 멈췄어. 기기를 안정적으로 들어줘."

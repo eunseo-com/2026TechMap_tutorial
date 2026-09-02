@@ -42,11 +42,12 @@
 
 ### L-20260903-143 — 실기기 XCTest는 bootstrap·assertion·후속 연결 상태를 구분해야 함
 
-- 상태: 보류
+- 상태: 해결
 - 발생 태스크: Task 13 — 전체 회귀·실기기·공개 배포
 - 관찰: ready device의 첫 full `PiggyEscapeTests`는 test runner가 code 0으로 종료해 bootstrap system failure 1개(total 1, passed 0, failed 1)로 끝났다. 새 DerivedData rerun은 185개 중 182개 통과·3개 assertion failure를 분리했다. cycle anchor의 `ObjectIdentifier` 재사용, retry exhaustion의 scan 안내 누락, 실제 RealityKit의 large finite post-scale bounds와 다른 fixture 기대가 각각 원인이었다. 보수 뒤 physical focused 3/3은 exit 0으로 통과했다.
-- 영향: focused green만으로 current full 185 green을 주장할 수 없다. final full rerun은 기기가 `unavailable`, `ddiServicesAvailable: false`, `tunnelState: unavailable`로 전이해 Xcode destination wait timeout(exit 70)으로 test 시작 전에 끝났다.
-- 조치: 기기 설정·data를 바꾸지 않고 physical path를 중단했다. available·DDI usable 상태 복귀 뒤 새 DerivedData full suite로 같은 세 경계와 전체 회귀를 확인한다.
+- 영향: focused green만으로 full green을 주장할 수 없었고, 당시 final rerun은 device unavailable timeout으로 시작 전 끝났다. 후속 read-only check에서 device가 available·DDI usable로 복귀한 뒤, reviewed root message contract를 포함한 fresh full suite는 186/186, exit 0으로 통과했다.
+- 조치: cycle UUID, low-level message 제거, root-owned approved sentence, large-finite fixture characterization을 source/test에 반영했다. 기기 설정·data는 바꾸지 않았다.
+- 검증: RED physical run은 2 tests/3 assertion failures였고, corrected focused run 4/4와 final full `PiggyEscapeTests` 186/186은 exit 0, `TEST SUCCEEDED`였다. 종료 후 partial `devicectl diagnose` warning은 assertion result와 분리한다.
 - 배운 점: XCTest bootstrap failure, 실제 assertion failure, post-run diagnostic warning, device connectivity timeout은 서로 다른 근거이며 서로 대체할 수 없다.
 
 ### L-20260903-141 — 제한된 CoreDevice 조회 실패는 실기기 부재의 증거가 아니었음
