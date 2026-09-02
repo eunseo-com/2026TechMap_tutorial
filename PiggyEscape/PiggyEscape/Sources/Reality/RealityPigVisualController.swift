@@ -27,6 +27,7 @@ final class RealityPigVisualController {
     private let entityLoader: EntityLoader
     private var modelLoad: AnyCancellable?
     private var movementCompletion: DispatchWorkItem?
+    private var surpriseRestoreCompletion: DispatchWorkItem?
     private var requestedPose: C3PigPose?
 
     init() {
@@ -98,6 +99,7 @@ final class RealityPigVisualController {
 
     func showSurprised(completion: @escaping (PoseResult) -> Void = { _ in }) {
         movementCompletion?.cancel()
+        movementCompletion = nil
         setPose(.surprised, completion: completion)
     }
 
@@ -118,7 +120,8 @@ final class RealityPigVisualController {
         )
 
         guard !skipsAssetLoadingAndTiming else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) { [weak self] in
+        surpriseRestoreCompletion?.cancel()
+        let restore = DispatchWorkItem { [weak self] in
             guard let self else { return }
             let restored = Transform(
                 scale: SIMD3(repeating: self.surpriseRestoreScale),
@@ -132,6 +135,18 @@ final class RealityPigVisualController {
                 timingFunction: .easeInOut
             )
         }
+        surpriseRestoreCompletion = restore
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16, execute: restore)
+    }
+
+    func cancelPendingWork() {
+        modelLoad?.cancel()
+        modelLoad = nil
+        requestedPose = nil
+        movementCompletion?.cancel()
+        movementCompletion = nil
+        surpriseRestoreCompletion?.cancel()
+        surpriseRestoreCompletion = nil
     }
 
     private func setPose(_ pose: C3PigPose, completion: @escaping (PoseResult) -> Void) {

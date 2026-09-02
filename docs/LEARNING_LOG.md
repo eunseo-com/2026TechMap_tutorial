@@ -28,6 +28,18 @@
 
 ## 항목
 
+### L-20260901-136 — Task 6 RED 준비의 Tuist 세션 기록이 권한으로 중단됨
+
+- 상태: 해결
+- 발생 태스크: Task 6 — AR coordinator를 cycle별 5점 관찰과 bounded retry에 연결
+- 재현: `cd PiggyEscape && tuist generate --no-open`
+- 관찰: 새 provider 테스트를 추가한 뒤 Tuist가 `/Users/yang-eunseo/.local/state/tuist/sessions/A6E52E37-7CFE-41F4-B8D3-E2749E005EB2`에 쓸 수 없어 exit 133과 `Permission denied`로 종료됐다.
+- 영향: 최초 실행에서는 새 테스트 파일이 생성 Xcode project에 반영되지 않아 provider 타입 부재 compile RED 관찰이 지연됐다.
+- 원인/가설: 이전 L-20260901-128·133과 같은 작업 트리 밖 Tuist session 상태 경로 쓰기 제한이다.
+- 조치: 같은 `tuist generate --no-open` 명령을 session 상태 쓰기 권한으로 재실행해 프로젝트를 생성했다.
+- 검증: 프로젝트 생성 성공 뒤 provider 타입 부재 상태의 fresh generic iOS `build-for-testing`이 exit 65로 실패했고, Task 6 구현·테스트 정리 뒤 `/tmp/piggyescape-task6-compile-20260901`의 같은 기기 대상 compile/link가 exit 0으로 성공했다. Simulator와 XCTest runtime은 실행하지 않았다.
+- 배운 점: 새 source/test glob을 반영하는 Tuist 생성은 환경 준비 단계이며, 그 실패를 제품 RED로 세지 않는다.
+
 ### L-20260901-135 — exact 15° forward 정규화가 cosine보다 한 Float ULP 커짐
 
 - 상태: 해결

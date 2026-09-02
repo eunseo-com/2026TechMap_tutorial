@@ -147,19 +147,20 @@ enum RealityHideVerificationPolicy {
         if let meshDistance, meshDistance + meshSafetyMargin < pigDistance {
             return .hidden
         }
-        guard attempt.retryCount < maximumRetries else {
-            return .selectAnotherTarget
-        }
+        guard let nextAttempt = nextAttempt(after: attempt) else { return .selectAnotherTarget }
+        return .retry(nextAttempt)
+    }
+
+    static func nextAttempt(after attempt: RealityHideAttempt) -> RealityHideAttempt? {
+        guard attempt.retryCount < maximumRetries else { return nil }
         let candidate = attempt.destination + attempt.retreatDirection * retryDistance
-        guard attempt.floorRegion.containsPlacementXZ(candidate) else {
-            return .selectAnotherTarget
-        }
-        return .retry(RealityHideAttempt(
+        guard attempt.floorRegion.containsPlacementXZ(candidate) else { return nil }
+        return RealityHideAttempt(
             destination: candidate,
             retreatDirection: attempt.retreatDirection,
             floorRegion: attempt.floorRegion,
             retryCount: attempt.retryCount + 1
-        ))
+        )
     }
 }
 

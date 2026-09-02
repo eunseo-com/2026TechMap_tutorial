@@ -98,27 +98,43 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
             initialPosition: SIMD3(0, 0, -1.44)
         ))
         XCTAssertEqual(acceptedCount, 1)
-        XCTAssertEqual(coordinator.status, .walking)
+        XCTAssertEqual(coordinator.status, .verifyingOcclusion)
     }
 
-    func test_revealIsReportedOnceOnlyAfterARealBlockingFrame() {
+    func test_revealIsReportedOnceAfterStableHideAndViewpointChange() {
         var revealCount = 0
         let visualController = RealityPigVisualController.makeForTesting()
         let coordinator = RealityHideARView.Coordinator(
             meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
             visualController: visualController,
+            monotonicNow: { 0 },
             onRevealed: { revealCount += 1 }
         )
         coordinator.acceptHideTarget(destination: SIMD3(0, 0, -2), initialPosition: SIMD3(0, 0, -0.8))
-        coordinator.processHideArrival(meshDistance: 1, pigDistance: 2)
         let blockedPose = RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
-        let movedPose = RealityCameraPose(position: SIMD3(0.15, 0, 0), forward: SIMD3(0, 0, -1))
+        let movedPose = RealityCameraPose(position: SIMD3(0.16, 0, 0), forward: SIMD3(0, 0, -1))
+        recordStableHide(in: coordinator, referencePose: blockedPose)
 
-        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: true, meshDistance: nil, pigDistance: 2, cameraPose: blockedPose))
-        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: true, meshDistance: 1, pigDistance: 2, cameraPose: blockedPose))
-        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: true, meshDistance: nil, pigDistance: 2, cameraPose: movedPose))
-        XCTAssertTrue(coordinator.processRevealFrame(isObservationValid: true, meshDistance: nil, pigDistance: 2, cameraPose: movedPose))
-        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: true, meshDistance: nil, pigDistance: 2, cameraPose: movedPose))
+        XCTAssertFalse(coordinator.processRevealObservation(observation(
+            timestamp: 3,
+            states: visibleSamples(),
+            pose: blockedPose
+        )))
+        XCTAssertFalse(coordinator.processRevealObservation(observation(
+            timestamp: 4,
+            states: visibleSamples(),
+            pose: movedPose
+        )))
+        XCTAssertTrue(coordinator.processRevealObservation(observation(
+            timestamp: 5,
+            states: visibleSamples(),
+            pose: movedPose
+        )))
+        XCTAssertFalse(coordinator.processRevealObservation(observation(
+            timestamp: 6,
+            states: visibleSamples(),
+            pose: movedPose
+        )))
         XCTAssertEqual(revealCount, 1)
         XCTAssertEqual(visualController.currentPose, .surprised)
         XCTAssertEqual(visualController.surprisePeakScale, 1.5, accuracy: 0.0001)
@@ -128,34 +144,34 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
     func test_invalidRevealObservationResetsVisibleStabilityButKeepsTheBlockingPose() {
         let coordinator = RealityHideARView.Coordinator(
             meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
-            visualController: RealityPigVisualController.makeForTesting()
+            visualController: RealityPigVisualController.makeForTesting(),
+            monotonicNow: { 0 }
         )
         coordinator.acceptHideTarget(destination: SIMD3(0, 0, -2), initialPosition: SIMD3(0, 0, -0.8))
-        coordinator.processHideArrival(meshDistance: 1, pigDistance: 2)
         let blockingPose = RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
-        let movedPose = RealityCameraPose(position: SIMD3(0.15, 0, 0), forward: SIMD3(0, 0, -1))
+        let movedPose = RealityCameraPose(position: SIMD3(0.16, 0, 0), forward: SIMD3(0, 0, -1))
+        recordStableHide(in: coordinator, referencePose: blockingPose)
 
-        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: true, meshDistance: 1, pigDistance: 2, cameraPose: blockingPose))
-        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: true, meshDistance: nil, pigDistance: 2, cameraPose: movedPose))
-        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: false, meshDistance: nil, pigDistance: 2, cameraPose: movedPose))
-        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: true, meshDistance: nil, pigDistance: 2, cameraPose: movedPose))
-        XCTAssertTrue(coordinator.processRevealFrame(isObservationValid: true, meshDistance: nil, pigDistance: 2, cameraPose: movedPose))
+        XCTAssertFalse(coordinator.processRevealObservation(observation(timestamp: 3, states: visibleSamples(), pose: movedPose)))
+        XCTAssertFalse(coordinator.processRevealObservation(observation(timestamp: 4, states: invalidSamples(), pose: movedPose)))
+        XCTAssertFalse(coordinator.processRevealObservation(observation(timestamp: 5, states: visibleSamples(), pose: movedPose)))
+        XCTAssertTrue(coordinator.processRevealObservation(observation(timestamp: 6, states: visibleSamples(), pose: movedPose)))
     }
 
-    func test_invalidProjectionDoesNotConsumeVisibleFrameAfterBlock() {
+    func test_invalidSampleDoesNotCountAsAVisibleFrame() {
         let coordinator = RealityHideARView.Coordinator(
             meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
-            visualController: RealityPigVisualController.makeForTesting()
+            visualController: RealityPigVisualController.makeForTesting(),
+            monotonicNow: { 0 }
         )
         coordinator.acceptHideTarget(destination: SIMD3(0, 0, -2), initialPosition: SIMD3(0, 0, -0.8))
-        coordinator.processHideArrival(meshDistance: 1, pigDistance: 2)
         let blockedPose = RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
-        let movedPose = RealityCameraPose(position: SIMD3(0.15, 0, 0), forward: SIMD3(0, 0, -1))
+        let movedPose = RealityCameraPose(position: SIMD3(0.16, 0, 0), forward: SIMD3(0, 0, -1))
+        recordStableHide(in: coordinator, referencePose: blockedPose)
 
-        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: true, meshDistance: 1, pigDistance: 2, cameraPose: blockedPose))
-        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: false, meshDistance: nil, pigDistance: 2, cameraPose: movedPose))
-        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: true, meshDistance: nil, pigDistance: 2, cameraPose: movedPose))
-        XCTAssertTrue(coordinator.processRevealFrame(isObservationValid: true, meshDistance: nil, pigDistance: 2, cameraPose: movedPose))
+        XCTAssertFalse(coordinator.processRevealObservation(observation(timestamp: 3, states: invalidSamples(), pose: movedPose)))
+        XCTAssertFalse(coordinator.processRevealObservation(observation(timestamp: 4, states: visibleSamples(), pose: movedPose)))
+        XCTAssertTrue(coordinator.processRevealObservation(observation(timestamp: 5, states: visibleSamples(), pose: movedPose)))
     }
 
     func test_projectionGateRequiresOnscreenPointAndPigInFrontOfCamera() {
@@ -200,7 +216,9 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
         let coordinator = RealityHideARView.Coordinator(
             meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
             visualController: visualController,
+            monotonicNow: { 0 },
             onTargetAccepted: { events.append("accepted") },
+            onMovementFinished: { events.append("moved") },
             onPigReachedTarget: { events.append("reached") },
             onRevealed: { revealCount += 1 }
         )
@@ -215,9 +233,8 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
         XCTAssertEqual(visualController.worldPosition.y, 0, accuracy: 0.0001)
         XCTAssertEqual(events, ["accepted"])
         let blockedPose = RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
-        let movedPose = RealityCameraPose(position: SIMD3(0.15, 0, 0), forward: SIMD3(0, 0, -1))
-        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: true, meshDistance: 0.5, pigDistance: 2, cameraPose: blockedPose))
-        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: true, meshDistance: nil, pigDistance: 2, cameraPose: movedPose))
+        let movedPose = RealityCameraPose(position: SIMD3(0.16, 0, 0), forward: SIMD3(0, 0, -1))
+        XCTAssertFalse(coordinator.processRevealObservation(observation(timestamp: 1, states: visibleSamples(), pose: movedPose)))
         XCTAssertEqual(revealCount, 0)
 
         let runningLoad = pendingLoads.removeFirst()
@@ -228,14 +245,13 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
         let idleLoad = pendingLoads.removeFirst()
         XCTAssertEqual(idleLoad.asset, "Piggy")
         idleLoad.completion(.success(ModelEntity(mesh: .generateBox(size: 0.3))))
-        XCTAssertEqual(events, ["accepted"])
+        XCTAssertEqual(events, ["accepted", "moved"])
 
-        coordinator.processHideArrival(meshDistance: 0.5, pigDistance: 2)
-        XCTAssertEqual(events, ["accepted", "reached"])
+        recordStableHide(in: coordinator, referencePose: blockedPose)
+        XCTAssertEqual(events, ["accepted", "moved", "reached"])
 
-        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: true, meshDistance: 0.5, pigDistance: 2, cameraPose: blockedPose))
-        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: true, meshDistance: nil, pigDistance: 2, cameraPose: movedPose))
-        XCTAssertTrue(coordinator.processRevealFrame(isObservationValid: true, meshDistance: nil, pigDistance: 2, cameraPose: movedPose))
+        XCTAssertFalse(coordinator.processRevealObservation(observation(timestamp: 3, states: visibleSamples(), pose: movedPose)))
+        XCTAssertTrue(coordinator.processRevealObservation(observation(timestamp: 4, states: visibleSamples(), pose: movedPose)))
         XCTAssertEqual(revealCount, 0)
         let surprisedLoad = pendingLoads.removeFirst()
         XCTAssertEqual(surprisedLoad.asset, "Piggy_surprised")
@@ -297,20 +313,20 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
         let coordinator = RealityHideARView.Coordinator(
             meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
             visualController: visualController,
+            monotonicNow: { 0 },
             onRevealed: { revealCount += 1 },
             onError: { errorCount += 1 }
         )
         coordinator.acceptHideTarget(destination: SIMD3(0, 0, -1), initialPosition: SIMD3(0, 0, -0.2))
         loader.succeedNext()
         loader.succeedNext()
-        coordinator.processHideArrival(meshDistance: 0.5, pigDistance: 2)
-        XCTAssertEqual(coordinator.status, .hidden)
         let blockedPose = RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
-        let movedPose = RealityCameraPose(position: SIMD3(0.15, 0, 0), forward: SIMD3(0, 0, -1))
+        let movedPose = RealityCameraPose(position: SIMD3(0.16, 0, 0), forward: SIMD3(0, 0, -1))
+        recordStableHide(in: coordinator, referencePose: blockedPose)
+        XCTAssertEqual(coordinator.status, .hidden)
 
-        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: true, meshDistance: 0.5, pigDistance: 2, cameraPose: blockedPose))
-        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: true, meshDistance: nil, pigDistance: 2, cameraPose: movedPose))
-        XCTAssertTrue(coordinator.processRevealFrame(isObservationValid: true, meshDistance: nil, pigDistance: 2, cameraPose: movedPose))
+        XCTAssertFalse(coordinator.processRevealObservation(observation(timestamp: 3, states: visibleSamples(), pose: movedPose)))
+        XCTAssertTrue(coordinator.processRevealObservation(observation(timestamp: 4, states: visibleSamples(), pose: movedPose)))
         XCTAssertEqual(coordinator.status, .revealing)
         loader.failNext()
 
@@ -318,9 +334,8 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
         XCTAssertTrue(visualController.outerEntity.isEnabled)
         XCTAssertEqual(revealCount, 0)
         XCTAssertEqual(errorCount, 1)
-        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: true, meshDistance: 0.5, pigDistance: 2, cameraPose: blockedPose))
-        XCTAssertFalse(coordinator.processRevealFrame(isObservationValid: true, meshDistance: nil, pigDistance: 2, cameraPose: movedPose))
-        XCTAssertTrue(coordinator.processRevealFrame(isObservationValid: true, meshDistance: nil, pigDistance: 2, cameraPose: movedPose))
+        XCTAssertFalse(coordinator.processRevealObservation(observation(timestamp: 5, states: visibleSamples(), pose: movedPose)))
+        XCTAssertTrue(coordinator.processRevealObservation(observation(timestamp: 6, states: visibleSamples(), pose: movedPose)))
     }
 
     func test_hideMovementDoesNotReachTheTargetUntilMeshOcclusionIsVerified() {
@@ -328,6 +343,7 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
         let coordinator = RealityHideARView.Coordinator(
             meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
             visualController: RealityPigVisualController.makeForTesting(),
+            monotonicNow: { 0 },
             onPigReachedTarget: { reachedCount += 1 }
         )
 
@@ -335,17 +351,83 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
             destination: SIMD3(0, 0, -1),
             initialPosition: SIMD3(0, 0, -0.44)
         )
-        coordinator.processHideArrival(meshDistance: nil, pigDistance: 1)
+        _ = coordinator.processHideObservation(observation(
+            timestamp: 1,
+            states: visibleSamples(),
+            pose: RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
+        ), now: 0.1)
 
         XCTAssertEqual(reachedCount, 0)
-        XCTAssertEqual(coordinator.status, .walking)
+        XCTAssertEqual(coordinator.status, .verifyingOcclusion)
     }
 
-    func test_verifiedHideArrivalReachesTheTargetOnce() {
+    func test_centerOnlyOcclusionCannotCompleteHideVerification() {
         var reachedCount = 0
         let coordinator = RealityHideARView.Coordinator(
             meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
             visualController: RealityPigVisualController.makeForTesting(),
+            monotonicNow: { 0 },
+            onPigReachedTarget: { reachedCount += 1 }
+        )
+        let pose = RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
+        let centerOnly: [PigOcclusionSampleID: OcclusionSampleState] = [
+            .center: .blocked,
+            .top: .visible,
+            .bottom: .visible,
+            .left: .visible,
+            .right: .visible
+        ]
+
+        _ = coordinator.acceptHideTarget(
+            destination: SIMD3(0, 0, -1),
+            initialPosition: SIMD3(0, 0, -0.44)
+        )
+
+        XCTAssertEqual(coordinator.processHideObservation(
+            observation(timestamp: 1, states: centerOnly, pose: pose),
+            now: 0.1
+        ), .waiting)
+        XCTAssertEqual(coordinator.processHideObservation(
+            observation(timestamp: 2, states: centerOnly, pose: pose),
+            now: 0.2
+        ), .waiting)
+        XCTAssertEqual(coordinator.status, .verifyingOcclusion)
+        XCTAssertEqual(reachedCount, 0)
+    }
+
+    func test_duplicateFrameTimestampCannotCompleteStableHide() {
+        let coordinator = RealityHideARView.Coordinator(
+            meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
+            visualController: RealityPigVisualController.makeForTesting(),
+            monotonicNow: { 0 }
+        )
+        let pose = RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
+        _ = coordinator.acceptHideTarget(
+            destination: SIMD3(0, 0, -1),
+            initialPosition: SIMD3(0, 0, -0.44)
+        )
+
+        XCTAssertEqual(coordinator.processHideObservation(
+            observation(timestamp: 1, states: hiddenSamples(), pose: pose),
+            now: 0.1
+        ), .waiting)
+        XCTAssertEqual(coordinator.processHideObservation(
+            observation(timestamp: 1, states: hiddenSamples(), pose: pose),
+            now: 0.2
+        ), .waiting)
+        XCTAssertEqual(coordinator.status, .verifyingOcclusion)
+        XCTAssertEqual(coordinator.processHideObservation(
+            observation(timestamp: 2, states: hiddenSamples(), pose: pose),
+            now: 0.3
+        ), .hidden(referencePose: pose))
+    }
+
+    func test_twoUniqueFourOfFiveOccludedFramesReachTheTargetOnce() {
+        var reachedCount = 0
+        let coordinator = RealityHideARView.Coordinator(
+            meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
+            visualController: RealityPigVisualController.makeForTesting(),
+            monotonicNow: { 0 },
             onPigReachedTarget: { reachedCount += 1 }
         )
 
@@ -353,8 +435,19 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
             destination: SIMD3(0, 0, -1),
             initialPosition: SIMD3(0, 0, -0.44)
         )
-        coordinator.processHideArrival(meshDistance: 0.7, pigDistance: 1)
-        coordinator.processHideArrival(meshDistance: 0.7, pigDistance: 1)
+        let pose = RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
+        XCTAssertEqual(coordinator.processHideObservation(
+            observation(timestamp: 1, states: hiddenSamples(), pose: pose),
+            now: 0.1
+        ), .waiting)
+        XCTAssertEqual(coordinator.processHideObservation(
+            observation(timestamp: 2, states: hiddenSamples(), pose: pose),
+            now: 0.2
+        ), .hidden(referencePose: pose))
+        XCTAssertEqual(coordinator.processHideObservation(
+            observation(timestamp: 3, states: hiddenSamples(), pose: pose),
+            now: 0.3
+        ), .waiting)
 
         XCTAssertEqual(reachedCount, 1)
         XCTAssertEqual(coordinator.status, .hidden)
@@ -363,9 +456,14 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
     func test_unoccludedHideReturnsToTargetSelectionAfterBoundedRetries() {
         let visualController = RealityPigVisualController.makeForTesting()
         var messages: [String] = []
+        var retryCount = 0
+        var exhaustedCount = 0
         let coordinator = RealityHideARView.Coordinator(
             meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
             visualController: visualController,
+            monotonicNow: { 0 },
+            onOcclusionRetryStarted: { retryCount += 1 },
+            onOcclusionExhausted: { exhaustedCount += 1 },
             onMessage: { messages.append($0) }
         )
 
@@ -373,12 +471,18 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
             destination: SIMD3(0, 0, -1),
             initialPosition: SIMD3(0, 0, -0.44)
         )
-        coordinator.processHideArrival(meshDistance: nil, pigDistance: 1)
-        coordinator.processHideArrival(meshDistance: nil, pigDistance: 1)
-        coordinator.processHideArrival(meshDistance: nil, pigDistance: 1)
+        XCTAssertTrue(coordinator.processOcclusionDeadline(now: 1.5))
+        XCTAssertEqual(coordinator.currentHideAttempt?.retryCount, 1)
+        XCTAssertEqual(coordinator.currentHideAttempt?.destination.z ?? .nan, -1.18, accuracy: 0.0001)
+        XCTAssertTrue(coordinator.processOcclusionDeadline(now: 1.5))
+        XCTAssertEqual(coordinator.currentHideAttempt?.retryCount, 2)
+        XCTAssertEqual(coordinator.currentHideAttempt?.destination.z ?? .nan, -1.36, accuracy: 0.0001)
+        XCTAssertTrue(coordinator.processOcclusionDeadline(now: 1.5))
 
         XCTAssertEqual(coordinator.status, .waitingForTarget)
         XCTAssertFalse(visualController.outerEntity.isEnabled)
+        XCTAssertEqual(retryCount, 2)
+        XCTAssertEqual(exhaustedCount, 1)
         XCTAssertEqual(messages, [RealityAvailabilityMessage.scanFirst])
     }
 
@@ -386,7 +490,8 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
         let visualController = RealityPigVisualController.makeForTesting()
         let coordinator = RealityHideARView.Coordinator(
             meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
-            visualController: visualController
+            visualController: visualController,
+            monotonicNow: { 0 }
         )
         let region = RealityFloorRegion(
             anchorIdentifier: UUID(uuidString: "12345678-1234-1234-1234-123456789ABC")!,
@@ -402,11 +507,115 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
             retreatDirection: SIMD3(0, 0, -1),
             floorRegion: region
         ))
-        coordinator.processHideArrival(meshDistance: nil, pigDistance: 1)
+        XCTAssertTrue(coordinator.processOcclusionDeadline(now: 1.5))
 
         XCTAssertEqual(coordinator.status, .waitingForTarget)
         XCTAssertEqual(visualController.worldPosition, acceptedDestination)
         XCTAssertFalse(visualController.outerEntity.isEnabled)
+    }
+
+    func test_restartCreatesExactlyOneFreshCycleAndDetachesThePreviousPig() {
+        let firstVisual = RealityPigVisualController.makeForTesting()
+        let coordinator = RealityHideARView.Coordinator(
+            meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
+            visualController: firstVisual,
+            visualControllerFactory: { RealityPigVisualController.makeForTesting() },
+            monotonicNow: { 0 }
+        )
+
+        coordinator.acceptHideTarget(destination: SIMD3(0, 0, -1), initialPosition: SIMD3(0, 0, -0.4))
+        let firstAnchor = coordinator.currentPigAnchorIdentifier
+        coordinator.restartHideCycle()
+
+        XCTAssertFalse(coordinator.hasActiveHideCycle)
+        XCTAssertFalse(firstVisual.outerEntity.isEnabled)
+        XCTAssertEqual(coordinator.status, .waitingForTarget)
+
+        coordinator.acceptHideTarget(destination: SIMD3(0, 0, -1.2), initialPosition: SIMD3(0, 0, -0.6))
+
+        XCTAssertTrue(coordinator.hasActiveHideCycle)
+        XCTAssertNotEqual(coordinator.currentPigAnchorIdentifier, firstAnchor)
+        XCTAssertEqual(coordinator.cycleCreationCount, 2)
+    }
+
+    func test_verifiedHideRestartAndStopCancelTheirAttemptDeadlines() {
+        let scheduler = TrackingRealityDeadlineScheduler()
+        let coordinator = RealityHideARView.Coordinator(
+            meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
+            visualController: RealityPigVisualController.makeForTesting(),
+            visualControllerFactory: { RealityPigVisualController.makeForTesting() },
+            deadlineScheduler: scheduler,
+            monotonicNow: { 0 }
+        )
+        let pose = RealityCameraPose(position: .zero, forward: SIMD3(0, 0, -1))
+
+        _ = coordinator.acceptHideTarget(
+            destination: SIMD3(0, 0, -1),
+            initialPosition: SIMD3(0, 0, -0.4)
+        )
+        XCTAssertEqual(scheduler.scheduleCount, 1)
+        recordStableHide(in: coordinator, referencePose: pose)
+        XCTAssertEqual(scheduler.cancelCount, 1)
+
+        coordinator.restartHideCycle()
+        _ = coordinator.acceptHideTarget(
+            destination: SIMD3(0, 0, -1.2),
+            initialPosition: SIMD3(0, 0, -0.6)
+        )
+        XCTAssertEqual(scheduler.scheduleCount, 2)
+        coordinator.restartHideCycle()
+        XCTAssertEqual(scheduler.cancelCount, 2)
+
+        _ = coordinator.acceptHideTarget(
+            destination: SIMD3(0, 0, -1.4),
+            initialPosition: SIMD3(0, 0, -0.8)
+        )
+        XCTAssertEqual(scheduler.scheduleCount, 3)
+        coordinator.stop()
+        XCTAssertEqual(scheduler.cancelCount, 3)
+        XCTAssertFalse(coordinator.hasActiveHideCycle)
+    }
+
+    func test_lateAssetCompletionFromRestartedCycleCannotAdvanceTheNewCycle() {
+        typealias Completion = (Result<Entity, Error>) -> Void
+        var firstLoads: [(String, Completion)] = []
+        var secondLoads: [(String, Completion)] = []
+        let firstVisual = RealityPigVisualController.makeForTesting { asset, completion in
+            firstLoads.append((asset, completion))
+            return nil
+        }
+        let secondVisual = RealityPigVisualController.makeForTesting { asset, completion in
+            secondLoads.append((asset, completion))
+            return nil
+        }
+        var movementCount = 0
+        let coordinator = RealityHideARView.Coordinator(
+            meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
+            visualController: firstVisual,
+            visualControllerFactory: { secondVisual },
+            monotonicNow: { 0 },
+            onMovementFinished: { movementCount += 1 }
+        )
+
+        _ = coordinator.acceptHideTarget(
+            destination: SIMD3(0, 0, -1),
+            initialPosition: SIMD3(0, 0, -0.4)
+        )
+        let staleRunningCompletion = firstLoads.removeFirst().1
+        coordinator.restartHideCycle()
+        _ = coordinator.acceptHideTarget(
+            destination: SIMD3(0, 0, -1.2),
+            initialPosition: SIMD3(0, 0, -0.6)
+        )
+
+        staleRunningCompletion(.success(ModelEntity(mesh: .generateBox(size: 0.3))))
+        XCTAssertEqual(movementCount, 0)
+        XCTAssertEqual(coordinator.status, .walking)
+
+        secondLoads.removeFirst().1(.success(ModelEntity(mesh: .generateBox(size: 0.3))))
+        secondLoads.removeFirst().1(.success(ModelEntity(mesh: .generateBox(size: 0.3))))
+        XCTAssertEqual(movementCount, 1)
+        XCTAssertEqual(coordinator.status, .verifyingOcclusion)
     }
 }
 
@@ -435,6 +644,38 @@ private final class ControlledRealityEntityLoader {
 }
 
 private struct TestRealityEntityLoadError: Error {}
+
+@MainActor
+private final class TrackingRealityDeadlineScheduler: RealityDeadlineScheduling {
+    private(set) var scheduleCount = 0
+    private(set) var cancelCount = 0
+
+    func schedule<Owner: AnyObject>(
+        _ deadline: RealityDeadline,
+        owner: Owner,
+        operation: @escaping @MainActor (Owner) -> Void
+    ) -> any RealityDeadlineCancellable {
+        scheduleCount += 1
+        return TrackingRealityDeadlineCancellation { [weak self] in
+            self?.cancelCount += 1
+        }
+    }
+}
+
+@MainActor
+private final class TrackingRealityDeadlineCancellation: RealityDeadlineCancellable {
+    private var onCancel: (() -> Void)?
+
+    init(onCancel: @escaping () -> Void) {
+        self.onCancel = onCancel
+    }
+
+    func cancel() {
+        let onCancel = onCancel
+        self.onCancel = nil
+        onCancel?()
+    }
+}
 
 @MainActor
 private extension RealityHideARView.Coordinator {
@@ -478,5 +719,62 @@ private func makeHidePlan(
             center: .zero,
             extent: SIMD2(10, 10)
         )
+    )
+}
+
+private func observation(
+    timestamp: TimeInterval,
+    states: [PigOcclusionSampleID: OcclusionSampleState],
+    pose: RealityCameraPose?
+) -> RealityOcclusionObservation {
+    RealityOcclusionObservation(
+        frameTimestamp: timestamp,
+        samples: states,
+        cameraPose: pose
+    )
+}
+
+private func hiddenSamples() -> [PigOcclusionSampleID: OcclusionSampleState] {
+    [
+        .center: .blocked,
+        .top: .blocked,
+        .bottom: .blocked,
+        .left: .blocked,
+        .right: .visible
+    ]
+}
+
+private func visibleSamples() -> [PigOcclusionSampleID: OcclusionSampleState] {
+    Dictionary(uniqueKeysWithValues: PigOcclusionSampleID.allCases.map { ($0, .visible) })
+}
+
+private func invalidSamples() -> [PigOcclusionSampleID: OcclusionSampleState] {
+    Dictionary(uniqueKeysWithValues: PigOcclusionSampleID.allCases.map { ($0, .invalid) })
+}
+
+@MainActor
+private func recordStableHide(
+    in coordinator: RealityHideARView.Coordinator,
+    referencePose: RealityCameraPose,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) {
+    XCTAssertEqual(
+        coordinator.processHideObservation(
+            observation(timestamp: 1, states: hiddenSamples(), pose: referencePose),
+            now: 0.1
+        ),
+        .waiting,
+        file: file,
+        line: line
+    )
+    XCTAssertEqual(
+        coordinator.processHideObservation(
+            observation(timestamp: 2, states: hiddenSamples(), pose: referencePose),
+            now: 0.2
+        ),
+        .hidden(referencePose: referencePose),
+        file: file,
+        line: line
     )
 }

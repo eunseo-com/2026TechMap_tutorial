@@ -33,6 +33,7 @@ enum RealityProjectionGate {
 enum RealityHideARStatus: Equatable {
     case waitingForTarget
     case walking
+    case verifyingOcclusion
     case hidden
     case revealing
     case revealed
@@ -115,6 +116,9 @@ struct RealityHideARView: UIViewRepresentable {
     let interactionMode: RealityHideInteractionMode
     let onScanningReady: () -> Void
     let onTargetAccepted: () -> Void
+    let onMovementFinished: () -> Void
+    let onOcclusionRetryStarted: () -> Void
+    let onOcclusionExhausted: () -> Void
     let onPigReachedTarget: () -> Void
     let onRevealed: () -> Void
     let onError: () -> Void
@@ -125,6 +129,9 @@ struct RealityHideARView: UIViewRepresentable {
         interactionMode: RealityHideInteractionMode = .preparing,
         onScanningReady: @escaping () -> Void,
         onTargetAccepted: @escaping () -> Void,
+        onMovementFinished: @escaping () -> Void = {},
+        onOcclusionRetryStarted: @escaping () -> Void = {},
+        onOcclusionExhausted: @escaping () -> Void = {},
         onPigReachedTarget: @escaping () -> Void,
         onRevealed: @escaping () -> Void,
         onError: @escaping () -> Void,
@@ -134,6 +141,9 @@ struct RealityHideARView: UIViewRepresentable {
         self.interactionMode = interactionMode
         self.onScanningReady = onScanningReady
         self.onTargetAccepted = onTargetAccepted
+        self.onMovementFinished = onMovementFinished
+        self.onOcclusionRetryStarted = onOcclusionRetryStarted
+        self.onOcclusionExhausted = onOcclusionExhausted
         self.onPigReachedTarget = onPigReachedTarget
         self.onRevealed = onRevealed
         self.onError = onError
@@ -147,6 +157,9 @@ struct RealityHideARView: UIViewRepresentable {
             interactionMode: interactionMode,
             onScanningReady: onScanningReady,
             onTargetAccepted: onTargetAccepted,
+            onMovementFinished: onMovementFinished,
+            onOcclusionRetryStarted: onOcclusionRetryStarted,
+            onOcclusionExhausted: onOcclusionExhausted,
             onPigReachedTarget: onPigReachedTarget,
             onRevealed: onRevealed,
             onError: onError,
@@ -173,10 +186,43 @@ struct RealityHideARView: UIViewRepresentable {
 
     @MainActor
     final class Coordinator: NSObject {
+        @MainActor
+        private final class HideCycle {
+            let generation: Int
+            let anchor: AnchorEntity
+            let visualController: RealityPigVisualController
+            var attachmentGate = RealityPigSceneAttachmentGate()
+            var attempt: RealityHideAttempt
+            var hideMonitor: StableHideMonitor?
+            var revealMonitor: RealityRevealMonitor?
+            var revealReferencePose: RealityCameraPose?
+            var observationSubscription: (any Cancellable)?
+            var deadline: (any RealityDeadlineCancellable)?
+
+            init(
+                generation: Int,
+                plan: RealityHidePlan,
+                visualController: RealityPigVisualController
+            ) {
+                self.generation = generation
+                self.attempt = RealityHideAttempt(plan: plan)
+                self.visualController = visualController
+                anchor = AnchorEntity(world: .zero)
+                anchor.addChild(visualController.outerEntity)
+            }
+        }
+
         private let meshSupport: any RealityMeshSupporting
-        private let visualController: RealityPigVisualController
+        private let observationProvider: any RealityOcclusionObservationProviding
+        private let deadlineScheduler: any RealityDeadlineScheduling
+        private let monotonicNow: @MainActor () -> TimeInterval
+        private let visualControllerFactory: @MainActor () -> RealityPigVisualController
+        private var seededVisualController: RealityPigVisualController?
         private let onScanningReady: () -> Void
         private let onTargetAccepted: () -> Void
+        private let onMovementFinished: () -> Void
+        private let onOcclusionRetryStarted: () -> Void
+        private let onOcclusionExhausted: () -> Void
         private let onPigReachedTarget: () -> Void
         private let onRevealed: () -> Void
         private let onError: () -> Void
@@ -184,19 +230,24 @@ struct RealityHideARView: UIViewRepresentable {
         private let onMessage: (String) -> Void
 
         private weak var arView: ARView?
-        private var revealMonitor = RealityRevealMonitor()
-        private var revealSubscription: (any Cancellable)?
         private var environmentReadiness = RealityEnvironmentReadiness()
         private var scanningSubscription: (any Cancellable)?
-        private var pigAnchor: AnchorEntity?
-        private var pigSceneAttachment = RealityPigSceneAttachmentGate()
-        private var hideAttempt: RealityHideAttempt?
+        private var cycle: HideCycle?
+        private weak var tapRecognizer: UITapGestureRecognizer?
         private var hasAttachedToARView = false
         private var didReceiveCameraFrame = false
 
         private(set) var didStartMeshSession = false
         private(set) var status = RealityHideARStatus.waitingForTarget
+        private(set) var cycleGeneration = 0
+        private(set) var cycleCreationCount = 0
         var interactionMode: RealityHideInteractionMode
+
+        var hasActiveHideCycle: Bool { cycle != nil }
+        var currentPigAnchorIdentifier: ObjectIdentifier? {
+            cycle.map { ObjectIdentifier($0.anchor) }
+        }
+        var currentHideAttempt: RealityHideAttempt? { cycle?.attempt }
 
         var canStartMeshSession: Bool {
             meshSupport.supportsMeshWithClassification
@@ -205,9 +256,16 @@ struct RealityHideARView: UIViewRepresentable {
         init(
             meshSupport: any RealityMeshSupporting,
             visualController: RealityPigVisualController? = nil,
+            visualControllerFactory: (@MainActor () -> RealityPigVisualController)? = nil,
+            observationProvider: (any RealityOcclusionObservationProviding)? = nil,
+            deadlineScheduler: (any RealityDeadlineScheduling)? = nil,
+            monotonicNow: (@MainActor () -> TimeInterval)? = nil,
             interactionMode: RealityHideInteractionMode = .preparing,
             onScanningReady: @escaping () -> Void = {},
             onTargetAccepted: @escaping () -> Void = {},
+            onMovementFinished: @escaping () -> Void = {},
+            onOcclusionRetryStarted: @escaping () -> Void = {},
+            onOcclusionExhausted: @escaping () -> Void = {},
             onPigReachedTarget: @escaping () -> Void = {},
             onRevealed: @escaping () -> Void = {},
             onError: @escaping () -> Void = {},
@@ -215,10 +273,17 @@ struct RealityHideARView: UIViewRepresentable {
             onMessage: @escaping (String) -> Void = { _ in }
         ) {
             self.meshSupport = meshSupport
-            self.visualController = visualController ?? RealityPigVisualController()
+            self.seededVisualController = visualController
+            self.visualControllerFactory = visualControllerFactory ?? { RealityPigVisualController() }
+            self.observationProvider = observationProvider ?? RealityOcclusionObservationProvider()
+            self.deadlineScheduler = deadlineScheduler ?? RealityDeadlineScheduler()
+            self.monotonicNow = monotonicNow ?? { ProcessInfo.processInfo.systemUptime }
             self.interactionMode = interactionMode
             self.onScanningReady = onScanningReady
             self.onTargetAccepted = onTargetAccepted
+            self.onMovementFinished = onMovementFinished
+            self.onOcclusionRetryStarted = onOcclusionRetryStarted
+            self.onOcclusionExhausted = onOcclusionExhausted
             self.onPigReachedTarget = onPigReachedTarget
             self.onRevealed = onRevealed
             self.onError = onError
@@ -232,17 +297,10 @@ struct RealityHideARView: UIViewRepresentable {
             self.arView = arView
             guard startMeshSessionIfSupported(in: arView) else { return }
 
-            let anchor = AnchorEntity(world: .zero)
-            anchor.addChild(visualController.outerEntity)
-            pigAnchor = anchor
-            visualController.loadIdlePig { [weak self] result in
-                guard case .failure = result else { return }
-                self?.reportVisualFailure(recoveringTo: .waitingForTarget)
-            }
-
             let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
             tap.numberOfTouchesRequired = 1
             arView.addGestureRecognizer(tap)
+            tapRecognizer = tap
             beginScanningReadiness(in: arView)
         }
 
@@ -268,36 +326,29 @@ struct RealityHideARView: UIViewRepresentable {
         }
 
         @discardableResult
-        func processRevealFrame(
-            isObservationValid: Bool,
-            meshDistance: Float?,
-            pigDistance: Float,
-            cameraPose: RealityCameraPose
-        ) -> Bool {
-            guard status == .hidden else {
-                return false
-            }
-            guard isObservationValid else {
-                processInvalidRevealObservation()
-                return false
-            }
-            guard
-                  revealMonitor.update(
-                    meshDistance: meshDistance,
-                    pigDistance: pigDistance,
-                    cameraPose: cameraPose
-                  ) else {
+        func processRevealObservation(_ observation: RealityOcclusionObservation) -> Bool {
+            guard status == .hidden,
+                  let cycle,
+                  var revealMonitor = cycle.revealMonitor else {
                 return false
             }
 
+            let didReveal = revealMonitor.update(observation)
+            cycle.revealMonitor = revealMonitor
+            guard didReveal else { return false }
+
             status = .revealing
-            revealSubscription?.cancel()
-            revealSubscription = nil
-            visualController.showSurprised { [weak self] result in
-                guard let self, self.status == .revealing else { return }
+            cycle.observationSubscription?.cancel()
+            cycle.observationSubscription = nil
+            let generation = cycle.generation
+            cycle.visualController.showSurprised { [weak self] result in
+                guard let self,
+                      self.isCurrentCycle(generation),
+                      self.status == .revealing,
+                      let cycle = self.cycle else { return }
                 switch result {
                 case .success:
-                    self.visualController.playSurpriseScale()
+                    cycle.visualController.playSurpriseScale()
                     self.status = .revealed
                     self.onRevealed()
                 case .failure:
@@ -334,103 +385,215 @@ struct RealityHideARView: UIViewRepresentable {
         @discardableResult
         func acceptHideTarget(plan: RealityHidePlan) -> Bool {
             guard status == .waitingForTarget else { return false }
-            if let arView, let pigAnchor,
-               pigSceneAttachment.consumeIfReady(hasAcceptedTarget: true) {
-                arView.scene.addAnchor(pigAnchor)
+            let cycle = makeCycle(plan: plan)
+            self.cycle = cycle
+            if let arView,
+               cycle.attachmentGate.consumeIfReady(hasAcceptedTarget: true) {
+                arView.scene.addAnchor(cycle.anchor)
             }
             status = .walking
-            hideAttempt = RealityHideAttempt(plan: plan)
-            visualController.outerEntity.setPosition(plan.start, relativeTo: nil)
-            visualController.outerEntity.isEnabled = true
+            cycle.visualController.outerEntity.setPosition(plan.start, relativeTo: nil)
+            cycle.visualController.outerEntity.isEnabled = true
             onTargetAccepted()
-            walkPiggy(to: plan.destination)
+            walkPiggy(to: plan.destination, generation: cycle.generation)
             return true
         }
 
-        func processHideArrival(meshDistance: Float?, pigDistance: Float) {
-            guard status == .walking, let hideAttempt else { return }
-            switch RealityHideVerificationPolicy.decide(
-                meshDistance: meshDistance,
-                pigDistance: pigDistance,
-                attempt: hideAttempt
-            ) {
-            case .hidden:
-                self.hideAttempt = nil
-                status = .hidden
-                onPigReachedTarget()
-                if let arView {
-                    beginRevealMonitoring(in: arView)
-                }
-            case let .retry(nextAttempt):
-                self.hideAttempt = nextAttempt
-                walkPiggy(to: nextAttempt.destination)
-            case .selectAnotherTarget:
-                recoverFromUnverifiedHide()
+        @discardableResult
+        func processHideObservation(
+            _ observation: RealityOcclusionObservation,
+            now: TimeInterval
+        ) -> StableHideMonitorUpdate {
+            guard status == .verifyingOcclusion,
+                  let cycle,
+                  var monitor = cycle.hideMonitor else {
+                return .waiting
             }
+
+            let update = monitor.update(observation, now: now)
+            cycle.hideMonitor = monitor
+            switch update {
+            case .waiting:
+                break
+            case let .hidden(referencePose):
+                completeStableHide(referencePose: referencePose, generation: cycle.generation)
+            case .exhausted:
+                handleHideExhaustion(generation: cycle.generation)
+            }
+            return update
         }
 
-        private func walkPiggy(to destination: SIMD3<Float>) {
-            visualController.walk(to: destination) { [weak self] result in
-                guard let self else { return }
+        @discardableResult
+        func processOcclusionDeadline(now: TimeInterval) -> Bool {
+            guard status == .verifyingOcclusion,
+                  let cycle,
+                  var monitor = cycle.hideMonitor else { return false }
+            let update = monitor.deadlineElapsed(at: now)
+            cycle.hideMonitor = monitor
+            guard update == .exhausted else { return false }
+            handleHideExhaustion(generation: cycle.generation)
+            return true
+        }
+
+        func restartHideCycle() {
+            teardownCurrentCycle()
+            status = .waitingForTarget
+        }
+
+        private func makeCycle(plan: RealityHidePlan) -> HideCycle {
+            cycleGeneration += 1
+            cycleCreationCount += 1
+            let visualController: RealityPigVisualController
+            if let seededVisualController {
+                visualController = seededVisualController
+                self.seededVisualController = nil
+            } else {
+                visualController = visualControllerFactory()
+            }
+            return HideCycle(
+                generation: cycleGeneration,
+                plan: plan,
+                visualController: visualController
+            )
+        }
+
+        private func walkPiggy(to destination: SIMD3<Float>, generation: Int) {
+            guard isCurrentCycle(generation), let cycle else { return }
+            cycle.visualController.walk(to: destination) { [weak self] result in
+                guard let self, self.isCurrentCycle(generation) else { return }
                 switch result {
                 case .success:
-                    self.verifyHideAfterWalking()
+                    self.onMovementFinished()
+                    self.beginHideVerification(generation: generation)
                 case .failure:
                     self.reportVisualFailure(recoveringTo: .waitingForTarget)
                 }
             }
         }
 
-        private func verifyHideAfterWalking() {
-            guard status == .walking else {
-                return
+        private func beginHideVerification(generation: Int) {
+            guard status == .walking,
+                  isCurrentCycle(generation),
+                  let cycle else { return }
+            status = .verifyingOcclusion
+            let startTime = monotonicNow()
+            cycle.hideMonitor = StableHideMonitor(startTime: startTime)
+            cycle.deadline?.cancel()
+            cycle.deadline = deadlineScheduler.schedule(
+                .occlusionObservation,
+                owner: self
+            ) { owner in
+                guard owner.isCurrentCycle(generation) else { return }
+                _ = owner.processOcclusionDeadline(now: owner.monotonicNow())
             }
-            // Unit tests exercise the verification decision directly without an ARView.
-            // A live AR session without a current frame cannot verify occlusion, so it
-            // returns to target selection instead of leaving the pig in `.walking`.
-            guard let arView else { return }
-            guard let cameraTransform = arView.session.currentFrame?.camera.transform else {
+            if let arView {
+                beginOcclusionMonitoring(in: arView, generation: generation, phase: .hide)
+            }
+        }
+
+        private func completeStableHide(
+            referencePose: RealityCameraPose,
+            generation: Int
+        ) {
+            guard isCurrentCycle(generation), let cycle else { return }
+            cycle.deadline?.cancel()
+            cycle.deadline = nil
+            cycle.observationSubscription?.cancel()
+            cycle.observationSubscription = nil
+            cycle.hideMonitor = nil
+            cycle.revealReferencePose = referencePose
+            cycle.revealMonitor = RealityRevealMonitor(referencePose: referencePose)
+            status = .hidden
+            onPigReachedTarget()
+            if let arView {
+                beginOcclusionMonitoring(in: arView, generation: generation, phase: .reveal)
+            }
+        }
+
+        private func handleHideExhaustion(generation: Int) {
+            guard isCurrentCycle(generation), let cycle else { return }
+            cycle.deadline?.cancel()
+            cycle.deadline = nil
+            cycle.observationSubscription?.cancel()
+            cycle.observationSubscription = nil
+            cycle.hideMonitor = nil
+
+            guard let nextAttempt = RealityHideVerificationPolicy.nextAttempt(after: cycle.attempt) else {
+                onOcclusionExhausted()
                 recoverFromUnverifiedHide()
                 return
             }
-            let pigPosition = visualController.worldPosition
-            let screenPoint = arView.project(pigPosition)
-            guard RealityProjectionGate.canObserve(
-                projectedPoint: screenPoint,
-                viewportBounds: arView.bounds,
-                pigPosition: pigPosition,
-                cameraTransform: cameraTransform
-            ), let screenPoint else {
-                recoverFromUnverifiedHide()
-                return
-            }
-            let cameraPosition = Self.position(from: cameraTransform)
-            let meshDistance = arView.hitTest(
-                screenPoint,
-                query: .nearest,
-                mask: .sceneUnderstanding
-            ).first.map { simd_distance(cameraPosition, $0.position) }
-            processHideArrival(
-                meshDistance: meshDistance,
-                pigDistance: simd_distance(cameraPosition, pigPosition)
-            )
+            cycle.attempt = nextAttempt
+            status = .walking
+            onOcclusionRetryStarted()
+            walkPiggy(to: nextAttempt.destination, generation: generation)
         }
 
         private func recoverFromUnverifiedHide() {
-            hideAttempt = nil
-            revealMonitor = RealityRevealMonitor()
+            teardownCurrentCycle()
             status = .waitingForTarget
-            visualController.outerEntity.isEnabled = false
             onMessage(RealityAvailabilityMessage.scanFirst)
         }
 
+        private func teardownCurrentCycle() {
+            cycleGeneration += 1
+            guard let cycle else { return }
+            cycle.deadline?.cancel()
+            cycle.deadline = nil
+            cycle.observationSubscription?.cancel()
+            cycle.observationSubscription = nil
+            cycle.visualController.cancelPendingWork()
+            cycle.visualController.outerEntity.isEnabled = false
+            cycle.anchor.removeFromParent()
+            self.cycle = nil
+        }
+
+        private func isCurrentCycle(_ generation: Int) -> Bool {
+            cycleGeneration == generation && cycle?.generation == generation
+        }
+
         func stop() {
-            revealSubscription?.cancel()
-            revealSubscription = nil
             scanningSubscription?.cancel()
             scanningSubscription = nil
+            if let tapRecognizer {
+                arView?.removeGestureRecognizer(tapRecognizer)
+            }
+            teardownCurrentCycle()
+            arView?.session.delegate = nil
             arView?.session.pause()
+            arView = nil
             didStartMeshSession = false
+            hasAttachedToARView = false
+        }
+
+        private enum OcclusionMonitoringPhase {
+            case hide
+            case reveal
+        }
+
+        private func beginOcclusionMonitoring(
+            in arView: ARView,
+            generation: Int,
+            phase: OcclusionMonitoringPhase
+        ) {
+            guard isCurrentCycle(generation), let cycle else { return }
+            cycle.observationSubscription?.cancel()
+            cycle.observationSubscription = arView.scene.subscribe(to: SceneEvents.Update.self) { [weak self, weak arView] _ in
+                guard let self,
+                      let arView,
+                      self.isCurrentCycle(generation),
+                      let cycle = self.cycle,
+                      let observation = self.observationProvider.makeObservation(
+                        in: arView,
+                        pigEntity: cycle.visualController.outerEntity
+                      ) else { return }
+                switch phase {
+                case .hide:
+                    _ = self.processHideObservation(observation, now: self.monotonicNow())
+                case .reveal:
+                    _ = self.processRevealObservation(observation)
+                }
+            }
         }
 
         private func startMeshSessionIfSupported(in arView: ARView) -> Bool {
@@ -507,15 +670,21 @@ struct RealityHideARView: UIViewRepresentable {
         }
 
         private func reportVisualFailure(recoveringTo recoveryStatus: RealityHideARStatus) {
-            status = recoveryStatus
-            revealMonitor = RealityRevealMonitor()
             if recoveryStatus == .waitingForTarget {
-                hideAttempt = nil
-                visualController.outerEntity.isEnabled = false
-            } else if recoveryStatus == .hidden {
-                visualController.outerEntity.isEnabled = true
+                teardownCurrentCycle()
+                status = .waitingForTarget
+            } else if recoveryStatus == .hidden,
+                      let cycle,
+                      let referencePose = cycle.revealReferencePose {
+                status = .hidden
+                cycle.visualController.outerEntity.isEnabled = true
+                cycle.revealMonitor = RealityRevealMonitor(referencePose: referencePose)
                 if let arView {
-                    beginRevealMonitoring(in: arView)
+                    beginOcclusionMonitoring(
+                        in: arView,
+                        generation: cycle.generation,
+                        phase: .reveal
+                    )
                 }
             }
             onError()
@@ -559,60 +728,6 @@ struct RealityHideARView: UIViewRepresentable {
                 }
                 self.processScanningObservation(hasMesh: hasMesh, hasFloor: hasFloor)
             }
-        }
-
-        private func beginRevealMonitoring(in arView: ARView) {
-            revealMonitor = RealityRevealMonitor()
-            revealSubscription?.cancel()
-            revealSubscription = arView.scene.subscribe(to: SceneEvents.Update.self) { [weak self, weak arView] _ in
-                guard let self, let arView else { return }
-                self.evaluateReveal(in: arView)
-            }
-        }
-
-        private func evaluateReveal(in arView: ARView) {
-            let pigPosition = visualController.worldPosition
-            guard let cameraTransform = arView.session.currentFrame?.camera.transform else {
-                processInvalidRevealObservation()
-                return
-            }
-            let screenPoint = arView.project(pigPosition)
-            guard RealityProjectionGate.canObserve(
-                projectedPoint: screenPoint,
-                viewportBounds: arView.bounds,
-                pigPosition: pigPosition,
-                cameraTransform: cameraTransform
-            ), let screenPoint else {
-                processInvalidRevealObservation()
-                return
-            }
-
-            let cameraPosition = Self.position(from: cameraTransform)
-            let cameraForward = -SIMD3(
-                cameraTransform.columns.2.x,
-                cameraTransform.columns.2.y,
-                cameraTransform.columns.2.z
-            )
-            let meshDistance = arView.hitTest(
-                screenPoint,
-                query: .nearest,
-                mask: .sceneUnderstanding
-            ).first.map { simd_distance(cameraPosition, $0.position) }
-            let pigDistance = simd_distance(cameraPosition, pigPosition)
-            processRevealFrame(
-                isObservationValid: true,
-                meshDistance: meshDistance,
-                pigDistance: pigDistance,
-                cameraPose: RealityCameraPose(
-                    position: cameraPosition,
-                    forward: cameraForward
-                )
-            )
-        }
-
-        private func processInvalidRevealObservation() {
-            guard status == .hidden else { return }
-            revealMonitor.recordInvalidObservation()
         }
 
         private static func position(from transform: simd_float4x4) -> SIMD3<Float> {
