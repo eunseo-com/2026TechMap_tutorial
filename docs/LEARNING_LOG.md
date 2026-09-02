@@ -28,6 +28,18 @@
 
 ## 항목
 
+### L-20260903-149 — Swift 6 strict test compile에 RealityKit 헬퍼 격리 경고가 남음
+
+- 상태: 해결
+- 발생 태스크: Task 9 Swift 6 준비 — test helper isolation 정리
+- 재현: `xcodebuild -quiet -project PiggyEscape/PiggyEscape.xcodeproj -scheme PiggyEscape -destination 'generic/platform=iOS' -derivedDataPath /tmp/piggyescape-task9-controller-swift6-20260903 CODE_SIGNING_ALLOWED=NO SWIFT_VERSION=6 SWIFT_STRICT_CONCURRENCY=complete build-for-testing`을 실행한다.
+- 관찰: build-for-testing은 exit 0이었지만 `RealityPigVisualControllerTests.swift`의 `makeFiniteCrossAxisOverflowModel`, `makeLargeFiniteAnisotropicTransformModel`, `completePoseLoad`가 RealityKit의 main actor-isolated 생성·프로퍼티·메서드를 nonisolated 전역 함수에서 사용한다는 경고를 출력했다.
+- 영향: production 동작과 strict gate 성공에는 영향이 없지만 테스트 bundle이 Swift 6에서 경고 없이 준비됐다고 말할 수 없다.
+- 원인/가설: 테스트 클래스와 호출 지점은 `@MainActor`인데 세 전역 helper만 격리 표기가 빠져 호출 대상 RealityKit API의 actor 계약이 함수 시그니처에 보존되지 않았다.
+- 조치: 세 helper에 `@MainActor`를 명시하고 production 코드나 테스트 의미는 변경하지 않는다.
+- 검증: 서로 다른 새 DerivedData에서 Swift 6 strict와 Swift 5 generic iPhoneOS `build-for-testing`이 모두 exit 0이었다. 세 helper의 actor-isolation 경고는 다시 출력되지 않았고, 남은 출력은 Xcode가 목적지 선택과 무관하게 초기화하는 CoreSimulator service 및 로컬 provisioning profile 환경 진단뿐이었다.
+- 배운 점: actor-isolated 테스트 클래스 밖으로 RealityKit fixture 생성을 분리할 때 helper 자체에도 같은 격리 계약을 표기한다.
+
 ### L-20260903-148 — paired·DDI-ready 실기기도 현재 passcodeRequired면 XCTest를 시작하지 않음
 
 - 상태: 실기기 대기

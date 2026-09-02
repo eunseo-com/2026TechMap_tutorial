@@ -184,6 +184,7 @@ final class RealityPigVisualControllerTests: XCTestCase {
     }
 }
 
+@MainActor
 private func makeFiniteCrossAxisOverflowModel() -> Entity {
     let container = Entity()
     let offset = Float.greatestFiniteMagnitude * 0.75
@@ -195,12 +196,14 @@ private func makeFiniteCrossAxisOverflowModel() -> Entity {
     return container
 }
 
+@MainActor
 private func makeLargeFiniteAnisotropicTransformModel() -> Entity {
     let model = ModelEntity(mesh: .generateBox(width: 1e-30, height: 0.2, depth: 0.09))
     model.scale.x = Float.greatestFiniteMagnitude * 0.75
     return model
 }
 
+@MainActor
 private func completePoseLoad(
     _ load: (asset: String, completion: (Result<Entity, Error>) -> Void)
 ) {
