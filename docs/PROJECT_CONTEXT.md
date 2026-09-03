@@ -1,61 +1,45 @@
-# 프로젝트 공통 컨텍스트
+# 프로젝트 컨텍스트
 
-> 이 문서는 Claude와 Codex가 공유하는 작업 시작점이다. 중요한 결정을 바꾸면 관련 설계·계획 문서와 함께 갱신한다.
+> 이 문서는 저장소를 함께 다루는 작업자의 공통 시작점이다. 로컬 대화 기록이 아니라, 이 문서와 `docs/WORK_LOG.md`·설계·실행 계획의 Git 추적 상태를 기준으로 작업한다.
 
-## 프로젝트 목표
+## 현재 승인 범위
 
-`2026TechMap_tutorial`은 SceneKit에서 RealityKit으로 넘어가는 이유를 기능 목록이 아니라 이야기형 DocC 튜토리얼로 체험하게 하는 프로젝트다. 개발자가 만든 닫힌 SceneKit 세계에 갇힌 돼지 캐릭터가 현실 공간으로 탈출해 숨바꼭질하는 과정으로, **선언한 것만 존재하는 가짜 세계**와 **실측한 공간을 읽는 세계**의 차이를 보여준다.
+- 범위: 사용자가 Chapter 2–4 확장을 승인했다. 최종 범위는 **C3 SceneKit 닫힌 세계 → RealityKit 현실 준비 → 실제 물체 뒤 숨기·이동 재발견 → SceneKit/RealityKit 비교·완료**의 네 챕터다.
+- 상세 기준: 사용자가 [4개 챕터 완성 설계](superpowers/specs/2026-08-29-four-chapter-experience-and-docc-design.md)를 승인했다. 구현은 이 설계와 [4개 챕터 실행 계획](superpowers/plans/2026-08-29-four-chapter-experience-and-docc-implementation.md)의 테스트·커밋 순서를 따른다.
+- 기준선: 기존 방·가짜 소파 구현은 SceneKit 개념을 설명하는 참고 예제로 보존한다. 실행 앱의 Chapter 1은 현재 C3 섬·기존 나무·돼지 경험을 기준으로 한다.
+- 진입 화면: `ContentView`는 `EscapeRootView` 하나를 시작한다. Chapter 2와 3은 같은 `RealityHideARView`·AR session을 유지하고 Chapter 4에서 정리한다.
+- 공개 문서: 저장소 루트 `Tutorials/SceneKitToRealityKit.docc`를 유일한 공개 DocC 원본으로 통합하고, `scripts/build-docc-site.sh`와 Pages 파이프라인으로 기준 URL의 네 챕터를 앱 구현과 동기화한다.
+- 제외: 금융 상태, SwiftData 저장, 용돈·작은 돼지, WatchConnectivity, Watch UI, 물체 의미 자동 분류, LiDAR 미지원 기기의 가짜 오클루전.
 
-## 읽기 우선순위
+## 경험 계약
 
-1. 이 문서 — 현재 범위, 환경, 협업 규칙
-2. `씬킷에서_리얼리티킷으로_컨셉노트.md` — 전체 이야기와 기술적 의도
-3. `DocC_튜토리얼_구조화_프롬프트.md` — 4개 챕터의 DocC 구조
-4. `docs/superpowers/specs/2026-08-10-ch1-scenekit-closed-world-design.md` — Chapter 1의 승인된 설계
-5. `docs/superpowers/plans/2026-08-10-ch1-closed-world-implementation.md` — Chapter 1의 구현·검증·커밋 순서
+1. **Chapter 1**: SceneKit C3 섬에서 나레이션 뒤 돼지를 탭하면 기존 나무 뒤로 걷고, 도착 0.40초 뒤 자동으로 한 번 발견된다. 0.70초 페이드 뒤 Chapter 2로 전환한다.
+2. **Chapter 2**: 카메라 권한과 LiDAR 지원을 확인하고, 유효한 `ARView`에서 최소 한 개의 mesh와 최소 한 개의 분류된 floor를 모두 관찰한다. 준비 완료 CTA 전에는 실제 물체 선택 탭을 받지 않는다.
+3. **Chapter 3**: 높이 0.18m의 돼지를 카메라에서 0.90m 이상 떨어진 세로 물체 뒤로 이동한다. 현재 카메라 기준 중심·상·하·좌·우 다섯 점 중 중심을 포함한 네 점이 서로 다른 AR frame의 연속 두 관찰에서 실제 mesh에 가려진 뒤에만 찾기 안내를 표시한다.
+4. 사용자가 최초 가림 pose에서 0.15m 이상 이동하거나 15° 이상 회전한 이력을 만든 뒤, 중심을 포함한 세 점이 서로 다른 AR frame의 연속 두 관찰에서 보일 때 한 번 발견한다. 이후 같은 AR session에서 다시 숨기거나 Chapter 4로 진행한다.
+5. **Chapter 4**: 세계·좌표·앞뒤 관계·책임 구조의 네 축으로 SceneKit과 RealityKit을 비교하고 완료 또는 replay를 제공한다.
 
-서로 상충하면 더 구체적이고 최근인 설계/계획 문서를 우선하고, 판단이 필요한 변경은 문서로 남긴다.
+정확한 상태 전이·수치·오류·DocC·검증 경계는 승인된 [4개 챕터 완성 설계](superpowers/specs/2026-08-29-four-chapter-experience-and-docc-design.md)를 최우선으로 한다. 이전 설계는 변경 이유와 구현 이력을 확인하는 참고 문서로 유지한다.
 
-## 현재 진행 상태
+## 시작 순서와 협업 규칙
 
-- GitHub 기본 브랜치 `main`을 기준으로 작업한다. 시작할 때마다 원격 변경을 가져와 최신 커밋을 확인한다.
-- Chapter 1의 설계와 8개 태스크 구현 계획은 커밋되어 있다.
-- GitHub Pages용 DocC 카탈로그는 `https://eunseo-com.github.io/2026TechMap_tutorial/`에 배포한다. 문서 콘텐츠는 C3 월드에서 실제 RealityKit 숨기까지 진행한 별도 Xcode 작업본의 코드를 대조해 4개 챕터로 확장했다.
-- 이 저장소의 앱 구현 승인 범위는 계속 Chapter 1이다. DocC의 Chapter 2–4는 확인한 C3→RealityKit 실험 흐름을 설명하는 학습 문서이며, 이 저장소에서 새 앱 구현을 승인한다는 뜻은 아니다.
-- 카메라 권한과 AR 카메라 배경은 실기기에서 관찰했지만, Chapter 3의 실제 가구 메쉬 가림·사용자 이동 뒤 재발견은 LiDAR 지원 실기기에서 최종 수동 검증이 필요하다.
-- GitHub 위키(SceneKit, RealityKit, 비교와 마이그레이션, 실기기 카메라 진단)의 참고 표·체크리스트·진단 기록을 DocC Article 4개(`Tutorials/SceneKitToRealityKit.docc/Articles/`)로 옮기고, 각 챕터 본문과 `@Resources`에서 연결했다. 근거는 `docs/superpowers/specs/2026-08-19-wiki-reference-articles-design.md`. 로컬 `docc convert`/`docc preview`로 링크 해석과 렌더링을 확인했으며, `main` 푸시에 따른 실제 GitHub Pages 배포는 아직 하지 않았다.
+1. 이 문서
+2. `docs/WORK_LOG.md`
+3. `씬킷에서_리얼리티킷으로_컨셉노트.md` (현재 브랜치에 없으면 부재 사실을 `docs/LEARNING_LOG.md`에 기록하고 승인된 설계 명세를 대체 근거로 사용)
+4. 관련 설계 명세와 실행 계획
 
-## Chapter 1: ClosedWorld
+구현 전에는 `git fetch --prune origin`, `git status --short` 순서로 상태를 확인한다. 권한·환경 문제로 명령이 실패하면 재시도나 보류 전에 `docs/LEARNING_LOG.md`에 재현·관찰·영향을 기록한다. 다른 작업자가 만들었거나 추적하지 않은 파일은 요청 없이 이동·삭제·스테이징하지 않는다.
 
-목표는 SceneKit의 두 가지 ‘닫힘’을 설명보다 체험으로 보여주는 것이다.
+의사결정, 검증 결과, 남은 위험, 다음 시작점은 `docs/WORK_LOG.md`에 결과물과 같은 커밋으로 기록한다. 실패·예상 밖 동작·실기기 한계는 `docs/LEARNING_LOG.md`에 남긴다. `.claude/`와 대용량 C3 참고 사본은 로컬 참고물이며 추적하지 않는다.
 
-1. 존재 범위: 코드로 선언한 방·바닥·가짜 소파만 있고, 실제 방의 물체는 이 세계에 존재하지 않는다.
-2. 구조 방식: 생김새·물리·행동이 `SCNNode` 트리에 함께 붙는 구조를 살펴본다.
+커밋·PR에는 작업자·도구·모델·AI 생성 표기와 `Co-Authored-By`를 넣지 않는다. 생성된 Xcode 프로젝트, DerivedData, `/tmp` 산출물은 추적하지 않는다.
 
-구현은 SwiftUI의 `UIViewRepresentable` 안에 `SCNView`를 배치한다. Tuist 프로젝트에는 앱과 XCTest 타깃을 두고, 방·돼지·가짜 소파·이동 액션·노드 탐구 코드는 뷰와 분리해 단위 테스트한다. 마지막에는 Chapter 1용 DocC 카탈로그를 같은 타깃에 추가한다.
+## 검증 상태
 
-재사용이 승인된 로컬 원본은 `C3_Piggy` 프로젝트의 `Piggy.usdc`, `Ground_Color.usdc`, `Wood_Color.usdc` 및 로더 패턴이다. 이 자산을 실제 프로젝트에 복사하는 정확한 시점과 방법은 Chapter 1 구현 계획의 Task 2를 따른다. 벽은 의도적으로 `SCNBox`로 직접 만든다.
+- 자동 검증: 현재 worktree에는 정적 집계상 190개 XCTest가 있다. `2c4d854` 기준 physical focused 4/4와 full suite 186/186은 exit 0으로 통과했다. 이후 Chapter 1 Reduce Motion 2개와 C3 cancellation handle의 compile-time Sendable·실제 coordinator deinit 취소 회귀 2개를 추가했다. 현재 Swift 5와 Swift 6 strict의 fresh generic iPhoneOS `build-for-testing`은 모두 exit 0이지만, 최신 read-only 잠금 상태가 `passcodeRequired: true`라 새 4개를 포함한 runtime은 이번 범위에서 0건이다. Task 9의 UI test target·launch fixture·XCUITest는 명시적 no-Simulator 범위에 따라 계속 보류한다.
+- 언어 모드: 프로젝트 설정은 Swift 5를 유지한다. `C3AutoDiscoveryCancellable`이 checked `Sendable` 계약을 가지며 immutable `Task<Void, Never>` production wrapper와 nonisolated `deinit` 정리를 함께 보존한다. 2026-09-03 fresh generic iPhoneOS Swift 6 strict app·unit-test bundle compile/link가 exit 0이므로 이 preparation diagnostic은 닫혔지만 프로젝트 언어 모드를 Swift 6으로 전환한 것은 아니다.
+- 실기기 검증: 최신 read-only 확인은 paired physical iPhone 16 Pro(iPhone17,1), iOS 26.6, Developer Mode·DDI usable을 확인했지만 현재 `passcodeRequired: true`다. 잠금 우회 없이 focused 실행을 생략했으므로 이번 Task 9 runtime은 0건이며, 기준 186/186만 유효하다. 사용자 상호작용이나 capture가 없으므로 visual/LiDAR acceptance는 주장하지 않는다. 카메라 권한·Settings 복구, 0.18m 크기, 다섯 점 LiDAR mesh 가림, 0.15m/15° 이동 재발견, replay와 증거 스크린샷은 여전히 `실기기 대기`다.
 
-## 확인된 개발 환경
+## C3 참고 원본
 
-| 항목 | 확인값 |
-| --- | --- |
-| Xcode | 26.6 (17F113) |
-| Swift | 6.3.3 |
-| Tuist | 4.200.5 |
-| iOS 배포 타깃 | 17.0 |
-| 검증 대상 | iPhone 17 Pro Simulator |
-
-Simulator에는 `iPhone 17 Pro` 기기가 설치되어 있다. ARKit 기반 Chapter 3의 실제 오클루전 검증은 LiDAR 탑재 실기기가 추가로 필요할 수 있으므로, 현 단계에서 시뮬레이터 통과를 실기기 검증으로 간주하지 않는다.
-
-## GitHub 중심 협업 방식
-
-- 다음 작업자가 알아야 할 목표, 결정, 제약, 진행 상태는 이 저장소의 Markdown으로 남긴다.
-- 작업을 시작할 때 `git fetch --prune origin`, `git status --short`를 실행한다. 현재 작업과 무관한 변경은 보존한다.
-- 구현은 Chapter 1 계획의 Task 1부터 순서대로 진행하며, 각 태스크에서 테스트/빌드 증거를 확인한 뒤 별도 커밋한다.
-- 커밋 메시지에는 AI 생성 표기와 `Co-Authored-By` 트레일러를 넣지 않는다.
-- Apple 샘플 사본, 브라우저 저장본, `.claude/` 활동 로그는 로컬 참고물이라 커밋하지 않는다. 거기서 확인한 내용이 프로젝트 의사결정에 영향을 주면 이 문서나 설계 문서에 요약한다.
-
-## 다음 시작점
-
-Chapter 1 구현을 요청받으면 `docs/superpowers/plans/2026-08-10-ch1-closed-world-implementation.md`의 **Task 1: Tuist project scaffold**부터 시작한다. Task 1이 완료되기 전에는 에셋, SceneKit 로직, DocC 본문을 추가하지 않는다.
+`/Users/yang-eunseo/Downloads/C3_Piggy/C3_Piggy`의 월드 표현을 참고했다. 지정된 C3 에셋은 바이트 변경 없이 앱 리소스에 두며, 재사용 범위는 섬·나무·돼지 포즈·궤도 카메라·조명·장식 배치다. 금융과 Watch 기능은 의도적으로 가져오지 않는다.

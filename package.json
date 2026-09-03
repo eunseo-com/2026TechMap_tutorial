@@ -1,0 +1,15 @@
+{
+  "name": "2026-tech-map-tutorial-verification",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test:docc-browser": "node --test --test-concurrency=1 scripts/tests/verify-docc-browser-contract.test.mjs",
+    "verify:docc-browser": "node scripts/verify-docc-browser.mjs"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "playwright": "1.62.1"
+  }
+}

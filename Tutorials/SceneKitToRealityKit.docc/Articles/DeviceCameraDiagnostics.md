@@ -1,60 +1,71 @@
-# 실기기 카메라 진단 — 검은 화면 기록
+# 실기기 카메라 진단 — 레이아웃, 세션과 준비 상태 분리
 
-@Metadata {
-    @TechnologyRoot
-}
+이 문서는 Chapter 2의 카메라 배경 문제를 조사하며 확인한 수명 경계를 기록한다. 과거 한 실기기에서 관찰한 검은 화면을 모든 기기의 보편적 원인으로 확대하지 않고, 다시 확인할 수 있는 진단 순서만 남긴다.
 
-Chapter 2의 "ARView가 실제 화면을 얻은 뒤 세션 시작하기" 절이 요약한 진단 과정을, 실패 기록 형식 그대로 자세히 남긴다.
+## 관찰한 증상과 범위
 
-## 증상
+한 iPhone 16 Pro 환경에서 C3 장면 뒤 카메라 권한을 허용했지만 안내 아래의 `ARView` 배경이 검게 남은 적이 있었다. 당시 변경을 한 항목씩 분리한 결과, AR configuration 옵션보다 내부 view의 layout, session 시작과 content attachment 순서가 문제 경계를 설명했다.
 
-iPhone 16 Pro 실기기에서 C3 월드를 통과해 현실 공간으로 전환한 뒤, 카메라 권한을 허용하면 안내 문구는 나타났지만 `ARView`의 카메라 배경이 계속 검게 멈춰 있었다. 사용자는 실제 공간을 전혀 볼 수 없었다.
+이 기록은 해당 재현의 결론이다. OS·기기·권한·tracking 상태가 다른 검은 화면까지 같은 원인이라고 단정하지 않는다.
 
-## 진단 원칙
+## 먼저 구분할 네 상태
 
-증상을 재현할 때마다 한 번에 하나의 변수만 바꾸고, 바꾼 뒤에도 증상이 그대로면 그 항목을 원인 후보에서 제외했다. 새 코드를 추가해 증상이 사라지는 것과, 기존 코드에서 원인을 제거해 증상이 사라지는 것을 구분해서 기록했다.
+| 상태 | 확인할 사실 |
+| --- | --- |
+| 카메라 권한 | authorized인지, denied/restricted인지 |
+| view layout | 내부 `ARView`가 window에 붙고 bounds가 비어 있지 않은지 |
+| session 시작 | valid layout 뒤 한 generation에서 한 번 시작했는지 |
+| 환경 준비 | 실제 mesh와 classified horizontal floor를 모두 관찰했는지 |
 
-## 무엇이 원인이 아니었나
+세션 시작은 환경 readiness 준비 완료와 동일하지 않다. camera frame이 들어와도 mesh나 floor가 아직 하나뿐이면 Chapter 2의 준비 상태를 유지한다.
 
-아래 7가지를 순서대로 배제했다. 각 항목을 수정하거나 되돌려도 검은 화면은 그대로였다.
+유효한 layout과 non-empty bounds를 확인한 뒤 session을 시작한다. 이후 mesh 그리고 classified floor를 모두 관찰해야 ready가 된다.
 
-1. 수동 `ARWorldTrackingConfiguration` 설정값
-2. LiDAR 장면 재구성·장면 이해(scene understanding) 옵션
-3. 수평·수직 평면 감지 옵션
-4. AR 세션 델리게이트 구현
-5. SwiftUI `UIViewRepresentable` 컨테이너 구조
-6. 비동기 USD 에셋 로딩 타이밍
-7. 충돌 형상(collision shape) 생성 로직
+## 현재 코드가 강제하는 순서
 
-## 확인된 문제 경계
+1. SwiftUI가 Reality container를 표시한다.
+2. container가 `layoutSubviews`에서 내부 `ARView`의 frame을 확정한다.
+3. window가 있고 width·height가 0보다 클 때 session start gate를 한 번 연다.
+4. scanning 중에는 pig anchor를 attach하지 않는다.
+5. mesh와 classified floor를 모두 관찰하면 one-shot ready를 알린다.
+6. 사용자가 CTA를 누르면 같은 view·session으로 Chapter 3에 들어간다.
+7. Chapter 3에서 실제 surface hit, 거리와 floor region이 모두 유효한 target을 수락한 뒤에만 cycle anchor를 attach한다.
 
-**스캔 단계에서, 사용자가 실제 오브젝트를 선택하기 전에 돼지 컨트롤러 Entity를 씬에 결합하면 검은 화면이 발생한다.** 즉 문제는 AR 설정값이 아니라 "내부 `ARView`가 창에 붙어 유효한 크기를 얻기 전에" 콘텐츠 결합과 세션 시작이 함께 일어나는 순서에 있었다.
+이 순서는 session configuration, readiness와 hide content의 수명을 분리한다. 새 target을 받을 때마다 session을 다시 시작하지 않는다.
 
-## 바꾼 방식
+## 검은 화면을 좁히는 질문
 
-1. 내부 `ARView`가 윈도우에 부착되고 유효한 frame 크기를 가진 뒤에만 AR 세션을 시작한다.
-2. 스캔 진행 중에는 돼지의 월드 앵커를 씬에 추가하지 않는다.
-3. 사용자가 실제 오브젝트의 유효한 면을 탭한 뒤에만 앵커를 추가한다.
-4. 앵커가 씬에 결합된 뒤에만 돼지의 위치를 계산한다.
+1. 권한 상태가 `.authorized`인가?
+2. `ARView.window`가 존재하고 bounds가 유효한가?
+3. session 시작 callback이 같은 generation에서 중복되지 않았는가?
+4. tracking interruption 또는 session failure가 전달되었는가?
+5. scanning 전에 pig anchor나 model load를 시작하지 않았는가?
+6. Chapter 전환으로 Reality subtree가 의도치 않게 다시 만들어지지 않았는가?
 
-`RealityHideARView`가 `layoutSubviews`에서 frame을 먼저 확정한 뒤 시작 조건을 검사하는 구조가 이 순서를 코드로 강제한다.
+각 질문을 한 번에 하나씩 확인한다. scene reconstruction이나 plane detection을 끄고 화면이 바뀌었다는 사실만으로 원인을 확정하지 않는다.
 
-## 재발 방지 규칙
+## 표시와 상태가 어긋날 때
 
-- AR 세션은 뷰가 실제 크기를 가진 뒤에만 시작한다. 뷰 생성 시점과 세션 시작 시점을 같은 코드 블록에 두지 않는다.
-- 스캔 단계와 앵커 결합 단계를 상태로 명확히 분리하고, 스캔 중에는 가상 콘텐츠를 씬에 추가하지 않는다.
-- 검은 화면 증상이 재현되면 AR 설정값을 먼저 의심하지 말고, 뷰 생명주기와 세션 시작 순서부터 확인한다.
+- camera 배경은 보이지만 mesh 표시가 없다면 scene reconstruction 지원과 실제 주변 스캔을 확인한다.
+- `showSceneUnderstanding` mesh는 보이지만 ready가 아니라면 “바닥” 진행이 완료되었는지 확인한다.
+- ready인데 CTA 전 tap이 target을 만든다면 interaction mode가 `.preparing`인지 확인한다.
+- CTA 뒤에도 mesh debug가 화면을 덮는다면 Chapter 3 전환에서 debug option을 제거했는지 확인한다.
+- accepted hit marker가 엉뚱한 곳에 보인다면 marker 입력이 실제 accepted surface position인지 확인한다.
 
-## 남은 실기기 확인
+## 실기기 대기
 
-- [ ] 돼지 스케일이 선택한 실제 오브젝트 크기와 자연스럽게 맞는지
-- [ ] 카메라 반대편으로 걸어가는 애니메이션이 매끄러운지
-- [ ] 메쉬 오클루전이 트리거될 때 안내 문구가 함께 나오는지
-- [ ] 사용자가 한 번 더 움직였을 때 재발견 시퀀스가 한 번만 실행되는지
+다음 항목은 source 구조만으로 완료 처리하지 않는다.
 
-이 항목들은 시뮬레이터로 대체 검증할 수 없으며, LiDAR 지원 실기기에서 직접 관찰해야 한다.
+- [ ] 실제 camera 배경과 tracking interruption·복귀
+- [ ] 실제 `showSceneUnderstanding` mesh와 classified floor 진행
+- [ ] ready one-shot 피드백과 accepted hit marker 위치
+- [ ] 실제 floor fit, 0.18m 크기와 0.90m target 거리
+- [ ] 물리적 occlusion·reveal과 다시 숨기기 lifecycle
+
+이 항목은 LiDAR 지원 실기기에서 관찰하기 전까지 모두 실기기 대기다. 이번 최신 변경 검증에서는 Simulator runtime을 실행하지 않았으며 generic iPhoneOS build도 camera·mesh 동작 증거가 아니다.
 
 ## 관련 문서
 
 - <doc:02-OpeningTheDoor>
+- <doc:03-RealHideAndSeek>
 - <doc:RealityKitECS>

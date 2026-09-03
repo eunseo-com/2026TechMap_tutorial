@@ -1,98 +1,94 @@
-# RealityKit 심화 — ECS, 앵커, 실제 환경의 기준
+# RealityKit 심화 — 관찰, Entity와 cycle의 책임
 
-@Metadata {
-    @TechnologyRoot
-}
+Chapter 2·3은 ARKit이 관찰한 현실 공간을 RealityKit 표현과 게임 규칙에 연결한다. “RealityKit이 현실을 자동으로 안다”라고 뭉뚱그리지 않고, 센서 관찰·렌더링·순수 정책·수명 관리의 책임을 나누어 읽어야 한다.
 
-Chapter 2·3에서 사용한 Entity-Component-System 구조와 앵커링을 참고용으로 자세히 정리한다.
+## ARKit과 RealityKit의 역할 분담
 
-## RealityKit을 한 문장으로 읽기
+| 계층 | 이 프로젝트에서 맡는 일 |
+| --- | --- |
+| ARKit | camera frame·pose, plane anchor, `ARMeshAnchor`, tracking과 session 상태를 만든다 |
+| RealityKit | `ARView`에서 Entity를 렌더링하고 collision·occlusion·scene-understanding 결과를 사용한다 |
+| 순수 정책 | floor region, scale, 다섯 sample, hide/reveal 판정을 프레임워크 호출 없이 계산한다 |
+| coordinator | session, 입력 mode, hide cycle, deadline, callback generation을 연결하고 정리한다 |
 
-RealityKit은 애니메이션·물리·오디오·상호작용을 가진 모델을 렌더링하되, 그 구성을 Entity-Component-System(ECS) 패턴으로 조립하고, ARKit이 관찰한 실제 공간에 결과를 고정하는 엔진이다.
+ARKit의 mesh classification도 관찰 결과일 뿐, 앱이 보지 않은 물체 종류를 발명하지 않는다. Chapter 2의 화면은 실제 `showSceneUnderstanding` mesh와 mesh/floor 진행만 표시하며 관찰에서 오지 않은 사각 외곽선이나 물체 이름을 만들지 않는다.
 
-## Entity, Component, System을 구분하기
+요약하면 ARKit은 camera, plane, mesh observation을 만들고 RealityKit은 그 결과를 표시와 상호작용에 사용한다.
 
-| 개념 | 역할 | 흔한 오해 |
-| --- | --- | --- |
-| `Entity` | 씬에 존재하는 대상 그 자체. 이름·자식 계층만 가질 뿐 기능은 없다 | Entity 자체에 로직이 있다고 생각하기 쉽지만, 로직은 System에 있다 |
-| `Component` | Entity에 붙는 데이터 조각(위치, 모델, 충돌 형태 등) | Component가 스스로 행동한다고 착각하기 쉽지만, Component는 데이터만 들고 있다 |
-| `System` | 특정 Component 조합을 가진 모든 Entity를 매 프레임 순회하며 규칙을 적용 | System이 한 Entity에만 묶여 있다고 생각하기 쉽지만, System은 조건에 맞는 모든 대상에 동시에 작동한다 |
+## Entity, Component, System
 
-## Component로 기능을 조합하는 예시
-
-```swift
-let pig = ModelEntity(mesh: .generateBox(size: 0.1))
-pig.components.set(CollisionComponent(shapes: [.generateBox(size: [0.1, 0.1, 0.1])]))
-pig.components.set(PhysicsBodyComponent(massProperties: .default, material: nil, mode: .dynamic))
-```
-
-같은 `ModelEntity`에 `CollisionComponent`와 `PhysicsBodyComponent`를 각각 붙이면, 모양·충돌·물리가 서로 독립된 데이터로 존재한다. 하나를 빼도 나머지는 그대로 남는다 — SceneKit의 `SCNNode`가 모든 것을 한 번에 들고 있는 것과 대비된다.
-
-## System: 여러 대상에 같은 규칙을 적용하기
-
-Xcode의 Apple Pyro Panda RealityKit 샘플이 보여주는 패턴처럼, "이 대상이 특정 행동을 할 수 있다"는 사실은 Component에 데이터로 남기고, 그 데이터를 가진 모든 Entity를 매 프레임 갱신하는 일은 System이 맡는다.
+RealityKit의 Entity는 계층 안의 대상이고, Component는 그 대상의 데이터와 능력을 조합한다. System은 특정 Component 조건을 만족하는 Entity를 scene update마다 처리한다.
 
 ```swift
+import RealityKit
+
 struct RunAwayComponent: Component {
-    var targetDistance: Float
+    var speed: Float
 }
 
 struct RunAwaySystem: System {
     static let query = EntityQuery(where: .has(RunAwayComponent.self))
 
+    init(scene: RealityKit.Scene) {}
+
     func update(context: SceneUpdateContext) {
-        context.scene.performQuery(Self.query).forEach { entity in
-            // targetDistance를 읽어 매 프레임 위치를 갱신한다
+        for entity in context.scene.performQuery(Self.query) {
+            guard let runAway = entity.components[RunAwayComponent.self] else { continue }
+            entity.position.z -= runAway.speed * Float(context.deltaTime)
         }
     }
 }
 ```
 
-Entity는 "달릴 수 있다"는 데이터만 가지고, System은 그 데이터를 가진 모든 대상을 한 번에 처리한다. 이 프로젝트의 `RealityRevealMonitor`가 가림 상태를 관찰하는 방식도 같은 원리를 따른다 — 하나의 거대한 객체가 모든 일을 직접 처리하지 않는다.
+이 예제는 실제 Component/System 경계다. 반면 앱의 `RealityHidePlanner`, `StableHideMonitor`, `RealityRevealMonitor`는 테스트 가능한 Swift 정책 타입이고 RealityKit `System`이 아니다. coordinator가 scene update에서 observation을 전달한다고 해서 정책 타입의 정체가 System으로 바뀌지는 않는다.
 
-## 앵커: 가상 좌표계를 실제 환경의 기준에 붙이기
+## 준비 완료와 anchor 부착을 분리하기
 
-`AnchorEntity`는 가상 콘텐츠의 원점을 실제 공간의 특정 기준(평면, 이미지, 얼굴, 월드 원점 등)에 붙인다.
+Chapter 2에서 session을 시작했다고 돼지를 바로 붙이지 않는다.
 
-```swift
-let anchor = AnchorEntity(.plane(.horizontal, classification: .floor,
-                                  minimumBounds: SIMD2<Float>(0.2, 0.2)))
-anchor.addChild(pig)
-```
+1. 내부 `ARView`가 window와 유효한 bounds를 얻은 뒤 session을 한 번 시작한다.
+2. 최소 한 mesh와 최소 한 classified horizontal floor를 관찰해 mesh AND floor readiness를 만족한다.
+3. 첫 준비 완료를 한 번 알리고 “숨바꼭질 시작” CTA를 연다.
+4. CTA 뒤에도 같은 `ARView`와 같은 AR session을 유지하며 Chapter 3의 target selection으로 바꾼다.
+5. Chapter 3에서 유효한 target을 수락한 뒤에만 그 hide cycle의 새 pig anchor를 scene에 정확히 한 번 attach한다.
 
-| 앵커 종류 | 기준 |
-| --- | --- |
-| 월드 원점 | 세션 시작 시점의 기기 위치 |
-| 평면 감지 | 수평·수직 평면 |
-| 트래킹 결과 | 이미지·얼굴·바디 등 인식된 대상 |
-| 장면 재구성 | LiDAR가 만든 메쉬 표면 |
+따라서 scanning 중에는 pig anchor가 없다. 지원 판정, session 시작, mesh+floor readiness, valid target acceptance는 서로 다른 사건이다.
 
-Chapter 2에서 돼지를 앵커의 자식으로 추가하는 순간, 돼지의 좌표는 더 이상 개발자가 선언한 임의의 숫자가 아니라 실제로 관찰된 바닥을 기준으로 삼는다.
+Chapter 2와 Chapter 3은 같은 AR session을 유지한다.
 
-## RealityKit과 ARKit의 역할 분담
+## hide cycle이 소유하는 것
 
-기기 센서(카메라·LiDAR)의 원시 데이터는 ARKit이 처리해 평면·메쉬·트래킹 상태를 만들고, RealityKit은 그 결과를 받아 렌더링·충돌·오클루전에 반영한다. `RealityHideARView`가 ARView의 세션을 시작하는 시점을 조정하는 이유는, 이 파이프라인의 입력(카메라 프레임)이 준비되기 전에 콘텐츠를 먼저 결합하면 검은 화면이 발생하기 때문이다 (자세한 진단 과정은 <doc:DeviceCameraDiagnostics> 참고).
+각 cycle은 새 anchor, 새 visual controller, 가림·재발견 monitor, deadline과 generation을 소유한다. 유효한 surface와 같은 immutable floor region에서 start·destination을 계산한 뒤에만 Entity를 붙인다.
 
-## 어떤 표시 뷰를 쓸까
+재시도·다시 숨기기·화면 해제에서는 다음을 함께 정리한다.
 
-| 뷰 | 특징 |
-| --- | --- |
-| `ARView` | UIKit 기반, iOS에서 세밀한 세션 설정에 적합. 이 프로젝트가 사용 |
-| `RealityView` | SwiftUI 기반, visionOS·iOS 최신 API에서 선언적으로 구성 |
-| Scene/Entity 직접 구성 | AR 세션 없이 RealityKit만 사용할 때 |
+- cancellable deadline과 scene update subscription
+- 진행 중인 model load와 movement completion
+- 현재 pig anchor와 반응 상태
+- 이전 cycle generation으로 도착한 callback
 
-## 실기기 검증 체크리스트
+정상적인 Chapter 3 다시 숨기기는 AR session을 유지한다. 반면 scan timeout, session failure, LiDAR unavailable, Chapter 4 진입 또는 Reality 화면 제거에서는 AR subtree를 내리고 session까지 정리한다.
 
-- [ ] 카메라 권한 승인 후 실제 영상이 배경에 보인다.
-- [ ] 수평 평면이 감지되어 바닥 높이를 얻는다.
-- [ ] 수직 면 탭이 유효한 목적지를 계산한다.
-- [ ] LiDAR 메쉬가 돼지보다 앞에 있을 때 실제로 가려진다.
-- [ ] 사용자가 이동하면 다시 발견된다.
-- [ ] 메쉬가 불완전할 때도 앱이 잘못된 상태로 멈추지 않는다.
+## observation과 occlusion
+
+한 observation은 하나의 `ARFrame`에서 읽은 timestamp, camera pose, 돼지의 다섯 world sample, projection과 mesh hit 결과를 묶는다. RealityKit은 실제 mesh를 렌더링 occlusion에 사용할 수 있고, 앱 정책은 같은 관찰을 사용해 hide의 center+4/5와 reveal의 center+3/5를 판정한다.
+
+이 분리는 화면에 가려져 보이는 현상과 게임 상태를 바꾸는 안정 조건을 같은 것으로 착각하지 않게 한다. 걷기 완료나 한 번의 center ray만으로 `hiddenInReality`가 되지 않는다.
+
+## 실기기 대기 체크리스트
+
+- [ ] 실제 `showSceneUnderstanding` mesh와 mesh/floor 진행이 관찰 상태와 일치한다.
+- [ ] scanning 중 pig anchor가 없고 accepted target 뒤 cycle anchor가 한 번 붙는다.
+- [ ] 0.18m 돼지와 floor plan이 실제 공간에서 자연스럽다.
+- [ ] 실제 mesh의 4/5×두 frame hide와 0.15m/15° 이후 3/5×두 frame reveal이 일치한다.
+- [ ] 다시 숨기기와 Chapter 4 전환 뒤 이전 anchor·callback이 남지 않는다.
+
+위 항목은 모두 실기기 대기다. source type-check나 generic build는 실제 LiDAR 관찰을 대신하지 않는다.
 
 ## 관련 문서
 
 - <doc:02-OpeningTheDoor>
 - <doc:03-RealHideAndSeek>
+- <doc:04-Comparison>
 - <doc:DeviceCameraDiagnostics>
 - <doc:MigrationWorksheet>

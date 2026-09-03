@@ -6,7 +6,14 @@ on:
     paths:
       - "Tutorials/SceneKitToRealityKit.docc/**"
       - "Web/index.html"
+      - "Web/docc-accessibility-fixes.js"
       - "scripts/build-docc-site.sh"
+      - "scripts/verify-docc-content.sh"
+      - "scripts/verify-docc-browser.mjs"
+      - "scripts/verify-docc-site.sh"
+      - "scripts/tests/verify-docc-browser-contract.test.mjs"
+      - "package.json"
+      - "package-lock.json"
       - ".github/workflows/deploy-docc.yml"
   workflow_dispatch:
 
@@ -25,13 +32,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      - name: Verify DocC content and snippets
+        run: bash scripts/verify-docc-content.sh
       - name: Build DocC archive
-        run: bash scripts/build-docc-site.sh site
-      - name: Verify archive
-        run: test -f site/index.html && test -f site/data/tutorials/scenekittorealitykit.json
+        run: bash scripts/build-docc-site.sh "$RUNNER_TEMP/docc-site"
+      - name: Verify DocC routes, links, locale, and accessibility metadata
+        run: bash scripts/verify-docc-site.sh "$RUNNER_TEMP/docc-site"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install rendered-browser verifier
+        run: npm ci --ignore-scripts
+      - name: Install pinned Chromium
+        run: npm exec playwright -- install chromium
+      - name: Verify rendered-browser failure contracts
+        run: npm run test:docc-browser
+      - name: Verify rendered DocC routes and accessibility
+        run: npm run verify:docc-browser -- "$RUNNER_TEMP/docc-site"
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: site
+          path: ${{ runner.temp }}/docc-site
   deploy:
     environment:
       name: github-pages
