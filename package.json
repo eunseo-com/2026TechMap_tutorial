@@ -2,7 +2,7 @@
   "name": "2026-tech-map-tutorial-verification",
   "private": true,
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "scripts": {
     "test:docc-browser": "node --test --test-concurrency=1 scripts/tests/verify-docc-browser-contract.test.mjs",

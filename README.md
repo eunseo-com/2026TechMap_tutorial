@@ -29,7 +29,7 @@ bash scripts/build-docc-site.sh /tmp/SceneKitToRealityKit.doccarchive
 bash scripts/verify-docc-site.sh /tmp/SceneKitToRealityKit.doccarchive
 ```
 
-렌더링 검증은 Node.js 20 이상과 lockfile에 고정된 Playwright·axe를 사용합니다. 첫 실행에서 해당 Playwright 버전에 맞는 Chromium을 한 번 설치한 뒤, 로컬 정적 서버에서 11개 공개 경로를 데스크톱과 390×844 모바일 크기, light와 dark 색상 모드 조합으로 검사합니다.
+렌더링 검증은 Node.js 24 이상과 lockfile에 고정된 Playwright·axe를 사용합니다. 첫 실행에서 해당 Playwright 버전에 맞는 Chromium을 한 번 설치한 뒤, 로컬 정적 서버에서 11개 공개 경로를 데스크톱과 390×844 모바일 크기, light와 dark 색상 모드 조합으로 검사합니다.
 
 ```bash
 npm ci --ignore-scripts

@@ -28,6 +28,18 @@
 
 ## 항목
 
+### L-20260903-159 — 성공한 Pages run에 공식 Actions Node 20 deprecation이 남음
+
+- 상태: 해결
+- 발생 태스크: 공개 DocC Pages 배포 후 workflow 정리
+- 재현: PR #2 merge 뒤 `Deploy DocC` run `33708120700`의 annotation을 확인한다.
+- 관찰: content·build·static·browser·deploy는 모두 성공했지만 checkout, configure-pages, setup-node와 upload-pages-artifact의 내부 upload action이 Node.js 20 기반이라 runner가 Node.js 24로 강제 실행한다는 deprecation 1건이 남았다.
+- 영향: 이번 배포 결과는 유효하지만 향후 runner가 Node 20 action 호환 경로를 제거하면 동일 workflow가 실패할 수 있고, major tag만 사용하면 실행 코드가 가변적이다.
+- 원인/가설: workflow가 현재 공식 release보다 이전 major인 checkout v4, configure-pages v5, setup-node v4, upload-pages-artifact v4, deploy-pages v4를 사용했다.
+- 조치: 2026-09-03 공식 release API로 확인한 checkout v7.0.1, setup-node v7.0.0, configure-pages v6.0.0, upload-pages-artifact v5.0.0, deploy-pages v5.0.1의 commit SHA를 immutable하게 지정하고 verifier runtime을 Node 24로 올렸다.
+- 검증: 첫 배포는 build·deploy 성공, 공개 20개 URL HTTP 200과 이미지 hash 8/8 일치다. action update는 YAML parse, local content/build/site/browser gate와 Node 24 dependency 검증 뒤 `main` 재배포에서 annotation 재발 여부를 확인한다.
+- 배운 점: workflow 성공 여부와 action runtime deprecation은 분리해 확인하고, 공식 최신 major를 사용하더라도 release tag가 아닌 검증한 commit SHA로 고정한다.
+
 ### L-20260903-158 — 공통 h1 렌더만으로는 잘못된 route와 SPA 링크를 검출하지 못함
 
 - 상태: 해결
