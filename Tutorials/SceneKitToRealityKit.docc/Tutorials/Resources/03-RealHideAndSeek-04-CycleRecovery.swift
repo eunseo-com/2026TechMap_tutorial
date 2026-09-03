@@ -4,7 +4,7 @@
 // Contract tests: PiggyEscape/PiggyEscapeTests/RealityHideARViewCoordinatorTests.swift
 // Contract tests: PiggyEscape/PiggyEscapeTests/RealityOcclusionObservationProviderTests.swift
 // Implementation status: integrated
-// Verification: standalone iPhoneOS type-check·generic build·물리 iPhone 기준 186/186 통과; 추가 Reduce Motion 2개 compile·sign 통과/runtime은 device unlock 대기; UI test 0개; LiDAR 관찰·동일 기기 캡처·Swift 6 strict·배포 대기
+// Verification: standalone iPhoneOS type-check·fresh generic Swift 5/Swift 6 strict build-for-testing·현재 Swift 5 Release build 통과; 물리 iPhone 기준 186/186 통과; 최신 190개 중 추가 4개 runtime은 device unlock 대기; UI test 0개; LiDAR 관찰·동일 기기 캡처는 실기기 대기
 
 import Foundation
 import simd

@@ -28,6 +28,114 @@
 
 ## 항목
 
+### L-20260903-158 — 공통 h1 렌더만으로는 잘못된 route와 SPA 링크를 검출하지 못함
+
+- 상태: 해결
+- 발생 태스크: 공개 DocC 앱 화면 예시 보강 — rendered-browser gate 재검토
+- 재현: 서로 다른 URL이 같은 h1을 렌더하는 fixture, 잘못된 root 목적지, 존재하지 않는 내부 route·fragment와 slash 없는 디렉터리 링크를 기존 browser verifier에 입력한다. dark profile에서만 console·network·접근성 오류가 나는 fixture도 실행한다.
+- 관찰: 기존 verifier는 모두 같은 페이지를 보여 주거나 root가 overview로 이동하지 않아도 통과했고 rendered link를 검사하지 않았다. slash 없는 정상 디렉터리는 로컬 server에서 404였으며 light profile만 검사해 dark 전용 오류 세 종류도 놓쳤다.
+- 영향: 정적 asset이 온전해도 공개 URL별 내용이 뒤바뀌거나 SPA 탐색 링크가 끊긴 상태, dark theme 회귀가 Pages에 배포될 수 있었다.
+- 원인/가설: route 존재와 임의의 visible h1만 검사했고 route별 의미 계약, browser가 조립한 anchor/DOM fragment, Pages의 directory canonicalization과 색상 모드를 모델링하지 않았다.
+- 조치: 고정 11 route와 정확한 h1, root 최종 pathname을 manifest로 검사한다. 렌더 뒤 same-origin anchor의 HTTP target·route·file·fragment를 수집하고 slash 없는 directory를 canonical URL로 301 이동시킨다. desktop/mobile×light/dark 네 profile에 같은 console·page·network·axe gate를 적용한다.
+- 검증: 추가 계약의 RED를 각각 확인한 뒤 전체 contract 13/13, fresh archive 11 route×4 profile=44회, same-origin link 97개와 no-slash redirect 10개가 통과했다. 첫 확장 실행이 찾은 `#리소스`와 실제 `id="resources"` 불일치 4건도 산출물 보정 후 fragment 오류 0건으로 닫았다.
+- 배운 점: 정적 route inventory 뒤에도 URL별 고유 heading, 실제 redirect, 렌더된 내부 link·fragment와 지원 theme를 브라우저 수준에서 별도로 검증한다.
+
+### L-20260903-157 — 기본 격리 환경이 브라우저 검증기의 loopback listen을 거부함
+
+- 상태: 해결
+- 발생 태스크: 공개 DocC 앱 화면 예시 보강 — 최종 rendered-browser 검증
+- 재현: 기본 격리 환경에서 `npm run test:docc-browser`를 실행한다.
+- 관찰: 일곱 계약 테스트가 모두 `listen EPERM: operation not permitted 127.0.0.1`로 시작 전에 실패했다. fixture assertion이나 browser 결과에 도달하지 못했다.
+- 영향: 구현 회귀와 무관한 로컬 socket 권한 때문에 rendered-browser gate의 최종 근거를 수집할 수 없었다.
+- 원인/가설: 검증기가 임의 loopback port에 정적 서버를 열어야 하지만 기본 실행 권한은 local listen을 허용하지 않는다.
+- 조치: 동일한 명령에 loopback listen과 headless browser 실행 권한만 허용해 다시 실행했다. CI runner에는 이 격리 제한이 없다.
+- 검증: 재실행한 contract 13/13과 fresh archive 11 route×4 profile=44회가 모두 exit 0이다.
+- 배운 점: browser gate가 fixture assertion 전에 전부 같은 listen 오류로 실패하면 제품 결함과 분리하고, 최소 local socket 권한으로 같은 명령을 재실행한다.
+
+### L-20260903-156 — 정적 Pages 검사만으로 렌더링·접근성 회귀를 막지 못함
+
+- 상태: 해결
+- 발생 태스크: 공개 DocC 앱 화면 예시 보강 — Pages 배포 gate 최종 리뷰
+- 재현: fresh DocC archive를 1440×900과 390×844에서 모든 공개 HTML route로 렌더링하고 console·page error·network response와 axe serious/critical 결과를 수집한다.
+- 관찰: 정적 content·site verifier가 모두 통과한 산출물에서도 DocC Render가 만든 이름 없는 toggle·checkbox, `aria-label`을 지원하지 않는 기본 role, 키보드 초점을 받지 않는 스크롤 표, 일부 text contrast를 합쳐 보정 전 27건을 검출했다.
+- 영향: 기존 workflow는 HTML·JSON·asset 존재만 확인하므로 runtime route 실패, 모바일 전용 console 오류와 심각한 접근성 위반을 그대로 배포할 수 있었다.
+- 원인/가설: 정적 verifier는 브라우저가 JavaScript로 조립한 DOM·computed style·네트워크 수명과 접근성 tree를 실행하지 않는다. 일부 문제는 현재 Swift-DocC Render가 생성한 markup과 theme 조합에서만 나타난다.
+- 조치: lockfile에 고정된 headless browser와 접근성 engine으로 정상·console·page error·HTTP·request failure·serious/critical 계약 테스트를 만들었다. 빌드 산출물에는 필요한 role·label·table focus·contrast만 결정론적으로 보정하는 script를 주입하고, artifact upload 전에 11 route를 desktop/mobile×light/dark에서 모두 검사한다.
+- 검증: 계약 테스트 13/13, fresh archive 11 route×4 profile=44회가 통과했다. console warning/error·page error·request failure·HTTP 4xx/5xx와 axe serious/critical은 0건이고 dependency audit 취약점도 0건이다.
+- 배운 점: 정적 DocC 구조 검증과 실제 browser 접근성 검증은 서로 대체할 수 없으므로 배포 전에 둘 다 실행한다.
+
+### L-20260903-155 — 크기와 IHDR만 검사하면 다른 이미지와 손상 PNG를 승인함
+
+- 상태: 해결
+- 발생 태스크: 공개 DocC 앱 화면 예시 보강 — 이미지 무결성 최종 리뷰
+- 재현: 승인 hero를 같은 크기로 다시 인코딩하거나, PNG signature와 IHDR 크기만 남긴 24-byte 파일로 바꿔 기존 image validator를 실행한다. compiled archive의 이미지 하나만 다른 유효 PNG로 바꿔 site verifier도 실행한다.
+- 관찰: 세 변형 모두 기존 gate를 exit 0으로 통과했다. 파일명·IHDR 크기·서로 다른 bytes만 검사했기 때문에 승인된 시각 자료인지와 실제 전체 decode 가능 여부, source와 compiled copy의 동일성을 증명하지 못했다.
+- 영향: 사용자가 지정한 네 hero와 승인된 네 앱 화면이 같은 크기의 다른 파일로 바뀌거나 손상돼도 Pages 배포를 막지 못했다.
+- 원인/가설: 이미지 계약을 파일 목록과 header metadata로만 표현하고 승인된 content digest와 decoder 결과를 포함하지 않았다.
+- 조치: 정확한 8개 PNG의 SHA-256을 content·site gate에 고정하고 전체 PNG decode를 필수화했다. site gate는 source와 compiled asset 양쪽의 승인 digest 및 byte identity까지 검사한다.
+- 검증: 재인코딩 이미지, header-only PNG, source와 다른 compiled asset이 각각 새 gate에서 거절됐다. 원본 content verifier는 snippet 12/12와 함께 통과했고 기존 archive site verifier도 승인 digest·decode·byte identity를 통과했다.
+- 배운 점: 고정된 시각 자산의 무결성은 경로·크기만으로 확인하지 말고 승인 digest, 완전 decode, 배포 산출물 동일성을 함께 검사한다.
+
+### L-20260903-154 — 추가 shell 정적 분석 도구가 환경에 없음
+
+- 상태: 해결
+- 발생 태스크: 공개 DocC 앱 화면 예시 보강
+- 재현: `shellcheck scripts/build-docc-site.sh scripts/verify-docc-content.sh scripts/verify-docc-site.sh`를 실행한다.
+- 관찰: `shellcheck: command not found`로 exit 127이었다. 앞에 실행된 `git diff --check`는 출력 없이 통과했다.
+- 영향: 선택적 shell lint 결과는 얻지 못했지만 실제 content/build/site gate 실행에는 영향이 없다.
+- 원인/가설: 현재 작업 환경에 shellcheck 실행 파일이 설치되어 있지 않다.
+- 조치: 범위를 넓혀 도구를 설치하지 않고 세 script의 `bash -n`, 실제 RED/GREEN 실행과 `git diff --check`로 대체 검증했다.
+- 검증: `bash -n`과 `git diff --check`가 각각 exit 0이고 content verifier·DocC build·site verifier도 exit 0이다.
+- 배운 점: 선택적 lint 의존성이 없는 저장소에서는 syntax 검사와 실제 gate 실행을 필수 기준으로 유지하고, lint 부재를 성공처럼 기록하지 않는다.
+
+### L-20260903-153 — Chapter CTA와 현재 섹션 라벨의 DocC 현지화 누락
+
+- 상태: 해결
+- 발생 태스크: 공개 DocC 앱 화면 예시 보강
+- 재현: 새 archive의 Chapter 3을 브라우저에서 열고 다음 CTA와 상단 현재 섹션 라벨을 읽는다.
+- 관찰: 다음 CTA는 `Get started`, 상단은 `현재 {number}섹션`으로 렌더링됐다. 처음 `{number}섹션`을 정적 `섹션`으로 바꾼 시도는 네 section link까지 모두 같은 `섹션`으로 만들어 채택하지 않았다.
+- 영향: 한국어 튜토리얼의 핵심 이동 동작과 현재 위치를 VoiceOver·시각 사용자 모두 부정확하게 읽는다.
+- 원인/가설: build 후처리가 overview JSON 하나만 번역해 chapter call-to-action JSON을 놓쳤다. Swift-DocC Render의 한국어 `현재 {thing}`은 내부에서 다시 넘긴 `{number}섹션`을 중첩 보간하지 않는다.
+- 조치: 모든 tutorial JSON의 compiler action title을 한국어로 바꾸고, 번호를 만드는 `{number}섹션`은 유지한 채 현재 상태 형식만 정적 `현재 섹션`으로 바꿨다. site verifier가 두 회귀를 함께 거부한다.
+- 검증: 새 archive에서 site verifier가 exit 0이다. 1440×900과 390×844 브라우저에서 section link `1섹션`–`4섹션`, English CTA 0, 한국어 `시작하기`, AI 고지·이미지·관련 코드 연결을 확인했고 console warning/error는 0건이다.
+- 배운 점: 중첩 번역 placeholder를 고칠 때 하위 label의 정보까지 제거하지 말고, 조합하는 상위 label만 정적으로 만들어야 한다.
+
+### L-20260903-152 — Chapter 2의 정상 footer를 이미지 카드 중복으로 오인함
+
+- 상태: 해결
+- 발생 태스크: 공개 DocC 앱 화면 예시 보강
+- 재현: 새 archive에서 `bash scripts/verify-docc-site.sh <archive>`를 실행한다.
+- 관찰: DocC build는 warning 없이 성공했고 네 앱 화면 reference도 모두 생성됐지만, site verifier만 Chapter 2 `contentSection` 길이가 2라며 실패했다.
+- 영향: 올바른 Chapter 2 문서가 배포 gate에서 거절됐다.
+- 원인/가설: target task의 `contentSection` 전체가 앱 화면 카드 하나여야 한다고 가정했지만, `@Steps` 뒤의 `실기기 대기`와 이전·다음 링크는 별도 `fullWidth` block으로 컴파일된다.
+- 조치: 전체 block 수가 아니라 `kind == contentAndMedia`인 block이 정확히 하나이고 기대 media를 가리키는지 검사한다. 후속 `fullWidth`는 보존한다.
+- 검증: 같은 archive에 site verifier를 다시 실행해 5 documentation route, 5 tutorial route, 8 visual image, `ko-KR`, link·alt·asset 검사를 exit 0으로 통과했다.
+- 배운 점: DocC task의 후속 설명은 별도 `fullWidth`가 될 수 있으므로 semantic 계약은 목적이 같은 block kind를 세고 무관한 정상 block을 금지하지 않는다.
+
+### L-20260903-151 — 공개 DocC에 앱 화면 예시와 생성 이미지 고지가 없음
+
+- 상태: 해결
+- 발생 태스크: 공개 DocC 앱 화면 예시 보강
+- 재현: 앱 화면 자산·고지·배치 계약을 verifier에 먼저 추가한 뒤 `bash scripts/verify-docc-content.sh`와 기존 archive 대상 `bash scripts/verify-docc-site.sh /tmp/piggyescape-final-docc-site-20260903`을 실행한다.
+- 관찰: content verifier는 앱 화면 PNG 4장 부재, legacy icon 1장 잔존, 네 챕터 고지·image-before-code 부재를 합쳐 14 errors로 exit 1이었다. 기존 archive verifier도 네 앱 화면의 compiled/source asset·alt·고지가 없어 exit 1이었다. 기존 12개 snippet type-check는 12/12로 유지됐다.
+- 영향: 공개 페이지는 챕터 개념 이미지만 보여 주고 실제 앱에서 무엇이 보이는지 코드와 연결해 설명하지 못한다.
+- 원인/가설: 이전 Task 11은 챕터 대표 구조 도식 네 장만 계약으로 삼았고, 튜토리얼 본문용 앱 화면 예시는 자산·markup·배포 검증 대상이 아니었다.
+- 조치: 첨부한 네 장을 대표 이미지로 보존하고, 실제 UI source를 근거로 한 세로형 앱 화면 예시 네 장을 생성한다. 각 튜토리얼에서 생성 이미지임을 명시하고 관련 `@Code`보다 먼저 배치한다. legacy icon은 제거한다.
+- 검증: 새 source의 content verifier에서 8개 image asset, 네 앱 화면의 target section·related code 연결, 고유 alt와 12/12 snippet type-check를 exit 0으로 확인했다. 새 DocC archive도 8개 compiled image, 고지, route/link와 `ko-KR`을 site verifier로 확인했다.
+- 배운 점: 대표 concept art와 화면 동작 예시는 목적이 다르므로 별도 자산·alt·provenance·compiler output 계약으로 관리한다.
+
+### L-20260903-150 — 화면 구조 탐색에서 존재하지 않는 파일명을 사용함
+
+- 상태: 해결
+- 발생 태스크: 공개 DocC 앱 화면 예시 보강
+- 재현: 실제 화면 구성을 읽기 위해 `PiggyEscape/PiggyEscape/Sources/Escape/ComparisonChapterView.swift`를 `sed`로 열려고 한다.
+- 관찰: 해당 경로가 없어 `No such file or directory`가 출력됐고 앞서 지정한 다른 파일 읽기만 완료됐다.
+- 영향: 소스나 산출물은 변경되지 않았지만 Chapter 4 화면 예시의 근거 파일을 아직 읽지 못했다.
+- 원인/가설: 파일 목록에는 `ComparisonView.swift`가 있는데 화면 역할을 보고 존재하지 않는 이름을 추정했다.
+- 조치: `rg --files` 결과의 실제 `ComparisonView.swift`만 사용하고 추정 경로를 다시 사용하지 않는다.
+- 검증: 실제 파일을 읽어 Chapter 4 이미지와 설명을 현재 UI 구조에 맞춘다.
+- 배운 점: 화면 이름을 추정하지 말고 파일 목록에서 확인한 경로를 그대로 사용한다.
+
 ### L-20260903-149 — Swift 6 strict test compile에 RealityKit 헬퍼 격리 경고가 남음
 
 - 상태: 해결

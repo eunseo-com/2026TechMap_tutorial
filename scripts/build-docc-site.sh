@@ -5,6 +5,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
 catalog_path="$repo_root/Tutorials/SceneKitToRealityKit.docc"
 root_index_path="$repo_root/Web/index.html"
+accessibility_fix_path="$repo_root/Web/docc-accessibility-fixes.js"
 
 if [[ $# -gt 1 ]]; then
   echo "usage: $0 [output-path]" >&2
@@ -75,21 +76,24 @@ if grep -Eiq '(^|[[:space:]])(warning|error):' "$diagnostics_log"; then
 fi
 
 cp "$root_index_path" "$output_path/index.html"
+cp "$accessibility_fix_path" "$output_path/js/docc-accessibility-fixes.js"
 printf '%s\n' '{}' > "$output_path/theme-settings.json"
 
 find "$output_path" -type f -name '*.html' \
   -exec perl -pi -e 's/<html lang="[^"]*"/<html lang="ko-KR"/g' {} +
+find "$output_path" -type f -name '*.html' \
+  -exec perl -0pi -e 's#</body>#<script defer src="/2026TechMap_tutorial/js/docc-accessibility-fixes.js"></script>\n</body># unless /docc-accessibility-fixes\.js/' {} +
 
 # Swift-DocC Render 6.2 ships an English plural choice string that is placed
 # verbatim into tutorial-card aria-labels. Keep the visible duration intact,
 # but prevent VoiceOver from reading "{count}" as literal text.
 find "$output_path/js" -type f -name 'index.*.js' \
-  -exec perl -pi -e 's/VUE_APP_DEFAULT_LOCALE\?\?"en-US"/VUE_APP_DEFAULT_LOCALE??"ko-KR"/g; s/minute \| minutes \| \{count\} minutes/minutes/g; s/분 \| 분 \| \{count\}분/분/g' {} +
+  -exec perl -pi -e 's/VUE_APP_DEFAULT_LOCALE\?\?"en-US"/VUE_APP_DEFAULT_LOCALE??"ko-KR"/g; s/minute \| minutes \| \{count\} minutes/minutes/g; s/분 \| 분 \| \{count\}분/분/g; s/"current":"현재 \{thing\}"/"current":"현재 섹션"/g' {} +
 
-# These two compiler-provided tutorial action titles are emitted into the
-# render JSON instead of going through the runtime locale table.
-perl -pi -e 's/"Get started"/"시작하기"/g; s/"View more"/"더 보기"/g' \
-  "$output_path/data/tutorials/scenekittorealitykit.json"
+# These compiler-provided tutorial action titles are emitted into overview and
+# chapter render JSON instead of going through the runtime locale table.
+find "$output_path/data/tutorials" -type f -name '*.json' \
+  -exec perl -pi -e 's/"Get started"/"시작하기"/g; s/"View more"/"더 보기"/g' {} +
 
 documentation_json=(
   "data/documentation/scenekittorealitykit.json"
@@ -120,20 +124,25 @@ route_html=(
   "tutorials/scenekittorealitykit/04-comparison/index.html"
 )
 
-chapter_images=(
+visual_images=(
   "images/com.techmap.scenekittorealitykit/chapter-1-closed-world.png"
   "images/com.techmap.scenekittorealitykit/chapter-2-opening-reality.png"
   "images/com.techmap.scenekittorealitykit/chapter-3-real-hide-and-seek.png"
   "images/com.techmap.scenekittorealitykit/chapter-4-comparing-worlds.png"
+  "images/com.techmap.scenekittorealitykit/app-screen-chapter-1-closed-world.png"
+  "images/com.techmap.scenekittorealitykit/app-screen-chapter-2-scanning.png"
+  "images/com.techmap.scenekittorealitykit/app-screen-chapter-3-searching.png"
+  "images/com.techmap.scenekittorealitykit/app-screen-chapter-4-comparison.png"
 )
 
 required_files=(
   "index.html"
+  "js/docc-accessibility-fixes.js"
   "theme-settings.json"
   "${documentation_json[@]}"
   "${tutorial_json[@]}"
   "${route_html[@]}"
-  "${chapter_images[@]}"
+  "${visual_images[@]}"
 )
 
 for relative_path in "${required_files[@]}"; do
@@ -169,4 +178,4 @@ if [[ -n "$invalid_language_html" ]]; then
 fi
 
 echo "Built DocC site: $output_path"
-echo "Verified build inventory: 5 documentation JSON, 5 tutorial JSON, 4 chapter images"
+echo "Verified build inventory: 5 documentation JSON, 5 tutorial JSON, 8 visual images"

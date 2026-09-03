@@ -6,7 +6,15 @@
     }
 
     @Section(title: "경험을 네 비교 축으로 정렬하기") {
-        비교 순서는 `world`, `coordinates`, `visibility`, `responsibilities`로 고정합니다. SceneKit closed world와 RealityKit·ARKit reality connection을 같은 질문의 두 답으로 놓습니다.
+        @ContentAndMedia {
+            비교 순서는 `world`, `coordinates`, `visibility`, `responsibilities`로 고정합니다. SceneKit closed world와 RealityKit·ARKit reality connection을 같은 질문의 두 답으로 놓습니다.
+
+            **AI 생성 앱 화면 컨셉 · 실제 앱 실행 화면/실기기 캡처 아님**
+
+            관찰할 점: 각 비교 축의 SceneKit 답은 파란 카드, RealityKit·ARKit 답은 민트 카드로 짝지어 같은 질문을 좌우가 아닌 한 묶음으로 읽게 합니다. 화면의 완료 요약과 카드 배열은 비교 모델의 의도를 보여 주며 실제 진입 reason이나 체험 완료 상태의 증거는 아닙니다.
+
+            @Image(source: app-screen-chapter-4-comparison, alt: "AI 생성 앱 화면 컨셉으로, 짙은 청록 배경 위에 SceneKit 파란 카드와 RealityKit·ARKit 민트 카드가 비교 축마다 짝지어지고 노란 완료 동작이 배치된 세로 비교 화면")
+        }
 
         @Steps {
             @Step {

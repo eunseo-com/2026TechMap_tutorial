@@ -16,3 +16,6 @@ BringingYourSceneKitProjectsToRealityKit/
 
 # Locally generated static DocC archive
 build/
+
+# Local Node tooling used by the rendered DocC browser verifier
+node_modules/

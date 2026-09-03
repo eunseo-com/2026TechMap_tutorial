@@ -265,6 +265,8 @@ ACTUAL_ARTICLES_FILE="$VERIFY_TEMP_DIR/actual-articles.txt"
 EXPECTED_SNIPPETS_FILE="$VERIFY_TEMP_DIR/expected-snippets.txt"
 ACTUAL_SNIPPETS_FILE="$VERIFY_TEMP_DIR/actual-snippets.txt"
 EXPECTED_SNIPPET_NAMES_FILE="$VERIFY_TEMP_DIR/expected-snippet-names.txt"
+EXPECTED_IMAGES_FILE="$VERIFY_TEMP_DIR/expected-images.txt"
+ACTUAL_IMAGES_FILE="$VERIFY_TEMP_DIR/actual-images.txt"
 
 write_expected_inventory "$EXPECTED_TUTORIALS_FILE" \
     "SceneKitToRealityKit.tutorial" \
@@ -295,6 +297,24 @@ CANONICAL_SNIPPETS=(
     "04-Comparison-02-ReplayRouting.swift"
 )
 
+CHAPTER_HERO_IMAGES=(
+    "chapter-1-closed-world.png"
+    "chapter-2-opening-reality.png"
+    "chapter-3-real-hide-and-seek.png"
+    "chapter-4-comparing-worlds.png"
+)
+
+APP_SCREEN_IMAGES=(
+    "app-screen-chapter-1-closed-world.png"
+    "app-screen-chapter-2-scanning.png"
+    "app-screen-chapter-3-searching.png"
+    "app-screen-chapter-4-comparison.png"
+)
+
+write_expected_inventory "$EXPECTED_IMAGES_FILE" \
+    "${CHAPTER_HERO_IMAGES[@]}" \
+    "${APP_SCREEN_IMAGES[@]}"
+
 : > "$EXPECTED_SNIPPETS_FILE"
 : > "$EXPECTED_SNIPPET_NAMES_FILE"
 for snippet_name in "${CANONICAL_SNIPPETS[@]}"; do
@@ -309,6 +329,7 @@ if [[ ! -d "$CATALOG" ]]; then
     : > "$ACTUAL_TUTORIALS_FILE"
     : > "$ACTUAL_ARTICLES_FILE"
     : > "$ACTUAL_SNIPPETS_FILE"
+    : > "$ACTUAL_IMAGES_FILE"
 else
     (
         cd "$CATALOG" || exit 1
@@ -328,6 +349,12 @@ else
             | sed 's#^\./##' \
             | LC_ALL=C sort
     ) > "$ACTUAL_SNIPPETS_FILE"
+    (
+        cd "$CATALOG/Resources" || exit 1
+        find . -maxdepth 1 -type f -name '*.png' -print \
+            | sed 's#^\./##' \
+            | LC_ALL=C sort
+    ) > "$ACTUAL_IMAGES_FILE"
 fi
 
 if [[ -d "$APP_LOCAL_CATALOG" ]]; then
@@ -337,6 +364,101 @@ fi
 compare_inventory "DocC tutorial inventory" "$EXPECTED_TUTORIALS_FILE" "$ACTUAL_TUTORIALS_FILE"
 compare_inventory "DocC article inventory" "$EXPECTED_ARTICLES_FILE" "$ACTUAL_ARTICLES_FILE"
 compare_inventory "DocC snippet inventory" "$EXPECTED_SNIPPETS_FILE" "$ACTUAL_SNIPPETS_FILE"
+compare_inventory "DocC visual asset inventory" "$EXPECTED_IMAGES_FILE" "$ACTUAL_IMAGES_FILE"
+
+if ! python3 - "$CATALOG/Resources" <<'PY'
+import hashlib
+import shutil
+import struct
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+root = Path(sys.argv[1])
+expected = {
+    "chapter-1-closed-world.png": (
+        (1536, 1024),
+        "9979438c892484fab2db5d6b27bb9f4a538042d3ada3b183e2a559e5194f09c2",
+    ),
+    "chapter-2-opening-reality.png": (
+        (1536, 1024),
+        "026a6d1aa03fea750eb1c745690de5c86f2ceb33318c1521c51ad5cf3334bb2d",
+    ),
+    "chapter-3-real-hide-and-seek.png": (
+        (1536, 1024),
+        "9331925e7efc13cfb84dc4a39bc2553a699784ec9429dbe23242c6559330a020",
+    ),
+    "chapter-4-comparing-worlds.png": (
+        (1536, 1024),
+        "7ef77fcae8d6532a39dc2b2904d17a2d6c6b0c9513c3d8b480fafd2d11f4195d",
+    ),
+    "app-screen-chapter-1-closed-world.png": (
+        (1024, 1536),
+        "62fc0b98e4652cacd0812271afc3ec237b31c38fb9f340864498176b550f2385",
+    ),
+    "app-screen-chapter-2-scanning.png": (
+        (1024, 1536),
+        "fdedf18639979dbdbf3e1730359894bc95d2a59c04c47dd1dd769b2e8217b068",
+    ),
+    "app-screen-chapter-3-searching.png": (
+        (1024, 1536),
+        "3d6b41d7d6ca55ce2b1aee08fe1d01afbef960735e2032ea8826684669a46f7d",
+    ),
+    "app-screen-chapter-4-comparison.png": (
+        (1024, 1536),
+        "e7bd0e4121a9ce33c3a83836f8fcaf7215641e224114d1fe0ce31e57c583559f",
+    ),
+}
+errors = []
+digests = {}
+sips = shutil.which("sips")
+
+if sips is None:
+    errors.append("full PNG decoder is unavailable: sips")
+
+with tempfile.TemporaryDirectory(prefix="verify-docc-png-decode-") as decode_root:
+    for name, (expected_size, approved_digest) in expected.items():
+        path = root / name
+        if not path.is_file():
+            errors.append(f"missing PNG: {name}")
+            continue
+        data = path.read_bytes()
+        if len(data) < 24 or data[:8] != b"\x89PNG\r\n\x1a\n" or data[12:16] != b"IHDR":
+            errors.append(f"invalid PNG header: {name}")
+            continue
+        actual_size = struct.unpack(">II", data[16:24])
+        if actual_size != expected_size:
+            errors.append(f"wrong dimensions for {name}: expected {expected_size}, found {actual_size}")
+        digest = hashlib.sha256(data).hexdigest()
+        if digest != approved_digest:
+            errors.append(
+                f"unapproved SHA-256 for {name}: expected {approved_digest}, found {digest}"
+            )
+        if digest in digests:
+            errors.append(f"duplicate image bytes: {digests[digest]} and {name}")
+        else:
+            digests[digest] = name
+
+        if sips is not None:
+            decoded_path = Path(decode_root) / f"{path.stem}.tiff"
+            decoded = subprocess.run(
+                [sips, "-s", "format", "tiff", str(path), "--out", str(decoded_path)],
+                capture_output=True,
+                text=True,
+            )
+            if decoded.returncode != 0 or not decoded_path.is_file() or decoded_path.stat().st_size == 0:
+                detail = decoded.stderr.strip().splitlines()
+                suffix = f": {detail[-1]}" if detail else ""
+                errors.append(f"full PNG decode failed for {name}{suffix}")
+
+for error in errors:
+    print(error, file=sys.stderr)
+sys.exit(1 if errors else 0)
+PY
+then
+    fail "DocC visual assets must match the eight approved SHA-256 pins and pass full PNG decoding"
+fi
 
 APP_SOURCES_EXPECTED="$VERIFY_TEMP_DIR/app-sources-expected.txt"
 APP_SOURCES_ACTUAL="$VERIFY_TEMP_DIR/app-sources-actual.txt"
@@ -552,6 +674,178 @@ CH2="${TUTORIAL_FILES[1]}"
 CH3="${TUTORIAL_FILES[2]}"
 CH4="${TUTORIAL_FILES[3]}"
 
+if ! python3 - "$OVERVIEW" "$CH1" "$CH2" "$CH3" "$CH4" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+overview_path, *chapter_paths = map(Path, sys.argv[1:])
+disclosure = "AI 생성 앱 화면 컨셉 · 실제 앱 실행 화면/실기기 캡처 아님"
+expected_heroes = (
+    "chapter-1-closed-world",
+    "chapter-2-opening-reality",
+    "chapter-3-real-hide-and-seek",
+    "chapter-4-comparing-worlds",
+)
+expected_chapters = (
+    (
+        "선언된 섬 안에서만 보고 선택하기",
+        "app-screen-chapter-1-closed-world",
+        "01-ClosedWorld-02-C3SceneAndInput.swift",
+    ),
+    (
+        "실제 스캔을 보여 주고 CTA 뒤에만 입력 열기",
+        "app-screen-chapter-2-scanning",
+        "02-OpeningReality-03-ScanFeedbackAndGate.swift",
+    ),
+    (
+        "가림과 재발견을 서로 다른 두 frame으로 확인하기",
+        "app-screen-chapter-3-searching",
+        "03-RealHideAndSeek-03-StableOcclusion.swift",
+    ),
+    (
+        "경험을 네 비교 축으로 정렬하기",
+        "app-screen-chapter-4-comparison",
+        "04-Comparison-01-ComparisonModel.swift",
+    ),
+)
+errors = []
+
+
+def balanced_body(source, start, label):
+    cursor = start
+    depth = 1
+    while cursor < len(source) and depth:
+        if source[cursor] == "{":
+            depth += 1
+        elif source[cursor] == "}":
+            depth -= 1
+        cursor += 1
+    if depth:
+        errors.append(f"unterminated {label}")
+        return "", start
+    return source[start : cursor - 1], cursor
+
+
+def section_body(source, title, chapter_number):
+    matches = list(
+        re.finditer(
+            rf'@Section\s*\(\s*title\s*:\s*"{re.escape(title)}"\s*\)\s*\{{',
+            source,
+        )
+    )
+    if len(matches) != 1:
+        errors.append(
+            f"Chapter {chapter_number} must contain exactly one target section {title!r}; found {len(matches)}"
+        )
+        return ""
+    return balanced_body(source, matches[0].end(), f"Chapter {chapter_number} target section")[0]
+
+
+image_pattern = re.compile(
+    r'@Image\s*\(\s*source\s*:\s*([A-Za-z0-9._-]+)\s*,\s*alt\s*:\s*"([^"]+)"\s*\)',
+    re.DOTALL,
+)
+all_images = []
+
+if overview_path.is_file():
+    overview_source = overview_path.read_text(encoding="utf-8")
+    overview_images = image_pattern.findall(overview_source)
+    all_images.extend(overview_images)
+    actual_heroes = tuple(source for source, _ in overview_images)
+    if actual_heroes != expected_heroes:
+        errors.append(
+            "overview hero images must match the four ordered chapter mappings; "
+            f"found {actual_heroes!r}"
+        )
+else:
+    errors.append(f"missing overview source: {overview_path}")
+
+for chapter_number, (path, expected) in enumerate(zip(chapter_paths, expected_chapters), start=1):
+    title, expected_image, related_code = expected
+    if not path.is_file():
+        errors.append(f"missing Chapter {chapter_number} source: {path}")
+        continue
+    source = path.read_text(encoding="utf-8")
+    body = section_body(source, title, chapter_number)
+    if not body:
+        continue
+
+    content_matches = list(re.finditer(r'@ContentAndMedia\b(?:\s*\([^)]*\))?\s*\{', body))
+    if len(content_matches) != 1:
+        errors.append(
+            f"Chapter {chapter_number} target section must contain exactly one @ContentAndMedia; "
+            f"found {len(content_matches)}"
+        )
+        continue
+
+    content_match = content_matches[0]
+    content_body, content_end = balanced_body(
+        body,
+        content_match.end(),
+        f"Chapter {chapter_number} @ContentAndMedia",
+    )
+    if content_body.count(disclosure) != 1:
+        errors.append(
+            f"Chapter {chapter_number} @ContentAndMedia must contain exactly one explicit AI disclosure"
+        )
+
+    images = image_pattern.findall(content_body)
+    if len(images) != 1:
+        errors.append(
+            f"Chapter {chapter_number} @ContentAndMedia must contain exactly one image; found {len(images)}"
+        )
+    else:
+        image_source, image_alt = images[0]
+        all_images.append((image_source, image_alt))
+        if image_source != expected_image:
+            errors.append(
+                f"Chapter {chapter_number} app-screen image must be {expected_image}; found {image_source}"
+            )
+        if "AI 생성" not in image_alt:
+            errors.append(f"Chapter {chapter_number} app-screen alt must identify the AI-generated concept")
+
+    disclosure_position = content_body.find(disclosure)
+    image_position = content_body.find("@Image")
+    if disclosure_position < 0 or image_position < 0 or disclosure_position >= image_position:
+        errors.append(f"Chapter {chapter_number} must place the disclosure before its app-screen image")
+
+    code_match = re.search(
+        rf'@Code\s*\([^)]*\bfile\s*:\s*"{re.escape(related_code)}"',
+        body,
+        re.DOTALL,
+    )
+    if code_match is None:
+        errors.append(f"Chapter {chapter_number} target section is missing related code {related_code}")
+    elif code_match.start() <= content_end:
+        errors.append(f"Chapter {chapter_number} related code must follow @ContentAndMedia")
+
+expected_all_images = set(expected_heroes) | {item[1] for item in expected_chapters}
+actual_sources = [source for source, _ in all_images]
+if set(actual_sources) != expected_all_images or len(actual_sources) != len(expected_all_images):
+    errors.append(
+        "DocC sources must contain each of the eight approved visual images exactly once; "
+        f"found {actual_sources!r}"
+    )
+
+seen_alt = {}
+for image_source, alt in all_images:
+    normalized = " ".join(alt.split()).casefold()
+    if not normalized:
+        errors.append(f"missing source alt text for {image_source}")
+    elif normalized in seen_alt:
+        errors.append(f"duplicate source alt text for {seen_alt[normalized]} and {image_source}")
+    else:
+        seen_alt[normalized] = image_source
+
+for error in errors:
+    print(error, file=sys.stderr)
+sys.exit(1 if errors else 0)
+PY
+then
+    fail "DocC visual narratives must map each generated concept screen to its target section and related code"
+fi
+
 verify_each_step "$CH1" 3 "Chapter 1"
 verify_each_step "$CH2" 3 "Chapter 2"
 verify_each_step "$CH3" 4 "Chapter 3"
@@ -732,6 +1026,7 @@ forbid_catalog_regex "a fake sofa is not the current Chapter 1 implementation" '
 forbid_catalog_regex "the old additive mesh-distance rule is forbidden" 'meshDistance[[:space:]]*\+[[:space:]]*0\.03'
 forbid_catalog_regex "mesh-or-floor readiness is forbidden" 'hasObservedMesh[[:space:]]*\|\|[[:space:]]*hasObservedFloor'
 forbid_catalog_regex "movement completion cannot directly complete hiding" '(movementFinished.*(hiddenInReality|occlusionVerified)|(이동|movement).*완료.*(즉시|바로|직접).*(숨김|가림).*완료)'
+forbid_catalog_regex "outdated Swift 6 strict failure or pending status is forbidden" 'Swift 6 strict.{0,16}(실패|대기)'
 forbid_catalog_regex "a single center ray cannot complete hiding" '(중심.*(한 점|ray|레이).*(만으로|하나로).*(숨김|가림).*(성공|완료)|single[[:space:]-]*center[[:space:]-]*ray.*(success|complete))'
 forbid_catalog_regex "Chapter 2 scanning must not attach a pig anchor" '((scanning|스캔).*(pig|돼지).*(anchor|앵커).*(attach|부착|추가)[[:space:]]*[.(]|(scanning|스캔).*anchor\.addChild)'
 forbid_catalog_regex "fabricated object-recognition labels are forbidden" '((의자|소파)[[:space:]]*(인식 완료|감지 완료)|objectSemanticLabel|fakeSemanticLabel)'
