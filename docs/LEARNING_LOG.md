@@ -37,7 +37,7 @@
 - 영향: 이번 배포 결과는 유효하지만 향후 runner가 Node 20 action 호환 경로를 제거하면 동일 workflow가 실패할 수 있고, major tag만 사용하면 실행 코드가 가변적이다.
 - 원인/가설: workflow가 현재 공식 release보다 이전 major인 checkout v4, configure-pages v5, setup-node v4, upload-pages-artifact v4, deploy-pages v4를 사용했다.
 - 조치: 2026-09-03 공식 release API로 확인한 checkout v7.0.1, setup-node v7.0.0, configure-pages v6.0.0, upload-pages-artifact v5.0.0, deploy-pages v5.0.1의 commit SHA를 immutable하게 지정하고 verifier runtime을 Node 24로 올렸다.
-- 검증: 첫 배포는 build·deploy 성공, 공개 20개 URL HTTP 200과 이미지 hash 8/8 일치다. action update는 YAML parse, local content/build/site/browser gate와 Node 24 dependency 검증 뒤 `main` 재배포에서 annotation 재발 여부를 확인한다.
+- 검증: PR #3 merge commit `8315243`의 Pages run `33709409875`가 Node 24에서 content·build·static·browser·deploy를 모두 통과했고 build/deploy annotation은 각각 0건이다. 공개 11 route와 보정 script는 모두 HTTP 200, 공개 이미지 hash는 8/8 승인값과 일치하며 Chapter 3의 고지·컨셉 이미지·연결 코드를 desktop 1440×900과 mobile 390×844에서 확인했다.
 - 배운 점: workflow 성공 여부와 action runtime deprecation은 분리해 확인하고, 공식 최신 major를 사용하더라도 release tag가 아닌 검증한 commit SHA로 고정한다.
 
 ### L-20260903-158 — 공통 h1 렌더만으로는 잘못된 route와 SPA 링크를 검출하지 못함
