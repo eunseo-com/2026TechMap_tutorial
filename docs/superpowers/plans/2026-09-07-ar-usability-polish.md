@@ -33,3 +33,12 @@
 ## 2026-09-07 공개 반영 체크포인트
 
 최종 통합 검토는 중요 결함 없이 통과했다. PR #5를 main `b03d27b`로 통합한 Pages run `34131852587`의 build·deploy가 모두 성공했다. 공개 11개 경로 HTTP 200, 이미지 8/8 해시 일치, 최신 Chapter 2/3 문구·예제 출처, 실제 브라우저의 소개·스캔 그림·연결 코드를 확인했다. 1–5는 완료이며 **6의 실제 LiDAR 시야·숨기/찾기/replay·캡처 및 최신 222개 iPhone XCTest는 기기 연결 대기**다. 기존 작업 트리와 파일은 이 후속 검증을 위해 보존한다.
+
+## 2026-09-07 실기기 자동 회귀 후속
+
+사용자에게 연결을 다시 요청하지 않은 상태에서 paired iPhone이 local network로 사용 가능해졌다. 잠금 해제·Developer Mode·DDI를 read-only로 확인한 뒤 실제 iPhone에서 전체 222개를 실행했다. 실행 중 자막 종료 callback의 background publishing 경고를 발견해 표시된 `SCNView` 회귀를 먼저 추가했고, 의도한 스레드 assertion RED를 확인한 뒤 완료 queue만 `.main`으로 지정했다.
+
+- 수정 뒤 physical iPhone 16 Pro / iOS 26.6.1 전체 223/223, failed/skipped 0, exit 0. 같은 로그에서 해당 SwiftUI 경고는 관찰되지 않았다.
+- 수정 뒤 Swift 5 및 Swift 6 strict generic iPhoneOS app/test build 각각 exit 0. 프로젝트 언어 모드·기기 설정은 변경하지 않았다.
+- 위의 최신 전체 XCTest 실행 대기는 해소됐다. **6번의 실제 공간에서 스캔·숨기/찾기/replay를 관찰하고 캡처하는 수용은 계속 미완료**이며, 테스트 성공으로 체크하지 않는다. Simulator는 사용하지 않았다.
+- 후속 코드 검토 중요·경미 결함 0. 최신 검증 경계를 반영한 DocC 예제 12/12·경고 없는 archive·이미지/링크·브라우저 44회·내부 링크 100개·no-slash 이동 10개 통과 후 기존 공개 경로에 반영한다.

@@ -36,6 +36,10 @@
 
 ## 검증 상태
 
+- 2026-09-07 최신 실기기 자동 회귀: 연결 요청을 반복하지 않은 상태에서 paired iPhone이 사용 가능해져 read-only 잠금·DDI 확인 후 전체 테스트를 실행했다. 222개 실행에서 발견한 자막 종료의 background publishing 경고는 실제 `SCNView` 회귀 RED 뒤 완료 queue를 `.main`으로 지정해 보수했다. 수정 뒤 iPhone 16 Pro/iOS 26.6.1 **223/223 통과·실패/skip 0**, 같은 로그에서 해당 경고 미관찰, Swift 5·Swift 6 strict generic iPhoneOS build exit 0이다. 아래 과거 기록의 222개·190개 실행 대기는 해소됐지만 **실제 LiDAR 시야·스캔·숨기/찾기·캡처는 여전히 미완료**다. Simulator나 기기 설정 변경은 없었다.
+
+### 이전 체크포인트 — 최신 실행 상태는 위 항목을 우선
+
 - 2026-09-07 DocC 추가 개선: 네 챕터의 실제 학습 제목·안내, 현재 스캔/측면 이동/복구 설명과 독립 예제 12개, 새 세로 화면 컨셉 4개를 정합화했다. 문서 및 최종 통합 검토, content 12/12·경고 없는 archive·이미지 8개 검증·44회 브라우저 렌더·내부 링크 100개가 통과했다. PR #5의 main `b03d27b`를 Pages run `34131852587`로 배포했고, 공개 11개 경로와 이미지 8/8 해시·최신 Chapter 2/3 문구·예제 출처·브라우저 표시를 확인했다. 실제 화면 이미지는 촬영 증거가 아닌 컨셉으로 명시한다.
 
 - 2026-09-07 추가 사용성 범위: [AR 개선 명세](superpowers/specs/2026-09-07-ar-usability-polish.md)에 따라 작은 HUD/학습 sheet, 실제 4Hz 메시·바닥·추적 snapshot, 측정된 옆면 preview, 몸통 convex cast를 통과한 측면 경로와 scene update 기반 이동을 추가했다. 불안정 tracking은 가림/발견 입력에서 무효화하고 학습·비활성화 수명을 보수했다. 이번 순수 정책 runtime은 48/48, iPhoneOS compile/link 기준 테스트 inventory는 222개다. 전체 222개 iPhone runtime·실제 LiDAR 시각 확인은 실행하지 않았다. 사용자가 현재 기기 연결이 어렵다고 답했으므로 기기 연결을 재요청하거나 Simulator로 대체하지 않는다. DocC/이미지/Pages 동기화는 완료했으며 아래 190개·기기 잠금 기록은 9월 3일 기준선이다.

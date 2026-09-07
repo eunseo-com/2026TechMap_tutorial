@@ -28,6 +28,27 @@
 
 ## 항목
 
+### L-20260907-171 — 자막 종료 시 화면 상태가 렌더링 스레드에서 갱신됨
+
+- 상태: 해결
+- 발생 태스크: AR 사용성 개선 6 — 실제 iPhone 실행 로그 점검
+- 재현: 최신 앱의 physical iPhone `test-without-building` 전체 실행. `/tmp/piggy-ar-polish-device-20260907.xcresult`는 222/222 통과다.
+- 관찰: 테스트 host가 첫 화면을 렌더링하던 중 `[SwiftUI] Publishing changes from background threads is not allowed`가 main과 다른 스레드에서 한 번 발생했다.
+- 원인: 표시된 `SCNView`의 실제 자막 완료에서 `Thread.isMainThread == false` assertion을 재현했다. `NarrationOverlayScene.show`의 `SKAction.run` 완료가 queue 지정 없이 `C3ClosedWorldSceneView`를 거쳐 `EscapeRootCoordinator.machine`을 갱신한다. 기존 나무 이동 완료는 MainActor로 명시적으로 돌아오지만 자막 완료는 그러지 않았다. `@MainActor` 선언만으로 기존 프레임워크의 동기 콜백 실행 큐가 바뀌지 않는다.
+- 조치: 실제 렌더링이 자막 액션을 진행하는 회귀 테스트를 먼저 추가해 완료 콜백의 실행 스레드를 검증한다. `SKRenderer.update`와 offscreen `SCNRenderer.snapshot` 모두 overlay 완료를 구동하지 못해, 별도의 비-key test window에 표시한 `SCNView`로 원래 앱과 같은 display loop를 사용한다. 테스트 뒤 window와 scene을 정리하며 테스트 전용 production API·unchecked 전송 wrapper·Simulator는 추가하지 않는다.
+- 테스트 장치 조사: `SKRenderer.update`와 offscreen snapshot은 완료 자체가 진행되지 않아 timeout으로 실패했다. 이는 원하는 스레드 assertion RED가 아니므로 당시 production은 수정하지 않았다. 표시된 `SCNView`로 장치를 바꿔 실제 callback을 구동했고 앞선 전송 wrapper는 제거했다. 결과 번들 조회는 sandbox의 TestReport 쓰기 제한으로 exit 64였으므로 허용된 조회로 다시 확인했다.
+- 확정 RED·최소 수정: `/tmp/piggy-narration-red3.log`의 실기기 3개 focused 실행에서 새 테스트 한 개만 `Narration completion must not publish UI state on the renderer thread`로 실패했다(exit 65). 타이밍·자막·상태 전이는 유지하고 `SKAction.run(_:queue:)`의 queue만 `.main`으로 지정한다. 근거: [Apple SKAction.run(_:queue:)](https://developer.apple.com/documentation/spritekit/skaction/run(_:queue:)).
+- GREEN: `/tmp/piggy-narration-green-full.xcresult`의 physical iPhone 전체 223/223 통과, 실패·skip 0, exit 0. 같은 실행 로그에서 SwiftUI background publishing 경고가 사라졌다. 새 회귀는 원래 앱과 동일한 표시된 SceneKit overlay를 쓰며 테스트 window는 key로 만들지 않고 종료 때 정리한다. 새 generic iPhoneOS Swift 5와 Swift 6 strict app/test build도 exit 0이며 source compile warning은 없다. AppIntents metadata·DeviceSupport/진단 수집 환경 출력은 별도 남았다. 진단 파일을 외부로 전송하지 않았으며 실제 LiDAR 시각 수용은 여전히 대기다.
+
+### L-20260907-170 — 기기가 다시 연결돼 실기기 테스트 가능 범위를 재평가함
+
+- 상태: 해결
+- 발생 태스크: AR 사용성 개선 6 — 실제 iPhone 회귀 검증
+- 관찰: 배포 후 read-only 조회에서 iPhone 16 Pro가 local network로 available·paired였고 iOS 26.6.1, Developer Mode enabled, DDI available을 확인했다. 실행 전 lockState는 `passcodeRequired: false`, `unlockedSinceBoot: true`였다. 준비 중 별도 Info.plist를 검색한 명령은 해당 파일이 없어 exit 2였고, `Project.swift`가 Info.plist를 생성하는 manifest인 것을 확인했다.
+- 영향: 이전의 연결 불가 상태가 바뀌어 최신 iPhone XCTest 실행을 시도할 수 있다. 실제 주변을 비추고 걸어서 숨기/찾기를 확인하는 시각 수용은 여전히 다른 검증이다.
+- 조치: 기존 개발 팀의 명령행 서명 설정으로 테스트용 빌드를 만든 뒤 현재 잠금 상태를 재확인하고 실행한다. 프로젝트 서명 설정·기기 설정은 바꾸지 않으며 Simulator는 사용하지 않는다.
+- 검증: 서명된 `build-for-testing` exit 0, 실행 직전 잠금 해제 재확인 뒤 physical `test-without-building` exit 0. 결과 번들의 total/passed 222, failed/skipped 0을 확인했다. 이 실행에서 발견한 화면 갱신 경고는 L-20260907-171로 별도 추적하며 실제 LiDAR 시각 수용은 대기다.
+
 ### L-20260907-169 — 공개 화면 확인 중 임시 관찰 연결과 기록 패치가 실패함
 
 - 상태: 해결
