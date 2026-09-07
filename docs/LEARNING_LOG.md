@@ -28,6 +28,50 @@
 
 ## 항목
 
+### L-20260907-167 — 예제의 테스트 출처 주석이 존재하지 않는 파일을 가리킴
+
+- 상태: 해결
+- 발생 태스크: AR 사용성 개선 4 — 문서 출처 정확성
+- 재현: 스캔 예제의 Contract tests 주석과 `PiggyEscape/PiggyEscapeTests/RealityMeshScanProjectorTests.swift` 경로를 대조했다.
+- 관찰: 해당 파일이 없는데도 기존 gate는 주석의 존재만 확인해 통과했다.
+- 영향: 독자가 예제의 검증 근거를 따라갈 수 없고, 없는 테스트를 존재하는 것처럼 설명할 수 있다.
+- 원인: 출처 주석의 형식과 실제 파일 존재 여부가 분리되어 있었다.
+- 조치: 없는 경로는 제거하고 모든 예제의 Production/Contract tests 출처 파일 존재 여부를 content gate에서 검사한다. 문서를 맞추기 위한 빈 테스트는 추가하지 않는다.
+- 검증: 새 출처 검사가 실제로 없는 `RealityMeshScanProjectorTests.swift`와 `RealityWalkClearanceTests.swift` 두 경로를 실패로 검출했다. 허위 선언 제거 뒤 최종 content gate exit 0, 독립 iPhoneOS 예제 12/12 typecheck를 확인했다. 모든 Production/Contract tests 선언은 저장소 내부의 실제 파일인지 검사한다.
+
+### L-20260907-166 — 튜토리얼 Step의 세 번째 설명 문단은 버려짐
+
+- 상태: 해결
+- 발생 태스크: AR 사용성 개선 4 — 학습 문서와 이미지 연결
+- 재현: `bash scripts/build-docc-site.sh /tmp/piggy-polish-image-check`.
+- 관찰: 작성 중 Chapter 3의 Step에 추가한 학습 sheet 설명이 세 번째 문단이 되어 extraneous element 경고를 발생시켰다. 경고를 실패로 처리하는 build gate가 exit 1로 중단했다. 이후 재시도에서는 해당 경고가 사라졌으나 예제 파일 교체 중의 resource missing을 관찰했다.
+- 영향: 그 문단의 학습 설명이 산출물에서 누락될 수 있다.
+- 원인: DocC Step은 지시 문단 하나와 선택적인 캡션 문단만 허용한다.
+- 조치: 해당 학습 설명을 Section 본문으로 옮기도록 문서 작성에 반영한다. 파일 교체 중의 일시적 스냅샷을 최종 결과로 평가하지 않고, 작성 완료 보고 뒤 통합 gate를 실행한다.
+- 검증: 최종 출처·캡션 수정까지 포함하여 `/tmp/piggy-ar-polish-docc-final`로 archive를 새로 빌드해 경고 없이 exit 0. 구조·이미지 검증과 desktop/mobile × light/dark의 44회 렌더, 내부 링크 100개, no-slash 이동 10개도 exit 0으로 확인했다.
+
+### L-20260907-165 — 격리된 Release 빌드가 workspace 로딩 전에 종료됨
+
+- 상태: 해결
+- 발생 태스크: AR 사용성 개선 5 — generic iPhoneOS Release 확인
+- 재현: `xcodebuild -workspace PiggyEscape.xcworkspace -scheme PiggyEscape -configuration Release -destination 'generic/platform=iOS' -derivedDataPath /tmp/piggy-ar-polish-release CODE_SIGNING_ALLOWED=NO build`.
+- 관찰: 기본 격리 환경에서 cache/log 접근 거절과 workspace 인식 오류, exit 66. 컴파일 단계에는 도달하지 않았다.
+- 영향: Release 검증이 아직 성립하지 않았다. 이전 Swift 5/6 Debug compile 결과와 이번 정책 48/48은 별개로 유효하다.
+- 원인/가설: 개발 도구의 workspace 및 캐시 접근 제한을 먼저 확인한다.
+- 조치: 경로를 읽기 전용으로 확인한 뒤 동일 iPhoneOS 빌드에 필요한 권한으로 재실행한다. Simulator를 부팅하거나 대상으로 선택하지 않는다.
+- 검증: 경로와 workspace 파일은 존재했다. 필요한 개발 도구 접근 권한으로 같은 generic iPhoneOS Release 명령을 재실행해 exit 0과 BUILD SUCCEEDED를 확인했다. 실제 기기 실행·시각 수용은 포함하지 않았다.
+
+### L-20260907-164 — 공개 문서 확인과 브라우저 gate의 환경 권한 경계
+
+- 상태: 해결
+- 발생 태스크: AR 사용성 개선 4–5 — DocC·공개 화면 검증
+- 재현: 공개 튜토리얼 URL 열기, 기본 격리 환경의 `gh repo view` 및 `npm run test:docc-browser`.
+- 관찰: 웹 읽기는 safe-open 오류, 저장소 읽기는 연결 실패, 브라우저 gate는 `listen EPERM 127.0.0.1`로 종료했다. 권한을 확보한 HTTP 확인은 200, 저장소 조회는 정확한 공개 저장소와 기존 성공 배포를 반환했다.
+- 영향: 사이트 장애나 코드 회귀가 아니라 접근 경로별 검증 한계다. 공개 사이트는 9월 3일 버전으로 최신 개선은 아직 미배포다.
+- 원인/가설: loopback listen 제한은 이전 L-20260903-157과 같은 환경 제한이다. 웹 읽기의 safe-open 이유는 확인하지 못했다.
+- 조치: 브라우저 검사에 필요한 loopback 및 실행 권한을 확보해 동일 gate를 다시 실행한다. Simulator를 대체 수단으로 실행하지 않는다.
+- 검증: 순수 Swift 정책은 같은 체크포인트에서 48/48·0 failures 재확인. 필요한 권한으로 재실행한 브라우저 failure contract 13/13·0 failures·exit 0. 공개 overview도 실제 브라우저에서 정상 표시되었다.
+
 ### L-20260907-163 — 최신 AR 사용성 변경의 실기기 검증은 연결 불가로 보류
 
 - 상태: 실기기 대기

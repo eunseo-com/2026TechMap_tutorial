@@ -101,10 +101,10 @@ approved_visuals = {
     "chapter-2-opening-reality.png": "026a6d1aa03fea750eb1c745690de5c86f2ceb33318c1521c51ad5cf3334bb2d",
     "chapter-3-real-hide-and-seek.png": "9331925e7efc13cfb84dc4a39bc2553a699784ec9429dbe23242c6559330a020",
     "chapter-4-comparing-worlds.png": "7ef77fcae8d6532a39dc2b2904d17a2d6c6b0c9513c3d8b480fafd2d11f4195d",
-    "app-screen-chapter-1-closed-world.png": "62fc0b98e4652cacd0812271afc3ec237b31c38fb9f340864498176b550f2385",
-    "app-screen-chapter-2-scanning.png": "fdedf18639979dbdbf3e1730359894bc95d2a59c04c47dd1dd769b2e8217b068",
-    "app-screen-chapter-3-searching.png": "3d6b41d7d6ca55ce2b1aee08fe1d01afbef960735e2032ea8826684669a46f7d",
-    "app-screen-chapter-4-comparison.png": "e7bd0e4121a9ce33c3a83836f8fcaf7215641e224114d1fe0ce31e57c583559f",
+    "app-screen-chapter-1-closed-world.png": "7c1e109d2295516eff624cc7b997649841106ecbf7e4b4a439f5bf2929e4562b",
+    "app-screen-chapter-2-scanning.png": "b58047bf3a1099f21c43a5f14d4f3ba93cd25279757d7f6dae5e2ce0d168c372",
+    "app-screen-chapter-3-searching.png": "1b77ea6f2f3325cbdbe4666a4ec361a627ac7900f9cf31e55056edbe583be68a",
+    "app-screen-chapter-4-comparison.png": "b316972dc9d3ddceba0dc60d1a7f2e631a8f4a88401d81281aa089a1243457d2",
 }
 app_screen_contracts = {
     1: (
