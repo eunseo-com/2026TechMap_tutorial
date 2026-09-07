@@ -1103,6 +1103,13 @@ for snippet_name in "${CANONICAL_SNIPPETS[@]}"; do
     fi
     require_regex "$snippet_path" '^[[:space:]]*//[[:space:]]*Production:' "$snippet_name must declare its Production source path"
     require_regex "$snippet_path" '^[[:space:]]*//[[:space:]]*Contract tests:' "$snippet_name must declare its Contract tests path"
+    while IFS= read -r declared_path; do
+        if [[ "$declared_path" == /* || "$declared_path" == ".." || "$declared_path" == ../* || "$declared_path" == */../* ]]; then
+            fail "$snippet_name declares an unsafe source/test path: $declared_path"
+        elif [[ ! -f "$REPO_ROOT/$declared_path" ]]; then
+            fail "$snippet_name declares a missing source/test file: $declared_path"
+        fi
+    done < <(sed -E -n 's#^[[:space:]]*//[[:space:]]*(Production|Contract tests):[[:space:]]*(.+)[[:space:]]*$#\2#p' "$snippet_path")
     if grep -E -n -- '(TODO|TBD|<#[^>]*#>|//.*(\.\.\.|…))' "$snippet_path" > "$VERIFY_TEMP_DIR/snippet-placeholder.log" 2>/dev/null; then
         fail "$snippet_name contains a placeholder or omitted code"
         sed "s#^#$CATALOG_REL/Tutorials/Resources/$snippet_name:#" "$VERIFY_TEMP_DIR/snippet-placeholder.log" >&2

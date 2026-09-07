@@ -4,7 +4,6 @@
 // Production: PiggyEscape/PiggyEscape/Sources/Reality/RealityHideARView.swift
 // Production: PiggyEscape/PiggyEscape/Sources/Escape/EscapeRootView.swift
 // Contract tests: PiggyEscape/PiggyEscapeTests/RealityScanTelemetryTests.swift
-// Contract tests: PiggyEscape/PiggyEscapeTests/RealityMeshScanProjectorTests.swift
 // Contract tests: PiggyEscape/PiggyEscapeTests/RealityTargetPreviewTests.swift
 // Contract tests: PiggyEscape/PiggyEscapeTests/RealityHideARViewCoordinatorTests.swift
 
