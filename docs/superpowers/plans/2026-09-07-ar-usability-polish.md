@@ -6,7 +6,7 @@
 - [x] 2. 선택 전 실시간 실제 표면 preview와 actionable rejection, 탭 재검증·학습 sheet 수명
 - [x] 3. 물체 옆 경로·메시 충돌 검사, 제자리 회전/scene-time 이동·종료/취소, 경로 및 통합 회귀 추가
 - [x] 4. 앱과 같은 흐름의 DocC 설명·코드·용어·개선 이미지, 학습 관찰/복구 순서
-- [ ] 5. iPhoneOS 빌드·정책 runtime·DocC/Pages gate·리뷰 후 main 통합·공개 배포
+- [x] 5. iPhoneOS 빌드·정책 runtime·DocC/Pages gate·리뷰 후 main 통합·공개 배포
 - [ ] 6. LiDAR 실기기에서 카메라 시야·실시간 관찰·숨기/찾기/replay 및 실제 전후 캡처
 
 실기기 연결 전에도 1–5를 진행한다. 정책 runtime 통과를 LiDAR 관찰 증거로 간주하지 않는다.
@@ -29,3 +29,7 @@
 - archive/site gate: 경고 0, 이미지 8개의 해시·디코딩·원본/산출물 일치 통과.
 - 브라우저: 44회 렌더, 내부 링크 100개, no-slash 이동 10개 통과. 검사기 자체의 failure contract도 13/13이다.
 - 정책 runtime도 다시 48/48 통과했다. 다음은 최종 통합 검토와 main/Pages 배포이며, 6번의 실제 LiDAR 수용은 여전히 별도 대기다.
+
+## 2026-09-07 공개 반영 체크포인트
+
+최종 통합 검토는 중요 결함 없이 통과했다. PR #5를 main `b03d27b`로 통합한 Pages run `34131852587`의 build·deploy가 모두 성공했다. 공개 11개 경로 HTTP 200, 이미지 8/8 해시 일치, 최신 Chapter 2/3 문구·예제 출처, 실제 브라우저의 소개·스캔 그림·연결 코드를 확인했다. 1–5는 완료이며 **6의 실제 LiDAR 시야·숨기/찾기/replay·캡처 및 최신 222개 iPhone XCTest는 기기 연결 대기**다. 기존 작업 트리와 파일은 이 후속 검증을 위해 보존한다.
