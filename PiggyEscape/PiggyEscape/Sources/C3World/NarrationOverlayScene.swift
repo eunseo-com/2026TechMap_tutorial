@@ -34,7 +34,9 @@ final class NarrationOverlayScene: SKScene {
         let fade = SKAction.fadeIn(withDuration: 0.16)
         let scale = SKAction.scale(to: 1, duration: 0.16)
         scale.timingMode = .easeOut
-        panel.run(.sequence([.group([fade, scale]), .run { onFinished?() }]))
+        // SceneKit renders this overlay off-main; completion can publish SwiftUI state.
+        let finish = SKAction.run({ onFinished?() }, queue: .main)
+        panel.run(.sequence([.group([fade, scale]), finish]))
     }
 
     func showOpeningNarration(onFinished: (() -> Void)? = nil) {

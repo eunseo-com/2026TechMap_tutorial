@@ -8,7 +8,7 @@
 
 이 기록은 해당 재현의 결론이다. OS·기기·권한·tracking 상태가 다른 검은 화면까지 같은 원인이라고 단정하지 않는다.
 
-## 먼저 구분할 네 상태
+## 먼저 구분할 다섯 상태
 
 | 상태 | 확인할 사실 |
 | --- | --- |
@@ -65,9 +65,11 @@
 
 ## 현재 자동 검증 경계
 
-현재 앱 checkpoint에는 정적 XCTest 222개가 있다. 실제 production Swift를 쓰는 host 정책 runtime 48/48과 browser failure contract 13/13이 통과했고, fresh generic iPhoneOS Swift 5·Swift 6 strict `build-for-testing` 및 현재 Swift 5 Release build가 exit 0이다. 물리 iPhone의 기준 unit XCTest 186/186은 이전 checkpoint의 결과이며, 최신 222개 전체 runtime을 이번 변경에서 실행한 것은 아니다. AppIntents dependency 부재 metadata warning 1건이 남지만 source compile warning은 관찰되지 않았다.
+2026-09-07 iPhone 16 Pro(iOS 26.6.1)에서 현재 unit XCTest 223/223이 실행되어 실패·건너뛴 테스트 없이 통과했다. 최초 222개 실행에서 발견한 자막 완료의 background publishing 경고는, 실제 `SCNView` 렌더링 회귀를 추가하고 `SKAction.run(_:queue:)`의 완료 큐를 `.main`으로 지정한 뒤 같은 전체 실행에서 관찰되지 않았다. `@MainActor` 선언만으로 기존 렌더러의 동기 콜백 실행 큐가 바뀌지는 않는다는 경계를 검사한다.
 
-이 자동 결과는 카메라 시야, 실제 mesh 선, 측면 route의 자연스러움이나 LiDAR 가림을 증명하지 않는다. UI test는 0개이며 공개 Pages도 아직 이전 버전이다.
+수정 후 generic iPhoneOS Swift 5·Swift 6 strict `build-for-testing`도 exit 0이다. source compile warning은 없으며 AppIntents dependency 부재 metadata 경고와 기기 진단 수집의 환경 메시지는 별도로 남았다. 앞선 사용성 checkpoint의 production host 정책 48/48, browser failure contract 13/13, Swift 5 Release build와 공개 Pages 배포도 통과했다.
+
+이 자동 결과는 카메라 시야, 실제 mesh 선, 측면 route의 자연스러움이나 LiDAR 가림을 증명하지 않는다. 새 검사는 unit test host의 자막 렌더링 경계를 확인하며, 사용자가 이동하는 전체 흐름의 XCUITest나 실기기 수용을 대신하지 않는다. 공개 Pages에는 네 챕터의 개선된 설명·코드·컨셉 이미지가 반영되어 있다.
 
 ## 실기기 대기
 
