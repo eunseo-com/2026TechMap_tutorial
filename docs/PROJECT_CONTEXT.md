@@ -36,6 +36,8 @@
 
 ## 검증 상태
 
+- 2026-09-08 후속 공개 반영: PR #7 main `28c4f3c`의 Pages run `34136015665` build·deploy 성공. 공개 11개 경로, 이미지 8/8 해시, 최신 Chapter 2/3 내용·예제 출처와 진단 문서의 223/223 실행 증거를 확인했다. 코드·자동 테스트·DocC 공개는 완료이며, 아래 실제 LiDAR 시각 수용만 미완료다.
+
 - 2026-09-07 최신 실기기 자동 회귀: 연결 요청을 반복하지 않은 상태에서 paired iPhone이 사용 가능해져 read-only 잠금·DDI 확인 후 전체 테스트를 실행했다. 222개 실행에서 발견한 자막 종료의 background publishing 경고는 실제 `SCNView` 회귀 RED 뒤 완료 queue를 `.main`으로 지정해 보수했다. 수정 뒤 iPhone 16 Pro/iOS 26.6.1 **223/223 통과·실패/skip 0**, 같은 로그에서 해당 경고 미관찰, Swift 5·Swift 6 strict generic iPhoneOS build exit 0이다. 아래 과거 기록의 222개·190개 실행 대기는 해소됐지만 **실제 LiDAR 시야·스캔·숨기/찾기·캡처는 여전히 미완료**다. Simulator나 기기 설정 변경은 없었다.
 
 ### 이전 체크포인트 — 최신 실행 상태는 위 항목을 우선
