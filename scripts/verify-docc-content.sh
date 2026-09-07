@@ -582,7 +582,8 @@ if [[ -f "$OVERVIEW" ]]; then
         '@Chapter(name: "Chapter 4 — Comparing Worlds")' \
         '@TutorialReference(tutorial: "doc:04-Comparison")'
 
-    require_regex "$OVERVIEW" '(관찰|무엇을 보).*(의미|뜻).*(코드).*(복구|잘 안 되면)' "overview intro must teach observation, meaning, responsible code, and recovery"
+    require_token_order "$OVERVIEW" "overview intro must use the app's exact shared learning labels in order" \
+        '지금 볼 것' '이 말의 뜻' '코드와 연결하기' '잘 안 되면'
     require_regex "$OVERVIEW" '(AI 생성|컨셉).*(실제 앱 실행 화면|실기기 캡처).*(아니|구분)' "overview intro must distinguish concept images from runtime evidence"
     require_regex_count "$OVERVIEW" '(186/186|190개|222개|build-for-testing|Swift 6 strict)' 0 "overview intro must keep detailed verification history out of the first screen"
 
@@ -864,6 +865,7 @@ if [[ -f "$CH1" ]]; then
     require_fixed_count "$CH1" '01-ClosedWorld-02-C3SceneAndInput.swift' 1 "Chapter 1 canonical code mapping"
     require_fixed_count "$CH1" '01-ClosedWorld-03-AutoDiscovery.swift' 1 "Chapter 1 canonical code mapping"
     require_fixed_count "$CH1" '1/4 · 닫힌 세계' 2 "Chapter 1 compact progress caption and alt"
+    require_regex "$CH1" '앱의 [“"]코드로 만든 세계[”"] 학습 창.*[“"]지금 볼 것[”"].*[“"]이 말의 뜻[”"].*[“"]코드와 연결하기[”"].*[“"]잘 안 되면[”"]' "Chapter 1 must bridge the exact learning title and shared labels"
     require_regex "$CH1" 'C3' "Chapter 1 must describe C3"
     require_regex "$CH1" 'HideTree' "Chapter 1 must name HideTree"
     require_regex "$CH1" 'SCNCamera' "Chapter 1 must name SCNCamera"
@@ -887,6 +889,7 @@ if [[ -f "$CH2" ]]; then
     require_fixed_count "$CH2" '02-OpeningReality-02-SessionReadiness.swift' 1 "Chapter 2 canonical code mapping"
     require_fixed_count "$CH2" '02-OpeningReality-03-ScanFeedbackAndGate.swift' 1 "Chapter 2 canonical code mapping"
     require_fixed_count "$CH2" '2/4 · 현실 열기' 2 "Chapter 2 compact progress caption and alt"
+    require_regex "$CH2" '앱의 [“"]공간을 읽는다는 것[”"] 학습 창.*[“"]지금 볼 것[”"].*[“"]이 말의 뜻[”"].*[“"]코드와 연결하기[”"].*[“"]잘 안 되면[”"]' "Chapter 2 must bridge the exact learning title and shared labels"
     require_regex "$CH2" 'ARView' "Chapter 2 must describe ARView"
     require_regex "$CH2" 'ARMeshAnchor' "Chapter 2 must describe ARMeshAnchor"
     require_regex "$CH2" '(classified[[:space:]]+horizontal[[:space:]]+floor|분류된.*수평.*floor|분류된 수평 바닥)' "Chapter 2 must require a classified horizontal floor"
@@ -927,6 +930,7 @@ if [[ -f "$CH3" ]]; then
     require_fixed_count "$CH3" '03-RealHideAndSeek-03-StableOcclusion.swift' 1 "Chapter 3 canonical code mapping"
     require_fixed_count "$CH3" '03-RealHideAndSeek-04-CycleRecovery.swift' 1 "Chapter 3 canonical code mapping"
     require_fixed_count "$CH3" '3/4 · 현실 숨바꼭질' 2 "Chapter 3 compact progress caption and alt"
+    require_regex "$CH3" '앱의 [“"]숨었다는 증거[”"] 학습 창.*[“"]지금 볼 것[”"].*[“"]이 말의 뜻[”"].*[“"]코드와 연결하기[”"].*[“"]잘 안 되면[”"]' "Chapter 3 must bridge the exact learning title and shared labels"
     for literal in \
         '0.18m' \
         '0.90m' \
@@ -978,6 +982,7 @@ if [[ -f "$CH4" ]]; then
     require_fixed_count "$CH4" '04-Comparison-01-ComparisonModel.swift' 1 "Chapter 4 canonical code mapping"
     require_fixed_count "$CH4" '04-Comparison-02-ReplayRouting.swift' 1 "Chapter 4 canonical code mapping"
     require_fixed_count "$CH4" '4/4 · 두 세계 비교' 2 "Chapter 4 compact progress caption and alt"
+    require_regex "$CH4" '앱의 [“"]두 세계의 책임[”"] 학습 창.*[“"]지금 볼 것[”"].*[“"]이 말의 뜻[”"].*[“"]코드와 연결하기[”"].*[“"]잘 안 되면[”"]' "Chapter 4 must bridge the exact learning title and shared labels"
     require_token_order "$CH4" "Chapter 4 comparison axes must be world, coordinates, visibility, responsibilities in that order" \
         world coordinates visibility responsibilities
     for reason in \
