@@ -4,6 +4,10 @@
 
 ## 현재 인수인계
 
+- **2026-09-08 숨기 경로 거절 보수**: 사용자가 물체 탭 후 숨기가 시작되지 않는다고 다시 보고했다. production planner와 독립 장애물 계산으로 돌출 가구의 고정 출발점, 0.40–0.70m 사이 통로 누락의 nil-route RED를 재현했다. 카메라 snapshot을 보존하고 배치 전 출발점·측면 후보를 함께 검색하며, 실제 성공 route의 첫 점을 배치에 사용한다. 바닥 부족·출발점 근접·경로 충돌 안내를 분리했다. 기존 몸통 검사, 이동 중 재검사, 실제 가림과 이동 재발견 기준은 유지한다. 상세: [보수 계획](superpowers/plans/2026-09-08-hide-route-rejection.md).
+- **이번 검증 범위**: 최종 host 정책 **55/55**, generic iPhoneOS Swift 5·Swift 6 strict 앱/test compile/link exit 0, 정적 XCTest inventory **230개**다. source warning 없이 AppIntents dependency 부재 metadata 경고만 있었다. DocC Chapter 3·연결 예제·진단 문서와 검증 기준을 맞췄다. content/독립 예제 12/12, 경고 없는 archive, 이미지 8개 검증, desktop/mobile×light/dark **44회 렌더·내부 링크 102개·no-slash 이동 10개**가 통과했다. 최종 코드 검토 및 갱신된 DocC 공개 확인을 이어 진행한다.
+- **미완료·다음 시작점**: 00:33 및 최종 빌드 뒤 00:43의 physical iPhone read-only 확인은 `passcodeRequired: true`였다. 새 앱 설치·230개 전체 physical 실행·실제 사용자 가구의 숨기/찾기 수용은 미완료다. 아래 **223/223은 직전 코드의 실행 기준선**이지 이번 수정 실행 결과가 아니다. 기기 연결을 반복 요청하거나 Simulator로 대체하지 않는다.
+
 - **2026-09-08 후속 공개 반영 완료**: [PR #7](https://github.com/eunseo-com/2026TechMap_tutorial/pull/7)을 main `28c4f3c`로 통합했고, [Pages run 34136015665](https://github.com/eunseo-com/2026TechMap_tutorial/actions/runs/34136015665)의 build·deploy가 모두 성공했다. 공개 11개 경로 HTTP 200, 이미지 8/8 해시, Chapter 2/3 문구·예제 출처, 진단 문서의 **223/223과 실제 LiDAR 수용 구분**까지 확인했다. 앱/테스트는 검증한 `f3f13c9`와 동일하다. 최신 전체 XCTest 실행·문서·공개 배포 대기는 모두 해소됐으며 **아래 실기기 시각 수용 목록만 미완료**다. 사용자에게 기기 연결을 재요청하지 않고, 움직여야 하는 실제 확인을 자동 테스트로 대신하지 않는다.
 
 - **2026-09-07 최신 실기기 자동 회귀·자막 스레드 보수**: paired iPhone이 local network로 사용 가능해져 잠금 해제·DDI 확인 뒤 최신 테스트를 실행했다. 222개 통과 실행에서 발견한 SwiftUI background publishing 경고를 표시된 `SCNView` 회귀로 재현한 뒤, 자막 완료 queue를 `.main`으로 지정했다. 수정 후 iPhone 16 Pro/iOS 26.6.1 **223/223 통과·실패/skip 0**, 같은 로그에서 해당 경고 미관찰, Swift 5·Swift 6 strict generic iPhoneOS app/test build exit 0이다. 아래 checkpoint의 **전체 XCTest 실행 대기는 해소**됐으며 남은 것은 실제 공간에서의 LiDAR 시야·스캔·숨기/찾기/replay 및 캡처다. 추가 연결 요청·Simulator·기기 설정 변경은 하지 않았다. 근거: L-20260907-170~171.
@@ -69,6 +73,7 @@
 
 | 날짜 | 작업 범위 | 결과 | 검증 | 다음 시작점 |
 | --- | --- | --- | --- | --- |
+| 2026-09-08 | 숨기 경로의 고정 출발점·좁은 통로 거절 | 초기 배치 전 안전 출발점을 찾고 측면 후보를 세분화했다. 실제 route 첫 점을 배치에 전달하며 실패 원인별 안내와 Chapter 3 예제를 정합화했다. | 두 nil-route RED → host 55/55 GREEN, Swift 5·6 strict iPhoneOS app/test compile/link exit 0. 기기 잠금으로 최신 전체 230개 runtime·앱 설치·LiDAR 사용자 가구 재시도는 대기. | 독립 검토·DocC 최종 공개 확인, 이후 실제 물체 재시도 |
 | 2026-09-08 | 자막 경계 보수·최신 검증 DocC 공개 | PR #7 main `28c4f3c`, Pages `34136015665` build/deploy 성공. 검증된 앱 수정과 223개 실행 증거를 공개했다. | 공개 11경로 200, 이미지 8/8 해시, 최신 Chapter 2/3 내용·출처·진단 문서 223/223 경계 확인. 병합 결과와 검증 커밋의 코드 차이 없음. | 실제 LiDAR 시각 수용·숨기/찾기/replay·캡처; 전체 자동 테스트와 공개 배포는 완료 |
 | 2026-09-07 | 실기기 전체 회귀·자막 완료 스레드 | 실제 화면 렌더링에서 발생한 자막 완료의 UI 외 스레드 갱신을 재현하고 완료 queue만 main으로 지정했다. DocC의 최신 테스트·공개 배포 경계도 정정했다. | 새 회귀 RED 확인 후 physical 223/223·실패/skip 0, 같은 로그의 background publishing 경고 미관찰. Swift 5/6 strict iPhoneOS build exit 0, 독립 코드 검토 중요/경미 결함 0, DocC 예제 12/12·archive·이미지/링크 gate 통과. | 공개 후속 반영과 실제 LiDAR 시야·스캔·숨기/찾기/replay·캡처 수용; Simulator로 대체하지 않음 |
 | 2026-09-07 | AR 사용성·학습 이미지·DocC 공개 반영 | 최종 통합 검토 통과 후 PR #5를 `b03d27b`로 main에 통합하고 작은 HUD·실시간 스캔·측면 이동·학습 흐름과 네 새 세로 컨셉을 공개했다. 기존 가로 그림 네 장은 보존했다. | Pages `34131852587` build/deploy 성공. 공개 11경로 200, 이미지 8/8 해시, 최신 Chapter 2/3 문구·예제 출처 및 실제 브라우저 이미지/코드 표시 확인. 로컬 정책 48/48·문서 예제 12/12·렌더 44/44. | 기기 연결 가능 시 최신 222개 iPhone XCTest와 아래 실기기 수용 목록; 그전에는 완료로 과장하거나 Simulator로 대체하지 않음 |

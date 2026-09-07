@@ -32,5 +32,8 @@ enum RealityAvailabilityMessage {
     static let scanFirst = "주변 바닥과 숨을 물체를 조금 더 스캔해줘."
     static let selectVerticalSide = "카메라에서 90cm 이상 떨어진 실제 물체의 옆면을 탭해줘."
     static let moveFartherAway = "카메라에서 90cm 이상 떨어진 물체의 옆면을 탭해줘."
+    static let routeInsufficientFloor = "돼지가 돌아갈 앞·양옆·뒤 바닥을 더 비추고 다시 골라줘."
+    static let routeCameraTooClose = "돼지가 출발할 자리가 너무 가까워. 한 걸음 뒤에서 다시 골라줘."
+    static let routeObstructed = "이 옆면으로 돌아갈 길이 막혀 있어. 다른 옆면이나 물체를 골라줘."
     static let pigAssetLoadFailed = "돼지를 불러오지 못했어. 잠시 후 다시 시도해줘."
 }

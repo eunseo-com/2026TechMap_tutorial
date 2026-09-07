@@ -1,6 +1,6 @@
 @Tutorial(time: 35) {
     @Intro(title: "Chapter 3 — 진짜 숨바꼭질") {
-        이제 돼지가 선택한 옆면의 카메라 쪽 시작점에서 물체를 통과하지 않는 측면 경로로 반대편 바닥 목적지까지 이동합니다. 걷기 애니메이션이 끝났다는 이유만으로 숨김을 선언하지 않고, 현재 카메라에서 본 돼지 실루엣이 실제 mesh에 안정적으로 가려졌는지 확인합니다.
+        이제 돼지가 선택한 옆면의 카메라 쪽에서 출발해 물체를 통과하지 않는 측면 경로로 반대편 바닥 목적지까지 이동합니다. 출발점이 가구 아래쪽과 겹치면 돼지를 배치하기 전에 더 바깥의 출발점을 함께 찾습니다. 걷기 애니메이션이 끝났다는 이유만으로 숨김을 선언하지 않고, 현재 카메라에서 본 돼지 실루엣이 실제 mesh에 안정적으로 가려졌는지 확인합니다.
 
         앱의 “숨었다는 증거” 학습 창처럼 “지금 볼 것” → “이 말의 뜻” → “코드와 연결하기” → “잘 안 되면” 순서로 작은 돼지의 가림과 복구를 읽습니다. 찾기 안내는 verified hide 뒤에만 정확히 “옆으로 움직이거나 카메라 방향을 바꿔 피기를 찾아봐.”라고 나타납니다.
     }
@@ -14,7 +14,7 @@
 
                 @Code(name: "물리 크기와 floor plan", file: "03-RealHideAndSeek-01-ScaleAndFloorPlan.swift")
 
-                실행 확인: 카메라에서 0.90m 이상 떨어지고 `abs(normal.y) <= 0.35`인 면만 수용합니다. surface hit에는 0.02m tolerance를, 배치에는 0.10m inset을 적용하며 카메라 쪽 start와 반대쪽 destination을 각각 0.28m 떨어뜨려 같은 floor Y에 놓습니다. 실패·복구: 비어 있거나 유한하지 않은 bounds는 typed failure로 끝냅니다. 수평면, 근거리, 바닥 부족, floor footprint 밖이면 행동 가능한 거부 이유를 보여 주고 target selection에 남습니다.
+                실행 확인: 카메라에서 0.90m 이상 떨어지고 `abs(normal.y) <= 0.35`인 면만 수용합니다. surface hit에는 0.02m tolerance를, 배치에는 0.10m inset을 적용하며 초기 start와 destination을 면의 앞뒤 0.28m, 같은 floor Y에 놓습니다. 선택 당시 camera position도 보존합니다. 이 둘은 경로 탐색의 기준점이지 확정 배치점이 아닙니다. 뒤의 route 단계에서 몸통이 통과하는 실제 첫 점과 마지막 점을 확정한 뒤에만 돼지를 배치합니다. 실패·복구: 비어 있거나 유한하지 않은 bounds는 typed failure로 끝냅니다. 수평면, 근거리, 바닥 부족, floor footprint 밖이면 행동 가능한 거부 이유를 보여 주고 target selection에 남습니다.
             }
         }
     }
@@ -58,20 +58,26 @@
     @Section(title: "제한된 재시도와 cycle 수명 정리하기") {
         메쉬에는 구멍이 생기고 좁은 물체는 실루엣을 충분히 가리지 못할 수 있습니다. 한 위치에서 영원히 기다리지 않고 시도마다 예산을 둔 뒤, 같은 floor region 안에서만 제한적으로 더 숨습니다. 측정하지 못한 공간은 안전한 통로라고 보장하지 않습니다.
 
+        경로 탐색은 초기 start에서 물체 바깥으로 `0/0.15/0.30/0.45/0.60m` 더 떨어진 출발점, 측면 거리 `0.40/0.50/0.60/0.70/0.80/1.0/1.2/1.4m`, 추가 깊이 `0/0.25/0.55/0.85m`의 양쪽 후보를 짧은 순으로 검사합니다. 출발점은 선택 당시 카메라에서 0.90m 이상 떨어져야 합니다. camera position이 없는 이전 고정 plan은 출발점을 확장하지 않습니다. 동일 segment의 충돌 결과는 이번 탐색 안에서만 재사용합니다.
+
+        이동 중 새 mesh와 충돌하는지 계속 검사할 때는 위 캐시를 재사용하지 않습니다. 최초 경로가 열려 있었다고 이후 공간의 변화를 무시하지 않습니다.
+
         @Steps {
             @Step {
                 측면 route·몸통 여유, scene-time 걷기, same-frame observation, deadline, retry와 replay teardown을 hide cycle 단위로 묶습니다.
 
                 @Code(name: "가림 실패와 cycle 복구", file: "03-RealHideAndSeek-04-CycleRecovery.swift")
 
-                실행 확인: 측면 거리 `0.40/0.70/1.0/1.4m`, 추가 깊이 `0/0.25/0.55/0.85m`의 양쪽 후보를 짧은 순으로 검사합니다. 모든 점과 0.20m footprint가 floor 안에 있고 각 segment의 `convexCast`가 `.sceneUnderstanding` 몸통 여유를 확인한 route만 수용합니다. 돼지는 가장 짧은 각도로 제자리 회전하고 `SceneEvents.Update`의 scene-time으로 0.45m/s 이동합니다. 이동 중 새 mesh와 충돌하는지 계속 검사합니다. 그 뒤 한 hide attempt는 60 unique frame 또는 1.5초 중 먼저 끝나는 경계를 사용합니다. deadline 전 60번째 frame은 평가하고 `now >= deadline`인 frame은 제외합니다. scene update가 멎어도 cancellable deadline이 발화하며, retry는 같은 immutable floor region 안에서 0.18m씩 최대 2회 수행합니다. 실패·복구: route가 없거나 이동 중 장애물이 생기면 이동을 취소하고 양옆 바닥을 더 비춘 뒤 target selection으로 돌아갑니다. 후보가 inset 밖이거나 최종 가림 시도가 실패해도 anchor를 제거하고 selection으로 복구합니다. replay는 매번 새 anchor·controller·generation을 만들고 late callback을 무시합니다. Chapter 3 retry에는 같은 AR session을 유지하고 full stop에서만 session을 pause합니다.
+                실행 확인: 모든 점과 0.20m footprint가 floor 안에 있고 각 segment의 `convexCast`가 `.sceneUnderstanding` 몸통 여유를 확인한 route만 수용합니다. 성공한 route의 첫 점에 처음 배치하며, 막힌 초기 start에서 새 start까지 물체를 통과해 이동하지 않습니다. 설치된 모델의 실제 footprint도 재검사합니다. 제자리 회전 뒤 `SceneEvents.Update`의 scene-time으로 0.45m/s 이동하고, 새 mesh와 충돌하는지 계속 확인합니다. 도착 후 한 hide attempt는 60 unique frame 또는 1.5초 중 먼저 끝나는 경계를 사용합니다. deadline 전 60번째 frame은 평가하고 `now >= deadline`인 frame은 제외합니다. scene update가 멎어도 cancellable deadline이 발화하며, retry는 같은 immutable floor region 안에서 0.18m씩 최대 2회 수행합니다. 실패·복구: 바닥 부족이면 앞·양옆·뒤 바닥을 더 비추고, 출발점 근접이면 한 걸음 뒤에서 선택하며, 충돌 거절이면 다른 옆면을 선택하도록 각각 안내합니다. 이동 중 장애물, inset 밖 후보 또는 최종 가림 실패는 anchor를 제거하고 target selection으로 복구합니다. replay는 새 anchor·controller·generation을 만들고 late callback을 무시합니다. Chapter 3 retry에는 같은 AR session을 유지하고 full stop에서만 session을 pause합니다.
 
             }
         }
 
         학습 sheet를 열면 AR 입력과 active-time deadline을 일시 정지하고, 이미 큐에 있던 최신 scan·준비·발견 event는 닫은 뒤 한 번만 처리합니다. 로딩 중 발견 pose는 취소해 새 관찰을 요구합니다. 앱이 비활성 상태인 시간도 active 시간에 포함하지 않으며, 이동·가림 확인 중 비활성화되면 cycle을 취소하고 선택 단계로 복구합니다.
 
-        실기기 대기: 0.18m 돼지의 체감 크기, 실제 floor inset과 측면 route, 좁은 물체와 mesh hole에서의 4/5×두 frame hide, 사용자의 0.15m/15° 이동 뒤 3/5×두 frame reveal, 이동 중 obstruction 복구와 replay 정리는 LiDAR 지원 기기에서 직접 확인해야 합니다. 같은 물체·기기·위치의 before/after 증거도 아직 실기기 대기입니다.
+        중앙의 선택 가능 표시는 세로 면·거리·바닥 기준을 통과했다는 뜻이지, 소파·의자의 종류를 인식했거나 돌아갈 길을 확정했다는 뜻이 아닙니다. 경로 전체의 몸통 검사는 탭 순간에 수행합니다. 후보가 유한하므로 모든 방의 가능한 통로를 찾는 범용 길찾기도 아닙니다.
+
+        실기기 대기: 0.18m 돼지의 체감 크기, 실제 floor inset과 측면 route, 좁은 물체와 mesh hole에서의 4/5×두 frame hide, 사용자의 0.15m/15° 이동 뒤 3/5×두 frame reveal, 이동 중 obstruction 복구와 replay 정리는 LiDAR 지원 기기에서 직접 확인해야 합니다. 돌출된 가구와 좁은 통로의 경로 회귀 테스트는 실제 사용자 방의 LiDAR 결과를 대신하지 않습니다. 같은 물체·기기·위치의 before/after 증거도 아직 실기기 대기입니다.
 
         이전 장: <doc:02-OpeningTheDoor>
 

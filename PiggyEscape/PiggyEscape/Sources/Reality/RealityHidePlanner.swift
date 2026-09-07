@@ -100,7 +100,24 @@ struct RealityHidePlan: Equatable {
     let destination: SIMD3<Float>
     let retreatDirection: SIMD3<Float>
     let floorRegion: RealityFloorRegion
-    var waypoints: [SIMD3<Float>] = []
+    var waypoints: [SIMD3<Float>]
+    let cameraPosition: SIMD3<Float>?
+
+    init(
+        start: SIMD3<Float>,
+        destination: SIMD3<Float>,
+        retreatDirection: SIMD3<Float>,
+        floorRegion: RealityFloorRegion,
+        waypoints: [SIMD3<Float>] = [],
+        cameraPosition: SIMD3<Float>? = nil
+    ) {
+        self.start = start
+        self.destination = destination
+        self.retreatDirection = retreatDirection
+        self.floorRegion = floorRegion
+        self.waypoints = waypoints
+        self.cameraPosition = cameraPosition
+    }
 }
 
 struct RealityHideAttempt: Equatable {
@@ -210,7 +227,8 @@ enum RealityHidePlanner {
             start: start,
             destination: destination,
             retreatDirection: -towardCamera,
-            floorRegion: floorRegion
+            floorRegion: floorRegion,
+            cameraPosition: cameraPosition
         ))
     }
 }

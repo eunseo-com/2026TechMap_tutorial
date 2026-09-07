@@ -12,6 +12,8 @@ import RealityKit
 import simd
 
 struct PlacementFloorRegion {
+    // Teaching simplification: axis-aligned, already projected to floor Y and
+    // inset by 0.10m. Production uses the rotated immutable AR floor snapshot.
     let minimumXZ: SIMD2<Float>
     let maximumXZ: SIMD2<Float>
 
@@ -25,47 +27,95 @@ struct SideWalkRoute {
     let points: [SIMD3<Float>]
 }
 
+enum SideWalkRouteFailure {
+    case invalidPlan, insufficientFloor, cameraTooClose, movementObstructed
+}
+
 enum SideWalkRoutePlanner {
     static let footprintRadius: Float = 0.20
-    static let sideDistances: [Float] = [0.40, 0.70, 1.0, 1.4]
+    static let minimumCameraDistance: Float = 0.90
+    static let startExtras: [Float] = [0, 0.15, 0.30, 0.45, 0.60]
+    static let sideDistances: [Float] = [0.40, 0.50, 0.60, 0.70, 0.80, 1.0, 1.2, 1.4]
     static let extraDepths: [Float] = [0, 0.25, 0.55, 0.85]
+
+    private struct Segment: Hashable {
+        let start: SIMD3<Float>
+        let end: SIMD3<Float>
+    }
 
     static func route(
         start: SIMD3<Float>,
         destination: SIMD3<Float>,
         retreatDirection: SIMD3<Float>,
         floor: PlacementFloorRegion,
+        cameraPosition: SIMD3<Float>?,
+        onFailure: (SideWalkRouteFailure) -> Void,
         isSegmentClear: (SIMD3<Float>, SIMD3<Float>) -> Bool
     ) -> SideWalkRoute? {
         let horizontal = SIMD3(retreatDirection.x, 0, retreatDirection.z)
-        guard simd_length_squared(horizontal) > 0.0001 else { return nil }
+        let magnitude = simd_length_squared(horizontal)
+        guard start.allFinite, destination.allFinite, retreatDirection.allFinite,
+              cameraPosition?.allFinite ?? true,
+              magnitude.isFinite, magnitude > 0.0001 else {
+            onFailure(.invalidPlan)
+            return nil
+        }
         let retreat = simd_normalize(horizontal)
         let side = SIMD3(-retreat.z, 0, retreat.x)
         var candidates: [SideWalkRoute] = []
+        var hadFloorCandidate = false
 
-        for depth in extraDepths {
-            for distance in sideDistances {
-                for sign: Float in [1, -1] {
-                    let end = destination + retreat * depth
-                    let offset = side * distance * sign
-                    let points = [start, start + offset, end + offset, end]
-                    guard points.allSatisfy({ hasFloor(at: $0, in: floor) }) else {
-                        continue
+        // Without the selection-time camera snapshot, preserve the legacy spawn.
+        for extra in cameraPosition == nil ? [0] : startExtras {
+            let spawn = start - retreat * extra
+            for depth in extraDepths {
+                for distance in sideDistances {
+                    for sign: Float in [1, -1] {
+                        let end = destination + retreat * depth
+                        let offset = side * distance * sign
+                        let points = [spawn, spawn + offset, end + offset, end]
+                        guard points.allSatisfy({ hasFloor(at: $0, in: floor) }) else {
+                            continue
+                        }
+                        hadFloorCandidate = true
+                        if let cameraPosition {
+                            let distance = simd_distance(spawn, cameraPosition)
+                            guard distance.isFinite, distance >= minimumCameraDistance else {
+                                continue
+                            }
+                        }
+                        candidates.append(SideWalkRoute(points: points))
                     }
-                    candidates.append(SideWalkRoute(points: points))
                 }
             }
         }
 
-        return candidates.enumerated().sorted {
+        guard !candidates.isEmpty else {
+            onFailure(hadFloorCandidate ? .cameraTooClose : .insufficientFloor)
+            return nil
+        }
+        let ordered = candidates.enumerated().sorted {
             let lhs = length($0.element)
             let rhs = length($1.element)
             return lhs == rhs ? $0.offset < $1.offset : lhs < rhs
-        }.lazy.map(\.element).first { route in
-            zip(route.points, route.points.dropFirst()).allSatisfy {
-                isSegmentClear($0.0, $0.1)
+        }
+        var clearances: [Segment: Bool] = [:]
+        for candidate in ordered {
+            let route = candidate.element
+            if zip(route.points, route.points.dropFirst()).allSatisfy({ start, end in
+                let segment = Segment(start: start, end: end)
+                if let clear = clearances[segment] { return clear }
+                let clear = isSegmentClear(start, end)
+                clearances[segment] = clear
+                return clear
+            }) {
+                // Place the still-disabled pig at points.first, then walk along
+                // dropFirst(). Never move from the rejected original start.
+                return route
             }
         }
+        onFailure(.movementObstructed)
+        return nil
     }
 
     private static func hasFloor(
@@ -85,6 +135,10 @@ enum SideWalkRoutePlanner {
             $0 + simd_distance($1.0, $1.1)
         }
     }
+}
+
+private extension SIMD3 where Scalar == Float {
+    var allFinite: Bool { x.isFinite && y.isFinite && z.isFinite }
 }
 
 /// A real implementation uses the installed model footprint for bodyRadius.
