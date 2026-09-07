@@ -1,5 +1,7 @@
 // Production: PiggyEscape/PiggyEscape/Sources/Reality/RealityOcclusionPolicy.swift
+// Production: PiggyEscape/PiggyEscape/Sources/Reality/RealityOcclusionObservationProvider.swift
 // Contract tests: PiggyEscape/PiggyEscapeTests/RealityOcclusionPolicyTests.swift
+// Contract tests: PiggyEscape/PiggyEscapeTests/RealityOcclusionObservationProviderTests.swift
 
 import Foundation
 import simd
@@ -61,6 +63,20 @@ struct OcclusionObservation {
         PigOcclusionSampleID.allCases.reduce(into: 0) { result, id in
             if samples[id] == state { result += 1 }
         }
+    }
+
+    /// Limited tracking cannot provide a trustworthy movement pose. All five
+    /// samples become invalid so neither hide nor reveal can extend a streak.
+    static func invalidTracking(frameTimestamp: TimeInterval) -> Self {
+        Self(
+            frameTimestamp: frameTimestamp,
+            samples: Dictionary(
+                uniqueKeysWithValues: PigOcclusionSampleID.allCases.map {
+                    ($0, OcclusionSampleState.invalid)
+                }
+            ),
+            cameraPose: nil
+        )
     }
 }
 

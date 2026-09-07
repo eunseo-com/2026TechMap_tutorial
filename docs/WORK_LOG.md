@@ -6,6 +6,7 @@
 
 - **2026-09-07 추가 사용성 체크포인트**: `codex/ar-usability-polish`에서 [AR 개선 계획](superpowers/plans/2026-09-07-ar-usability-polish.md) 1–3의 코드를 구현했다. 큰 AR 설명창을 작은 챕터/상태 HUD와 별도 학습 sheet로 분리했고, 실제 frame의 메시·바닥·tracking을 4Hz로 계속 표시한다. 채움 없는 실제 삼각형 최대 120개와 선택 전 옆면/거리/바닥 preview를 추가했다. 돼지는 측면 경로를 실제 몸통 convex cast로 검사한 뒤 제자리 회전·0.45m/s scene-time 이동을 사용하며, 이동 중 장애물/중단이면 선택으로 복구한다. 코드 검토의 sheet 뒤 발견 콜백·불안정 tracking·C3 busy 상태·가로 안내 clipping을 보수했다.
 - **이번 검증과 다음 작업**: 실제 production Swift를 사용하는 host XCTest 48/48·0 failures, generic iPhoneOS Swift 5와 Swift 6 strict app/test bundle compile/link 각각 exit 0이며 테스트 정적 inventory 222개다. 222개 전체의 iPhone runtime과 AR 시각 수용을 실행한 것은 아니다. 사용자가 현재 iPhone 연결이 어렵다고 답했고 Simulator는 실행하지 않았다. 다음은 새 HUD/측면 경로에 맞춘 **DocC·예제 코드·학습 이미지 교체와 공개 Pages 동기화**이며 아직 그 변경을 배포하지 않았다. 아래 기록의 190개/9월 3일 Pages 배포는 직전 기준선이다.
+- **2026-09-07 DocC 정합화 체크포인트**: 네 챕터와 심화 문서를 앱 학습 창의 관찰→의미→책임 코드→복구 흐름에 맞췄다. Chapter 2는 first-ready latch와 최대 4Hz 현재 telemetry, 긴급 tracking 변화, 실제 삼각형 최대 120개의 채움 없는 선, 현재 상태 CTA와 중앙 preview·tap 재검사를 설명한다. Chapter 3은 bounded 측면 route·몸통 `convexCast`, 제자리 회전·0.45m/s scene-time 이동, live obstruction·tracking 무효·학습 sheet 수명을 연결한다. 기존 12개 예제·step pairing을 유지했으며 content gate와 독립 iPhoneOS type-check 12/12가 통과했다. 실제 LiDAR 시각 수용과 공개 Pages build·브라우저 검증·배포는 아직 완료하지 않았다.
 
 - 상태: 사용자가 기존 Chapter 1 제한을 해제하고 Chapter 2–4와 공개 DocC까지 완성하는 [4개 챕터 완성 설계](superpowers/specs/2026-08-29-four-chapter-experience-and-docc-design.md)를 승인했다. [4개 챕터 실행 계획](superpowers/plans/2026-08-29-four-chapter-experience-and-docc-implementation.md)은 앱 TDD 8개 단계, UI·Swift 6 준비, DocC 단일 원본·시각 자료·접근성·Pages, 최종 실기기·배포의 13개 태스크로 고정했다. Task 2는 네 챕터 상태·이벤트·오류 reason 보존과 상태 기반 chapter derivation, 별도 callback generation gate를 추가했고, Settings 재확인 1회 소비와 승인 전이만 사용하는 coordinator 호환 경로까지 검토 보수했다.
 - 진행 중 범위: 실행 앱은 C3 섬을 Chapter 1, 카메라 권한·AR 준비를 Chapter 2, 실제 물체 뒤 숨기·물리적 재발견을 Chapter 3, SceneKit/RealityKit 비교·완료를 Chapter 4로 분리한다. Chapter 2–3은 같은 `ARView`·session을 유지한다. Chapter 2 스캔은 실제 scene-understanding mesh만 시각화하고 mesh/floor 진행·one-shot 완료·Reduce Motion 정적 대안·유효 표면 marker를 분리한다. Chapter 3은 0.18m 돼지, 0.90m 최소 거리, 현재 camera view 기준 중심·상·하·좌·우 5점, 중심 포함 4/5의 서로 다른 AR frame 연속 두 관찰 가림, 0.15m 또는 15° 이동 이력 뒤 중심 포함 3/5의 연속 두 관찰 재발견을 기준으로 한다. 정보 overlay는 AR 탭을 막지 않으며 발견 뒤 다시 숨기기와 Chapter 4 진행을 제공한다.
@@ -17,6 +18,8 @@
 
 ### 실기기 수용 목록 — 실기기 대기
 
+- [ ] AR 상단은 작은 챕터/상태, 하단은 짧은 안내만 보여 중앙 카메라를 크게 가리지 않는다. 가로 화면과 접근성 큰 글씨에서도 하단 안내를 작은 영역 안에서 끝까지 읽을 수 있다.
+- [ ] 도움말을 열면 관찰·의미·책임 코드·복구를 따로 읽을 수 있고, 창 뒤에서 선택이나 발견이 진행되지 않는다. 닫은 뒤에는 새 정상 관찰을 요구하거나 보류한 결과를 한 번만 전달한다.
 - [ ] C3 섬·기존 나무·초기 나레이션이 보인다.
 - [ ] 초기 나레이션이 끝나기 전 돼지 탭은 무시된다.
 - [ ] 탭 뒤 걷는 돼지가 현재 카메라 반대편 나무 뒤로 이동한다.
@@ -24,8 +27,11 @@
 - [x] 페이드 뒤 시스템 카메라 권한 문구가 보이고, 허용 뒤 AR 카메라 배경이 열린다. 스캔 안내와 LiDAR 준비 상태의 일치는 별도 확인한다.
 - [ ] 권한 거부·제한과 Settings 복구를 각각 관찰한다.
 - [ ] Chapter 2의 공간 준비 CTA 전에는 AR 화면 탭이 타깃을 만들지 않고, CTA 뒤 같은 session에서 Chapter 3으로 이어진다.
-- [ ] Chapter 2의 실제 인식 mesh 표시와 mesh/floor 진행이 관찰 상태와 일치하고, 준비 완료는 한 번만 피드백되며 Chapter 3에서 mesh 디버그 표시가 제거된다.
-- [ ] 카메라에서 0.90m 이상 떨어진 실제 물체의 수직 옆면을 탭하면 0.18m 돼지가 카메라 쪽 바닥에서 반대편 바닥으로 걸어가며 화면을 과도하게 가리지 않는다.
+- [ ] Chapter 2의 채움 없는 메시 선·현재 mesh/floor 상태가 실제 관찰에 맞춰 계속 바뀐다. tracking 또는 관찰 상태가 나빠지면 시작 CTA가 다시 비활성화되고, Chapter 3에서는 스캔 선이 제거된다.
+- [ ] 선택 전 중앙 preview의 옆면·실제 거리·바닥 부족 안내가 맞으며, 실제 탭 위치와 전체 route는 탭 순간 다시 검사한다.
+- [ ] 카메라에서 0.90m 이상 떨어진 실제 물체의 수직 옆면을 탭하면 0.18m 돼지가 몸통 여유가 확보된 측면 경로로 물체를 돌아간다. 코너에서 제자리 회전한 뒤 움직이고, 화면을 과도하게 가리거나 물체를 관통하지 않는다.
+- [ ] 경로가 없거나 이동 중 새 장애물이 관찰되면 도착/숨기 성공을 꾸미지 않고 선택 단계로 복구한다.
+- [ ] 추적 불안정 때 카메라 pose를 이동 이력에 포함하지 않는다. 이동·가림 확인 중 앱을 비활성화했다가 돌아오면 선택 단계로 복구하고, 백그라운드 시간을 스캔 대기 시간으로 세지 않는다.
 - [ ] 현재 camera view 기준 중심·상·하·좌·우가 모두 화면 안에서 유효하고, 중심 포함 4/5를 실제 LiDAR mesh가 서로 다른 AR frame의 연속 두 관찰에서 가린 뒤에만 찾기 안내가 나타난다.
 - [ ] “옆으로 움직이거나 카메라 방향을 바꿔 피기를 찾아봐.” 정보 패널이 물체 선택·카메라 조작을 가로채지 않는다.
 - [ ] 가려진 채로 0.15m 이상 이동하거나 15° 이상 회전한 이력을 만든 뒤 중심 포함 3/5가 서로 다른 AR frame의 연속 두 유효 관찰에서 보일 때만 한 번 발견된다.
@@ -51,6 +57,7 @@
 
 | 날짜 | 작업 범위 | 결과 | 검증 | 다음 시작점 |
 | --- | --- | --- | --- | --- |
+| 2026-09-07 | AR 사용성 DocC·독립 예제 정합화 | 네 챕터 caption·설명과 관련 심화 문서를 compact HUD, 현재 telemetry, 채움 없는 mesh 선, 중앙 preview·tap 재검사, 측면 route·scene-time 이동, tracking/학습 수명에 맞췄다. overview 첫 화면의 상세 검증 이력은 진단 문서로 옮기고 기존 12개 예제와 step title/code pairing을 유지했다. | `scripts/verify-docc-content.sh` exit 0. overview 1·tutorial 4·article 5·snippet 12, 독립 iPhoneOS snippet type-check 12/12, 금지된 의미·source match 0. Simulator·실기기·공개 배포 미실행. | DocC archive·site/44-profile browser gate와 공개 Pages 동기화; LiDAR 실기기 수용은 별도 대기 |
 | 2026-09-07 | AR 시야·실시간 스캔·측면 이동 체크포인트 | 작은 HUD/학습 sheet, 실제 메시 선·4Hz 현재 관찰, 측정된 표면 preview, 바닥/몸통 충돌을 검사한 측면 경로·scene-time 이동과 중단 복구를 추가했다. 검토에서 찾은 학습·tracking·C3·가로 글씨 수명을 보수했다. | host 정책 48/48 runtime 통과. generic iPhoneOS Swift 5 build-for-testing exit 0, 222개 integration 포함 test bundle 컴파일. 실제 LiDAR와 전체 iPhone test runtime은 미실행. L-20260907-160~163. | 새 화면·경로·학습 의미에 맞춘 DocC/예제/이미지 개선 후 Pages 검증·배포 |
 | 2026-09-03 | 공개 DocC Pages 배포·workflow runtime 보수 | PR #2를 `main`에 merge해 8개 시각 자료와 네 챕터 문서를 공개했다. 첫 성공 run에 남은 공식 Actions Node 20 deprecation을 확인하고, 각 공식 최신 release의 commit SHA로 action을 고정하면서 verifier 실행 Node도 24로 올렸다. | PR #3 merge `8315243`, Pages run `33709409875` build·deploy 성공, build/deploy annotation 각각 0. 공개 11 route·보정 script HTTP 200, image SHA-256 8/8 승인값 일치. desktop 1440×900에서 고지·컨셉 이미지·코드 동시 배치, mobile 390×844에서 이미지 전체 폭·지연 로드 완료를 확인했다. | 실기기 focused 9개·full 190개와 LiDAR before/after evidence |
 | 2026-09-03 | 공개 DocC 앱 화면 컨셉·8-image Pages gate | 사용자가 지정한 챕터 구조 도식 4장과 앱 흐름을 보여 주는 세로 컨셉 화면 4장을 정확한 챕터·코드 단계에 연결했다. 모든 컨셉에 실제 앱 실행 화면·실기기 캡처가 아니라는 고지와 고유 대체 텍스트, 관찰 증거 경계를 붙였고 오래된 아이콘을 제거했다. 한국어 시작·현재 섹션 표현, 승인 이미지 SHA-256·완전 PNG decode·산출물 byte identity, 경로별 h1·root 이동·렌더 링크/fragment와 light/dark 접근성 gate를 보강했다. | DocC content 12/12, warning-free site build, documentation/tutorial route 5+5와 이미지 8장 검증, browser contract 13/13, desktop/mobile×light/dark에서 11 route×4=44회 및 same-origin 링크 97개 통과. 콘솔·페이지·네트워크 오류와 axe serious/critical 0건. Swift 5·Swift 6 strict generic iPhoneOS `build-for-testing`과 현재 Swift 5 Release 구성 빌드 각각 exit 0. 최신 physical 4개 runtime과 LiDAR before/after는 `실기기 대기`. | 기능 브랜치를 `main`에 통합해 Pages를 배포하고 공개 URL 재검증; 이어 iPhone unlock 뒤 focused 9개·full 190개와 LiDAR 수용 목록 실행 |
