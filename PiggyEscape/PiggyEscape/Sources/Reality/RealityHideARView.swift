@@ -116,10 +116,13 @@ struct RealityHideARView: UIViewRepresentable {
     let interactionMode: RealityHideInteractionMode
     let hideCycleResetSequence: Int
     let scanPresentation: RealityScanPresentation
+    let isInteractionSuspended: Bool
+    let onScanVisualization: (RealityScanVisualization) -> Void
     let onScanUpdate: (RealityScanUpdate) -> Void
     let onScanningReady: () -> Void
     let onTargetAccepted: () -> Void
     let onMovementFinished: () -> Void
+    let onMovementObstructed: () -> Void
     let onOcclusionRetryStarted: () -> Void
     let onOcclusionExhausted: () -> Void
     let onPigReachedTarget: () -> Void
@@ -139,9 +142,12 @@ struct RealityHideARView: UIViewRepresentable {
             reduceMotion: false
         ),
         onScanUpdate: @escaping (RealityScanUpdate) -> Void = { _ in },
+        isInteractionSuspended: Bool = false,
+        onScanVisualization: @escaping (RealityScanVisualization) -> Void = { _ in },
         onScanningReady: @escaping () -> Void,
         onTargetAccepted: @escaping () -> Void,
         onMovementFinished: @escaping () -> Void = {},
+        onMovementObstructed: @escaping () -> Void = {},
         onOcclusionRetryStarted: @escaping () -> Void = {},
         onOcclusionExhausted: @escaping () -> Void = {},
         onPigReachedTarget: @escaping () -> Void,
@@ -156,10 +162,13 @@ struct RealityHideARView: UIViewRepresentable {
         self.interactionMode = interactionMode
         self.hideCycleResetSequence = hideCycleResetSequence
         self.scanPresentation = scanPresentation
+        self.isInteractionSuspended = isInteractionSuspended
+        self.onScanVisualization = onScanVisualization
         self.onScanUpdate = onScanUpdate
         self.onScanningReady = onScanningReady
         self.onTargetAccepted = onTargetAccepted
         self.onMovementFinished = onMovementFinished
+        self.onMovementObstructed = onMovementObstructed
         self.onOcclusionRetryStarted = onOcclusionRetryStarted
         self.onOcclusionExhausted = onOcclusionExhausted
         self.onPigReachedTarget = onPigReachedTarget
@@ -179,9 +188,12 @@ struct RealityHideARView: UIViewRepresentable {
             hideCycleResetSequence: hideCycleResetSequence,
             scanPresentation: scanPresentation,
             onScanUpdate: onScanUpdate,
+            isInteractionSuspended: isInteractionSuspended,
+            onScanVisualization: onScanVisualization,
             onScanningReady: onScanningReady,
             onTargetAccepted: onTargetAccepted,
             onMovementFinished: onMovementFinished,
+            onMovementObstructed: onMovementObstructed,
             onOcclusionRetryStarted: onOcclusionRetryStarted,
             onOcclusionExhausted: onOcclusionExhausted,
             onPigReachedTarget: onPigReachedTarget,
@@ -205,6 +217,7 @@ struct RealityHideARView: UIViewRepresentable {
 
     func updateUIView(_ uiView: RealityARSessionContainer, context: Context) {
         context.coordinator.interactionMode = interactionMode
+        context.coordinator.isInteractionSuspended = isInteractionSuspended
         context.coordinator.synchronizeHideCycle(resetSequence: hideCycleResetSequence)
         context.coordinator.updateScanPresentation(scanPresentation)
     }
@@ -251,8 +264,10 @@ struct RealityHideARView: UIViewRepresentable {
         private var seededVisualController: RealityPigVisualController?
         private let onScanningReady: () -> Void
         private let onScanUpdate: (RealityScanUpdate) -> Void
+        private let onScanVisualization: (RealityScanVisualization) -> Void
         private let onTargetAccepted: () -> Void
         private let onMovementFinished: () -> Void
+        private let onMovementObstructed: () -> Void
         private let onOcclusionRetryStarted: () -> Void
         private let onOcclusionExhausted: () -> Void
         private let onPigReachedTarget: () -> Void
@@ -266,6 +281,7 @@ struct RealityHideARView: UIViewRepresentable {
 
         private weak var arView: ARView?
         private var environmentReadiness = RealityEnvironmentReadiness()
+        private var telemetryTracker = RealityScanTelemetryTracker()
         private var scanningSubscription: (any Cancellable)?
         private var cycle: HideCycle?
         private weak var tapRecognizer: UITapGestureRecognizer?
@@ -273,12 +289,34 @@ struct RealityHideARView: UIViewRepresentable {
         private var didReceiveCameraFrame = false
         private var shouldResumeScanningAfterInterruption = false
         private var isSessionInterrupted = false
+        private var selectionFeedback: (message: String, expiresAt: TimeInterval)?
 
         private(set) var didStartMeshSession = false
         private(set) var status = RealityHideARStatus.waitingForTarget
         private(set) var cycleGeneration = 0
         private(set) var cycleCreationCount = 0
         var interactionMode: RealityHideInteractionMode
+        var isInteractionSuspended: Bool {
+            didSet {
+                guard isInteractionSuspended != oldValue else { return }
+                if isInteractionSuspended {
+                    cycle?.revealMonitor?.recordInvalidObservation()
+                    acceptedSurfaceMarker.cancel()
+                    if status == .revealing, let cycle, let reference = cycle.revealReferencePose {
+                        cycle.visualController.cancelPendingWork()
+                        cycle.revealMonitor = RealityRevealMonitor(referencePose: reference)
+                        status = .hidden
+                        if let arView {
+                            beginOcclusionMonitoring(in: arView, generation: cycle.generation, phase: .reveal)
+                        }
+                    } else if status == .walking || status == .verifyingOcclusion {
+                        if status == .walking { onMovementObstructed() } else { onOcclusionExhausted() }
+                        reportSelectionFeedback(EscapeRootMessage.movementObstructed)
+                        restartHideCycle()
+                    }
+                }
+            }
+        }
         private(set) var hideCycleResetSequence: Int
         private(set) var scanPresentation: RealityScanPresentation
 
@@ -307,9 +345,12 @@ struct RealityHideARView: UIViewRepresentable {
                 reduceMotion: false
             ),
             onScanUpdate: @escaping (RealityScanUpdate) -> Void = { _ in },
+            isInteractionSuspended: Bool = false,
+            onScanVisualization: @escaping (RealityScanVisualization) -> Void = { _ in },
             onScanningReady: @escaping () -> Void = {},
             onTargetAccepted: @escaping () -> Void = {},
             onMovementFinished: @escaping () -> Void = {},
+            onMovementObstructed: @escaping () -> Void = {},
             onOcclusionRetryStarted: @escaping () -> Void = {},
             onOcclusionExhausted: @escaping () -> Void = {},
             onPigReachedTarget: @escaping () -> Void = {},
@@ -332,9 +373,12 @@ struct RealityHideARView: UIViewRepresentable {
             self.hideCycleResetSequence = hideCycleResetSequence
             self.scanPresentation = scanPresentation
             self.onScanUpdate = onScanUpdate
+            self.isInteractionSuspended = isInteractionSuspended
+            self.onScanVisualization = onScanVisualization
             self.onScanningReady = onScanningReady
             self.onTargetAccepted = onTargetAccepted
             self.onMovementFinished = onMovementFinished
+            self.onMovementObstructed = onMovementObstructed
             self.onOcclusionRetryStarted = onOcclusionRetryStarted
             self.onOcclusionExhausted = onOcclusionExhausted
             self.onPigReachedTarget = onPigReachedTarget
@@ -398,16 +442,15 @@ struct RealityHideARView: UIViewRepresentable {
         }
 
         private func applyScanPresentation(to arView: ARView) {
-            if scanPresentation.showsSceneUnderstanding {
-                arView.debugOptions.insert(.showSceneUnderstanding)
-            } else {
-                arView.debugOptions.remove(.showSceneUnderstanding)
-            }
+            // The teaching overlay uses sampled real mesh edges. Opaque debug geometry
+            // would hide the camera image the learner is trying to scan.
+            arView.debugOptions.remove(.showSceneUnderstanding)
         }
 
         @discardableResult
         func processRevealObservation(_ observation: RealityOcclusionObservation) -> Bool {
-            guard status == .hidden,
+            guard !isInteractionSuspended, !isSessionInterrupted,
+                  status == .hidden,
                   let cycle,
                   var revealMonitor = cycle.revealMonitor else {
                 return false
@@ -442,21 +485,20 @@ struct RealityHideARView: UIViewRepresentable {
 
         @discardableResult
         func processScanningObservation(hasMesh: Bool, hasFloor: Bool) -> Bool {
+            guard !isInteractionSuspended, !isSessionInterrupted else { return false }
             guard let update = environmentReadiness.observe(
                 hasMesh: hasMesh,
                 hasClassifiedFloor: hasFloor
             ) else { return false }
             onScanUpdate(update)
             guard update.becameReady else { return false }
-            scanningSubscription?.cancel()
-            scanningSubscription = nil
             onScanningReady()
             return true
         }
 
         @discardableResult
         func processTargetSelection(plan: RealityHidePlan) -> Bool {
-            guard !isSessionInterrupted,
+            guard !isSessionInterrupted, !isInteractionSuspended,
                   interactionMode == .selectingTarget else { return false }
             return acceptHideTarget(plan: plan)
         }
@@ -488,7 +530,9 @@ struct RealityHideARView: UIViewRepresentable {
             cycle.visualController.outerEntity.setPosition(plan.start, relativeTo: nil)
             cycle.visualController.outerEntity.isEnabled = true
             onTargetAccepted()
-            walkPiggy(to: plan.destination, generation: cycle.generation)
+            selectionFeedback = nil
+            walkPiggy(along: plan.waypoints.isEmpty ? [plan.destination] : plan.waypoints,
+                      generation: cycle.generation)
             return true
         }
 
@@ -497,7 +541,7 @@ struct RealityHideARView: UIViewRepresentable {
             _ observation: RealityOcclusionObservation,
             now: TimeInterval
         ) -> StableHideMonitorUpdate {
-            guard status == .verifyingOcclusion,
+            guard !isInteractionSuspended, !isSessionInterrupted, status == .verifyingOcclusion,
                   let cycle,
                   var monitor = cycle.hideMonitor else {
                 return .waiting
@@ -550,14 +594,32 @@ struct RealityHideARView: UIViewRepresentable {
             )
         }
 
-        private func walkPiggy(to destination: SIMD3<Float>, generation: Int) {
+        private func walkPiggy(along destinations: [SIMD3<Float>], generation: Int) {
             guard isCurrentCycle(generation), let cycle else { return }
-            cycle.visualController.walk(to: destination) { [weak self] result in
+            let clearance = arView.map { RealityWalkClearance(arView: $0) }
+            let floor = cycle.attempt.floorRegion
+            cycle.visualController.walk(along: destinations, isSegmentClear: { start, end, radius in
+                // Pure coordinator tests have no ARView; the production renderer
+                // additionally requires an attached scene before beginning motion.
+                guard let clearance else { return true }
+                for point in [start, end] {
+                    for x in [-radius, radius] {
+                        for z in [-radius, radius] {
+                            guard floor.containsPlacementXZ(point + SIMD3(x, 0, z)) else { return false }
+                        }
+                    }
+                }
+                return clearance.isClear(from: start, to: end, radius: radius)
+            }) { [weak self] result in
                 guard let self, self.isCurrentCycle(generation) else { return }
                 switch result {
                 case .success:
                     self.onMovementFinished()
                     self.beginHideVerification(generation: generation)
+                case .failure(.movementObstructed):
+                    self.onMovementObstructed()
+                    self.reportSelectionFeedback(EscapeRootMessage.movementObstructed)
+                    self.recoverFromUnverifiedHide()
                 case .failure:
                     self.reportVisualFailure(recoveringTo: .waitingForTarget)
                 }
@@ -619,7 +681,7 @@ struct RealityHideARView: UIViewRepresentable {
             cycle.attempt = nextAttempt
             status = .walking
             onOcclusionRetryStarted()
-            walkPiggy(to: nextAttempt.destination, generation: generation)
+            walkPiggy(along: [nextAttempt.destination], generation: generation)
         }
 
         private func recoverFromUnverifiedHide() {
@@ -657,6 +719,12 @@ struct RealityHideARView: UIViewRepresentable {
             arView = nil
             didStartMeshSession = false
             hasAttachedToARView = false
+            telemetryTracker.reset()
+            environmentReadiness = RealityEnvironmentReadiness()
+            didReceiveCameraFrame = false
+            isSessionInterrupted = false
+            shouldResumeScanningAfterInterruption = false
+            selectionFeedback = nil
         }
 
         private enum OcclusionMonitoringPhase {
@@ -674,6 +742,8 @@ struct RealityHideARView: UIViewRepresentable {
             cycle.observationSubscription = arView.scene.subscribe(to: SceneEvents.Update.self) { [weak self, weak arView] _ in
                 guard let self,
                       let arView,
+                      !self.isInteractionSuspended,
+                      !self.isSessionInterrupted,
                       self.isCurrentCycle(generation),
                       let cycle = self.cycle,
                       let observation = self.observationProvider.makeObservation(
@@ -725,7 +795,7 @@ struct RealityHideARView: UIViewRepresentable {
 
         private func recordSessionInterrupted() {
             isSessionInterrupted = true
-            shouldResumeScanningAfterInterruption = !environmentReadiness.isReady
+            shouldResumeScanningAfterInterruption = true
             scanningSubscription?.cancel()
             scanningSubscription = nil
             if hasActiveHideCycle {
@@ -753,10 +823,16 @@ struct RealityHideARView: UIViewRepresentable {
         private func handleTap(_ recognizer: UITapGestureRecognizer) {
             guard recognizer.state == .ended,
                   !isSessionInterrupted,
+                  !isInteractionSuspended,
                   interactionMode == .selectingTarget,
                   status == .waitingForTarget,
                   let arView,
                   let frame = arView.session.currentFrame else { return }
+
+            guard case .normal = frame.camera.trackingState else {
+                reportSelectionFeedback(RealityMeshScanProjector.telemetry(in: frame).tracking.guidance)
+                return
+            }
 
             let screenPoint = recognizer.location(in: arView)
             guard let hit = arView.hitTest(
@@ -764,7 +840,7 @@ struct RealityHideARView: UIViewRepresentable {
                 query: .nearest,
                 mask: .sceneUnderstanding
             ).first else {
-                onMessage(RealityAvailabilityMessage.scanFirst)
+                reportSelectionFeedback(RealityAvailabilityMessage.scanFirst)
                 return
             }
 
@@ -779,10 +855,21 @@ struct RealityHideARView: UIViewRepresentable {
 
             switch result {
             case let .rejected(rejection):
-                onMessage(message(for: rejection))
+                reportSelectionFeedback(message(for: rejection))
             case let .accepted(plan):
+                let clearance = RealityWalkClearance(arView: arView)
+                guard let route = RealityWalkRoutePlanner.route(for: plan, isSegmentClear: {
+                    clearance.isClear(from: $0, to: $1)
+                }), let destination = route.points.last else {
+                    reportSelectionFeedback(EscapeRootMessage.movementObstructed)
+                    return
+                }
+                let routedPlan = RealityHidePlan(
+                    start: plan.start, destination: destination, retreatDirection: plan.retreatDirection,
+                    floorRegion: plan.floorRegion, waypoints: Array(route.points.dropFirst())
+                )
                 _ = processTargetSelection(
-                    plan: plan,
+                    plan: routedPlan,
                     acceptedHit: RealitySurfaceHit(
                         point: surfaceHit.point,
                         normal: -plan.retreatDirection
@@ -842,14 +929,48 @@ struct RealityHideARView: UIViewRepresentable {
             scanningSubscription?.cancel()
             scanningSubscription = arView.scene.subscribe(to: SceneEvents.Update.self) { [weak self, weak arView] _ in
                 guard let self,
-                      let frame = arView?.session.currentFrame else { return }
-                let hasMesh = frame.anchors.contains { $0 is ARMeshAnchor }
-                let hasFloor = frame.anchors.contains { anchor in
-                    guard let plane = anchor as? ARPlaneAnchor else { return false }
-                    return plane.alignment == .horizontal && plane.classification == .floor
+                      !self.isSessionInterrupted,
+                      !self.isInteractionSuspended,
+                      let arView,
+                      let frame = arView.session.currentFrame else { return }
+                let sample = RealityMeshScanProjector.telemetry(in: frame)
+                if let telemetry = self.telemetryTracker.observe(sample) {
+                    let patches = self.scanPresentation.showsSceneUnderstanding && telemetry.tracking == .normal
+                        ? RealityMeshScanProjector.patches(in: frame, arView: arView) : []
+                    let preview = self.targetPreview(in: frame, arView: arView, tracking: telemetry.tracking)
+                    self.onScanVisualization(RealityScanVisualization(
+                        telemetry: telemetry, patches: patches, targetPreview: preview,
+                        selectionFeedback: self.selectionFeedback.flatMap {
+                            self.monotonicNow() < $0.expiresAt ? $0.message : nil
+                        }
+                    ))
                 }
-                self.processScanningObservation(hasMesh: hasMesh, hasFloor: hasFloor)
+                if sample.tracking == .normal {
+                    self.processScanningObservation(hasMesh: sample.meshAnchorCount > 0,
+                                                    hasFloor: sample.floorAnchorCount > 0)
+                }
             }
+        }
+
+        private func targetPreview(
+            in frame: ARFrame, arView: ARView, tracking: RealityTrackingStatus
+        ) -> RealityTargetPreview {
+            guard interactionMode == .selectingTarget, status == .waitingForTarget else { return .inactive }
+            guard tracking == .normal else { return .tracking(tracking) }
+            let center = CGPoint(x: arView.bounds.midX, y: arView.bounds.midY)
+            let hit = arView.hitTest(center, query: .nearest, mask: .sceneUnderstanding).first
+            let surface = hit.map { RealitySurfaceHit(point: $0.position, normal: $0.normal) }
+            return RealityTargetPreview.evaluate(
+                hit: surface,
+                cameraPosition: Self.position(from: frame.camera.transform),
+                floorRegion: surface.flatMap { nearestFloorRegion(in: frame, to: $0.point) },
+                tracking: tracking
+            )
+        }
+
+        private func reportSelectionFeedback(_ message: String) {
+            selectionFeedback = (message, monotonicNow() + 3)
+            onMessage(message)
         }
 
         private static func position(from transform: simd_float4x4) -> SIMD3<Float> {

@@ -1,98 +1,90 @@
 import SwiftUI
 
+/// Current observations stay compact; full explanations are behind the learning button.
 struct RealityScanFeedbackView: View {
-    let progress: RealityScanProgress
-    let presentation: RealityScanPresentation
-
-    @State private var sweepAtBottom = false
+    let telemetry: RealityScanTelemetry
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: progress.isReady ? "checkmark.circle.fill" : "viewfinder")
-                    .foregroundStyle(progress.isReady ? .green : .yellow)
-                Text(progress.isReady ? "공간 인식 완료" : "실제 공간 스캔 중")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-            }
-
-            ZStack {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(.black.opacity(0.22))
-
-                if presentation.showsSceneUnderstanding {
-                    GeometryReader { proxy in
-                        Rectangle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [.clear, .yellow.opacity(0.9), .clear],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(height: 2)
-                            .offset(y: sweepAtBottom ? proxy.size.height - 2 : 0)
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                    .accessibilityHidden(true)
-                }
-
-                VStack(spacing: 9) {
-                    ScanProgressRow(
-                        title: "공간 형태",
-                        detail: progress.hasMesh ? "AR 메시 감지됨" : "천천히 주변을 비춰줘",
-                        isComplete: progress.hasMesh
-                    )
-                    ScanProgressRow(
-                        title: "바닥",
-                        detail: progress.hasClassifiedFloor ? "분류된 바닥 감지됨" : "카메라를 아래쪽에도 비춰줘",
-                        isComplete: progress.hasClassifiedFloor
-                    )
-                }
-                .padding(14)
-            }
-            .frame(minHeight: 104)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) { statusChips }
+            VStack(alignment: .leading, spacing: 6) { statusChips }
         }
-        .padding(16)
-        .frame(maxWidth: 520)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22))
-        .overlay {
-            RoundedRectangle(cornerRadius: 22)
-                .stroke(.white.opacity(0.24), lineWidth: 1)
+        .accessibilityElement(children: .combine)
+        .allowsHitTesting(false)
+    }
+
+    @ViewBuilder
+    private var statusChips: some View {
+        chip(title: "공간", detail: telemetry.meshAnchorCount > 0
+             ? "\(telemetry.meshAnchorCount)개 영역" : "비춰줘",
+             isReady: telemetry.meshAnchorCount > 0)
+        chip(title: "바닥", detail: telemetry.floorAnchorCount > 0 ? "확인됨" : "아래로 비춰줘",
+             isReady: telemetry.floorAnchorCount > 0)
+    }
+
+    private func chip(title: String, detail: String, isReady: Bool) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: isReady ? "checkmark.circle.fill" : "viewfinder")
+                .foregroundStyle(isReady ? Color.mint : .white)
+                .accessibilityHidden(true)
+            Text(title).fontWeight(.semibold)
+            Text(detail).monospacedDigit()
         }
-        .task(id: presentation.showsAnimatedSweep) {
-            sweepAtBottom = false
-            guard presentation.showsAnimatedSweep else { return }
-            withAnimation(.linear(duration: 1.35).repeatForever(autoreverses: true)) {
-                sweepAtBottom = true
-            }
-        }
+        .font(.caption)
+        .foregroundStyle(.white)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(.black.opacity(0.76), in: Capsule())
     }
 }
 
-private struct ScanProgressRow: View {
-    let title: String
-    let detail: String
-    let isComplete: Bool
+struct RealityScanMeshOverlay: View {
+    let patches: [RealityScanPatch]
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: isComplete ? "checkmark.circle.fill" : "circle.dotted")
-                .foregroundStyle(isComplete ? .green : .white.opacity(0.72))
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(.white)
-                Text(detail)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.78))
+        Canvas { context, size in
+            for patch in patches {
+                var path = Path()
+                path.move(to: point(patch.a, in: size))
+                path.addLine(to: point(patch.b, in: size))
+                path.addLine(to: point(patch.c, in: size))
+                path.closeSubpath()
+                context.stroke(path, with: .color((patch.isFloor ? Color.yellow : .cyan).opacity(0.6)),
+                               lineWidth: 0.8)
             }
-
-            Spacer(minLength: 0)
         }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private func point(_ point: CGPoint, in size: CGSize) -> CGPoint {
+        CGPoint(x: point.x * size.width, y: point.y * size.height)
+    }
+}
+
+/// The reticle samples the center of the camera, while taps re-check their own hit.
+struct RealityTargetReticle: View {
+    let preview: RealityTargetPreview
+
+    var body: some View {
+        Image(systemName: preview.isSelectable ? "checkmark.viewfinder" : "viewfinder")
+            .font(.system(size: 30, weight: .medium))
+            .foregroundStyle(preview.isSelectable ? Color.mint : .white)
+            .shadow(color: .black, radius: 2)
+            .frame(width: 32, height: 32)
+            .overlay(alignment: .top) {
+            if case let .ready(distance) = preview {
+                Text("옆면 · \(distance, specifier: "%.1f") m")
+                    .font(.caption.weight(.semibold)).monospacedDigit()
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(.black.opacity(0.76), in: Capsule())
+                    .fixedSize()
+                    .offset(y: 40)
+            }
+        }
+        .allowsHitTesting(false)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(title), \(detail)")
+        .accessibilityLabel(preview.guidance)
     }
 }

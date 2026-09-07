@@ -28,6 +28,102 @@
 
 ## 항목
 
+### L-20260907-168 — 앱 도움말과 문서의 학습 이름이 달랐음
+
+- 상태: 해결
+- 발생 태스크: AR 사용성 개선 4 — 독립 문서 검토
+- 재현: `TutorialLearningView`의 네 학습 제목과 공통 안내를 각 DocC 챕터와 대조했다.
+- 관찰: 설명의 의미는 연결되지만 “지금 볼 것 / 이 말의 뜻 / 코드와 연결하기 / 잘 안 되면”과 챕터별 학습 제목이 문서에 그대로 나타나지 않았다.
+- 영향: 앱에서 문서로 넘어온 독자가 같은 학습 단계인지 알아보기 어렵다.
+- 조치: 기존 섹션 링크와 예제 짝은 유지하면서 각 챕터의 짧은 연결 문단에 실제 학습 제목과 안내를 추가하고 정확한 문구를 gate로 검사한다.
+- 검증: 강화한 gate가 overview와 네 챕터의 누락 다섯 건을 검출했다. 수정 뒤 content gate·독립 예제 12/12, 경고 없는 archive·이미지/링크 gate·브라우저 44회가 모두 exit 0이다. 범위 한정 재검토도 두 항목 해결·새 중요 결함 없음으로 통과했다.
+- 범위 기록: 이미지 교체에 필요한 content gate의 네 해시 동기화는 통합 담당 범위로 승인했다. 기존 작업 지시의 포괄적 해시 변경 금지 문구를 정정했으며 사이트 검사기와 이미지 파일의 소유 범위는 바꾸지 않았다.
+
+### L-20260907-167 — 예제의 테스트 출처 주석이 존재하지 않는 파일을 가리킴
+
+- 상태: 해결
+- 발생 태스크: AR 사용성 개선 4 — 문서 출처 정확성
+- 재현: 스캔 예제의 Contract tests 주석과 `PiggyEscape/PiggyEscapeTests/RealityMeshScanProjectorTests.swift` 경로를 대조했다.
+- 관찰: 해당 파일이 없는데도 기존 gate는 주석의 존재만 확인해 통과했다.
+- 영향: 독자가 예제의 검증 근거를 따라갈 수 없고, 없는 테스트를 존재하는 것처럼 설명할 수 있다.
+- 원인: 출처 주석의 형식과 실제 파일 존재 여부가 분리되어 있었다.
+- 조치: 없는 경로는 제거하고 모든 예제의 Production/Contract tests 출처 파일 존재 여부를 content gate에서 검사한다. 문서를 맞추기 위한 빈 테스트는 추가하지 않는다.
+- 검증: 새 출처 검사가 실제로 없는 `RealityMeshScanProjectorTests.swift`와 `RealityWalkClearanceTests.swift` 두 경로를 실패로 검출했다. 허위 선언 제거 뒤 최종 content gate exit 0, 독립 iPhoneOS 예제 12/12 typecheck를 확인했다. 모든 Production/Contract tests 선언은 저장소 내부의 실제 파일인지 검사한다.
+
+### L-20260907-166 — 튜토리얼 Step의 세 번째 설명 문단은 버려짐
+
+- 상태: 해결
+- 발생 태스크: AR 사용성 개선 4 — 학습 문서와 이미지 연결
+- 재현: `bash scripts/build-docc-site.sh /tmp/piggy-polish-image-check`.
+- 관찰: 작성 중 Chapter 3의 Step에 추가한 학습 sheet 설명이 세 번째 문단이 되어 extraneous element 경고를 발생시켰다. 경고를 실패로 처리하는 build gate가 exit 1로 중단했다. 이후 재시도에서는 해당 경고가 사라졌으나 예제 파일 교체 중의 resource missing을 관찰했다.
+- 영향: 그 문단의 학습 설명이 산출물에서 누락될 수 있다.
+- 원인: DocC Step은 지시 문단 하나와 선택적인 캡션 문단만 허용한다.
+- 조치: 해당 학습 설명을 Section 본문으로 옮기도록 문서 작성에 반영한다. 파일 교체 중의 일시적 스냅샷을 최종 결과로 평가하지 않고, 작성 완료 보고 뒤 통합 gate를 실행한다.
+- 검증: 최종 출처·캡션 수정까지 포함하여 `/tmp/piggy-ar-polish-docc-final`로 archive를 새로 빌드해 경고 없이 exit 0. 구조·이미지 검증과 desktop/mobile × light/dark의 44회 렌더, 내부 링크 100개, no-slash 이동 10개도 exit 0으로 확인했다.
+
+### L-20260907-165 — 격리된 Release 빌드가 workspace 로딩 전에 종료됨
+
+- 상태: 해결
+- 발생 태스크: AR 사용성 개선 5 — generic iPhoneOS Release 확인
+- 재현: `xcodebuild -workspace PiggyEscape.xcworkspace -scheme PiggyEscape -configuration Release -destination 'generic/platform=iOS' -derivedDataPath /tmp/piggy-ar-polish-release CODE_SIGNING_ALLOWED=NO build`.
+- 관찰: 기본 격리 환경에서 cache/log 접근 거절과 workspace 인식 오류, exit 66. 컴파일 단계에는 도달하지 않았다.
+- 영향: Release 검증이 아직 성립하지 않았다. 이전 Swift 5/6 Debug compile 결과와 이번 정책 48/48은 별개로 유효하다.
+- 원인/가설: 개발 도구의 workspace 및 캐시 접근 제한을 먼저 확인한다.
+- 조치: 경로를 읽기 전용으로 확인한 뒤 동일 iPhoneOS 빌드에 필요한 권한으로 재실행한다. Simulator를 부팅하거나 대상으로 선택하지 않는다.
+- 검증: 경로와 workspace 파일은 존재했다. 필요한 개발 도구 접근 권한으로 같은 generic iPhoneOS Release 명령을 재실행해 exit 0과 BUILD SUCCEEDED를 확인했다. 실제 기기 실행·시각 수용은 포함하지 않았다.
+
+### L-20260907-164 — 공개 문서 확인과 브라우저 gate의 환경 권한 경계
+
+- 상태: 해결
+- 발생 태스크: AR 사용성 개선 4–5 — DocC·공개 화면 검증
+- 재현: 공개 튜토리얼 URL 열기, 기본 격리 환경의 `gh repo view` 및 `npm run test:docc-browser`.
+- 관찰: 웹 읽기는 safe-open 오류, 저장소 읽기는 연결 실패, 브라우저 gate는 `listen EPERM 127.0.0.1`로 종료했다. 권한을 확보한 HTTP 확인은 200, 저장소 조회는 정확한 공개 저장소와 기존 성공 배포를 반환했다.
+- 영향: 사이트 장애나 코드 회귀가 아니라 접근 경로별 검증 한계다. 공개 사이트는 9월 3일 버전으로 최신 개선은 아직 미배포다.
+- 원인/가설: loopback listen 제한은 이전 L-20260903-157과 같은 환경 제한이다. 웹 읽기의 safe-open 이유는 확인하지 못했다.
+- 조치: 브라우저 검사에 필요한 loopback 및 실행 권한을 확보해 동일 gate를 다시 실행한다. Simulator를 대체 수단으로 실행하지 않는다.
+- 검증: 순수 Swift 정책은 같은 체크포인트에서 48/48·0 failures 재확인. 필요한 권한으로 재실행한 브라우저 failure contract 13/13·0 failures·exit 0. 공개 overview도 실제 브라우저에서 정상 표시되었다.
+
+### L-20260907-163 — 최신 AR 사용성 변경의 실기기 검증은 연결 불가로 보류
+
+- 상태: 실기기 대기
+- 발생 태스크: AR 시야·실시간 스캔·자연스러운 이동 개선
+- 재현: read-only 기기 목록에서 paired iPhone 16 Pro가 unavailable이며 사용자가 현재 연결이 어렵다고 답했다.
+- 관찰: 이번 변경 앱을 실제 카메라/LiDAR로 실행하거나 촬영하지 않았다. Simulator도 부팅·실행하지 않았다.
+- 영향: 실제 시야 확보, 메시 선의 정합·추적 품질, 물체 주변 통로 검사, 회전·걷기·발견 체감은 미검증이다.
+- 조치: 실제 production 순수 정책을 Mac의 XCTest에서 실행하고 iPhoneOS app/test bundle 컴파일로 검증 범위를 나누었다. 실제 실행 화면을 컨셉 이미지로 대신 증명하지 않는다.
+- 검증: 최신 정책 runtime 48개·0 failures. AR·SwiftUI integration assertions는 iPhone 연결 뒤 실행해야 한다.
+- 배운 점: 컴파일, 정책 runtime, 실기기 사용성은 서로 다른 완료 증거다.
+
+### L-20260907-162 — 학습 창·추적 중단이 발견 수명과 분리되어 있었음
+
+- 상태: 보수 후 통합 runtime 대기
+- 발생 태스크: AR 사용성 개선 코드 검토
+- 재현: 숨김 뒤 발견 포즈 비동기 로딩 중 학습 창을 열거나, 유효한 가림/발견 관찰 사이에 tracking limited 프레임을 넣는다. Chapter 1 돼지 이동 중에도 학습 버튼을 확인한다.
+- 관찰: 발견 포즈 콜백은 suspension을 반영하지 않았고 루트 큐의 one-shot 준비/발견 이벤트가 sheet 뒤에서 진행될 수 있었다. 관찰 provider는 tracking state를 검사하지 않았다. C3 내부 탭은 루트 busy 상태로 전달되지 않았다. 가로 화면 38pt 안내는 일반 글씨에서 스크롤이 막혀 있었다.
+- 조치: 포즈 요청 generation·취소, sheet 중 큐 결과 지연 후 1회 처리, tracking loss의 무효 다섯 점과 nil pose, C3 수락 탭 전달, 44pt 가로 안내 내 스크롤을 추가했다. 비활성화 시 이동/검증 취소와 스캔/중단 deadline 일시 정지도 연결했다.
+- 검증: 새 root·provider·visual regression은 iPhoneOS bundle에 포함한다. loss 사이의 visible stability 회귀를 포함한 순수 정책 48개는 runtime 통과했으며 AR integration 실행은 L-20260907-163과 같이 대기다.
+- 배운 점: 센서 관찰·모델 로딩·SwiftUI sheet·루트 지연 callback은 모두 같은 중단 의미를 가져야 한다.
+
+### L-20260907-161 — no-Simulator 정책 테스트 실행 환경과 새 API RED
+
+- 상태: 해결
+- 발생 태스크: 순수 정책 회귀 실행 경로 추가
+- 재현: `bash scripts/test-reality-policies.sh`; 새 tracker/preview/route/timeline 및 movementObstructed 이벤트를 구현하기 전에 실행했다.
+- 관찰: 처음에는 macOS XCTest 모듈·Swift assertion overlay·private XCTestCore 탐색 경로가 없어 컴파일/로딩이 실패했고, Apple XCTest에는 corelibs의 XCTMain 호출을 사용할 수 없었다. 이후 실제 새 타입/이벤트 부재 RED, route skeleton의 15개 중 3개 assertion 실패를 확인했다. 기존 테스트 helper `pose(position:)`는 macOS NSObject.pose(as:)와 이름이 겹쳤다.
+- 조치: 설치 Xcode의 framework·Swift test library·private framework 경로를 명시하고 XCTestSuite로 동일한 테스트 메서드를 실행한다. helper 이름만 makeCameraPose로 명확히 바꾸었다. 새 타입과 실제 bounded route/scene-time motion 정책을 구현했다.
+- 검증: 마지막 정책 실행은 48개·0 failures·exit 0. 이 실행은 ARKit/SwiftUI 렌더링을 모방하지 않으며 순수 production Swift만 검증한다.
+- 배운 점: 테스트 harness 실패와 제품 정책 실패를 구별하고, runtime에 필요한 라이브러리 경로도 재현 명령에 고정한다.
+
+### L-20260907-160 — AR 설명창이 시야를 가리고 이동이 물체를 가로지름
+
+- 상태: 코드 보수, 시각·실기기 검증 대기
+- 발생 태스크: AR 사용성 개선
+- 재현: 기존 EscapeRootView의 상단 스캔 카드·하단 title3 패널, 준비 완료에서 취소되는 scan subscription, 앞/뒤 두 점을 잇는 RealityPigVisualController.walk(to:)를 확인한다.
+- 관찰: 작은 화면에서 두 큰 설명 영역이 카메라를 덮으며, 준비 후 실시간 공간 상태 표시가 멈춘다. 이동은 실제 물체를 돌아가는 경로 없이 직선 이동하고, 도착 시점은 wall-clock으로 추정했다.
+- 조치: 작은 HUD/명시적 학습 sheet·현재 frame 기반 4Hz telemetry·실제 메시 선·실시간 표면 preview·바닥 내 측면 경로와 실제 몸통 convex cast·scene update 기반 회전/이동을 연결했다. 통로가 막히면 선택으로 복구한다.
+- 검증: 새 iPhoneOS build-for-testing과 정책 runtime 결과를 WORK_LOG에 기록한다. 프로젝트 생성 시 sandbox 밖 Tuist session 기록 권한 오류는 승인된 명령 재실행으로 해결했다. 공개 DocC/새 이미지 동기화는 다음 단계다.
+- 배운 점: 탭 통과 설정만으로 시야 문제가 해결되지는 않으며, 시각적 가림과 이동 경로의 충돌 검사는 별개다.
+
 ### L-20260903-159 — 성공한 Pages run에 공식 Actions Node 20 deprecation이 남음
 
 - 상태: 해결

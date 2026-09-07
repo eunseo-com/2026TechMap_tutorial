@@ -2,6 +2,9 @@ import SwiftUI
 import UIKit
 
 struct EscapeRootView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @State private var learningTopic: TutorialLearningTopic?
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var coordinator: EscapeRootCoordinator
@@ -36,11 +39,12 @@ struct EscapeRootView: View {
                 C3ClosedWorldSceneView(
                     reduceMotionEnabled: accessibilityReduceMotion,
                     onNarrationFinished: coordinator.closedWorldNarrationDidFinish,
+                    onPigTapped: coordinator.closedWorldPigDidBecomeTapped,
                     onDiscovered: beginClosedWorldFade
                 )
                 .ignoresSafeArea()
                 .opacity(coordinator.isClosedWorldFading ? 0 : 1)
-                .allowsHitTesting(!coordinator.isClosedWorldFading)
+                .allowsHitTesting(!coordinator.isClosedWorldFading && !coordinator.isLearningPresented)
                 .animation(
                     .easeInOut(duration: EscapeRootMotion.closedWorldFadeDuration),
                     value: coordinator.isClosedWorldFading
@@ -54,28 +58,69 @@ struct EscapeRootView: View {
 
             chapterFourView
 
-            VStack(spacing: 12) {
-                ChapterProgressView(chapter: coordinator.machine.state.chapter)
-
-                if coordinator.showsSceneUnderstanding {
-                    RealityScanFeedbackView(
-                        progress: coordinator.scanProgress,
-                        presentation: coordinator.scanPresentation(
-                            reduceMotion: accessibilityReduceMotion
-                        )
-                    )
+            VStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    ChapterProgressView(chapter: coordinator.machine.state.chapter)
+                        .allowsHitTesting(false)
+                    Spacer(minLength: 0)
+                    if coordinator.canPresentLearning {
+                        Button {
+                            guard coordinator.presentLearning() else { return }
+                            learningTopic = TutorialLearningTopic(chapter: coordinator.machine.state.chapter)
+                        } label: {
+                            Image(systemName: "questionmark")
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 44, height: 44)
+                                .background(.black.opacity(0.76), in: Circle())
+                        }
+                        .accessibilityLabel("이 장면에서 배우는 것")
+                        .accessibilityHint("체험을 잠시 멈추고 관찰·용어·코드 설명을 엽니다")
+                    }
                 }
-
+                if coordinator.showsSceneUnderstanding, verticalSizeClass != .compact,
+                   !dynamicTypeSize.isAccessibilitySize {
+                    RealityScanFeedbackView(telemetry: coordinator.scanVisualization.telemetry)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 Spacer()
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
-            .allowsHitTesting(false)
+            .frame(maxWidth: 560)
+            .padding(.horizontal, 16)
+            .padding(.top, 6)
 
             messageOverlay
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            actionBar
+            VStack(spacing: 0) {
+                if coordinator.showsRealityView, let message = realityGuidance {
+                    ScrollView(.vertical) {
+                        Text(message)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
+                    .frame(height: verticalSizeClass == .compact ? 44 : (dynamicTypeSize.isAccessibilitySize ? 100 : 60))
+                    .background(.black.opacity(0.76), in: RoundedRectangle(cornerRadius: 16))
+                    .frame(maxWidth: 540)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+                    .accessibilityElement(children: .combine)
+                }
+                actionBar
+            }
+        }
+        .sheet(item: $learningTopic, onDismiss: coordinator.dismissLearning) { topic in
+            TutorialLearningView(topic: topic, telemetry: coordinator.scanVisualization.telemetry)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sensoryFeedback(.success, trigger: coordinator.scanCompletionSequence)
+        .onChange(of: coordinator.isLearningPresented) { _, isPresented in
+            if !isPresented { learningTopic = nil }
         }
         .animation(.easeInOut(duration: 0.22), value: coordinator.showsRealityView)
         .onChange(of: coordinator.realitySurpriseSequence) { _, sequence in
@@ -94,8 +139,8 @@ struct EscapeRootView: View {
             }
         }
         .onChange(of: scenePhase) { _, phase in
-            guard phase == .active else { return }
-            coordinator.applicationDidBecomeActive()
+            if phase == .active { coordinator.applicationDidBecomeActive() }
+            else { coordinator.applicationDidBecomeInactive() }
         }
         .onAppear {
             realityCallbacks.activate()
@@ -130,6 +175,10 @@ struct EscapeRootView: View {
             onScanUpdate: { update in
                 scheduleRealityCallback(for: surfaceID) { $0.realityScanDidUpdate(update) }
             },
+            isInteractionSuspended: coordinator.isLearningPresented || scenePhase != .active,
+            onScanVisualization: { visualization in
+                scheduleRealityCallback(for: surfaceID) { $0.realityScanVisualizationDidUpdate(visualization) }
+            },
             onScanningReady: {
                 scheduleRealityCallback(for: surfaceID) { $0.realityScanningDidBecomeReady() }
             },
@@ -138,6 +187,9 @@ struct EscapeRootView: View {
             },
             onMovementFinished: {
                 scheduleRealityCallback(for: surfaceID) { $0.realityMovementDidFinish() }
+            },
+            onMovementObstructed: {
+                scheduleRealityCallback(for: surfaceID) { $0.realityMovementWasObstructed() }
             },
             onOcclusionRetryStarted: {
                 scheduleRealityCallback(for: surfaceID) { $0.realityOcclusionRetryDidStart() }
@@ -171,6 +223,17 @@ struct EscapeRootView: View {
             }
         )
         .id(surfaceID)
+        .overlay {
+            if coordinator.showsSceneUnderstanding, !coordinator.isSessionInterrupted,
+               !coordinator.isLearningPresented, scenePhase == .active {
+                RealityScanMeshOverlay(patches: coordinator.scanVisualization.patches)
+            }
+            if coordinator.realityInteractionMode == .selectingTarget, scenePhase == .active {
+                RealityTargetReticle(preview: coordinator.scanVisualization.targetPreview)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .allowsHitTesting(false)
+            }
+        }
         .scaleEffect(realityScreenScale)
         .clipped()
         .transition(.opacity)
@@ -204,6 +267,7 @@ struct EscapeRootView: View {
     @ViewBuilder
     private var messageOverlay: some View {
         if let message = coordinator.message,
+           !coordinator.showsRealityView,
            coordinator.machine.state != .discoveredByCamera,
            coordinator.machine.state != .requestingCameraPermission {
             VStack {
@@ -243,7 +307,8 @@ struct EscapeRootView: View {
             RootCTAButton(
                 title: "숨바꼭질 시작",
                 accessibilityHint: "실제 물체를 선택하는 단계로 이동합니다",
-                isDisabled: coordinator.isSessionInterrupted,
+                isDisabled: coordinator.isSessionInterrupted || coordinator.isLearningPresented
+                    || !coordinator.scanVisualization.telemetry.canSelectTargets,
                 action: coordinator.startRealHide
             )
                 .padding(.horizontal, 24)
@@ -317,6 +382,22 @@ struct EscapeRootView: View {
         default:
             EmptyView()
         }
+    }
+
+    private var realityGuidance: String? {
+        if coordinator.isSessionInterrupted { return EscapeRootMessage.sessionInterrupted }
+        let telemetry = coordinator.scanVisualization.telemetry
+        if telemetry.tracking != .normal { return telemetry.tracking.guidance }
+        if coordinator.machine.state == .scanningReality {
+            return telemetry.floorAnchorCount == 0 ? "바닥과 물체 옆면을 천천히 비춰줘." : "주변 물체의 옆면도 비춰줘."
+        }
+        if coordinator.machine.state == .realityReady {
+            return telemetry.canSelectTargets ? "바닥과 공간을 찾았어. 준비되면 시작해줘." : "바닥과 물체를 다시 비춰줘."
+        }
+        if coordinator.machine.state == .waitingForRealTarget {
+            return coordinator.scanVisualization.selectionFeedback ?? coordinator.scanVisualization.targetPreview.guidance
+        }
+        return coordinator.message
     }
 
     private func beginClosedWorldFade() {

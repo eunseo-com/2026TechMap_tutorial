@@ -20,8 +20,8 @@ SceneKit에서 현실 공간을 쓰려면 ARKit을 명시적으로 연결하고 
 | 번호 | Chapter | 경험 계약 | 아직 실기기에서 볼 것 |
 | --- | --- | --- | --- |
 | 1 | Chapter 1 | narration 전 tap 거부, C3 `HideTree`, 0.40초 one-shot 발견, `1.5배 → 1.0배`, 0.70초 fade | 실제 장면 연출과 handoff 체감 |
-| 2 | Chapter 2 | valid-layout session start, mesh AND classified floor readiness, 20초 scan, 10초 interruption, CTA 전 tap 잠금, same-session 전환 | 실제 mesh/floor 진행과 marker |
-| 3 | Chapter 3 | 0.18m, 0.90m, floor inset, view-space 5점, hide center+4/5×두 frame, 0.15m/15° latch, reveal center+3/5×두 frame | LiDAR occlusion·reveal·replay |
+| 2 | Chapter 2 | valid-layout session start, mesh AND classified floor readiness, 최대 4 Hz 현재 telemetry, 최대 120개 채움 없는 삼각형 선, 현재 상태 CTA, same-session 전환 | 실제 mesh/floor chip·tracking·중앙 preview와 tap 재검사 |
+| 3 | Chapter 3 | 0.18m, 0.90m, floor inset, 측면 `convexCast` route, 0.45m/s scene-time 이동, view-space 5점, hide center+4/5×두 frame, 0.15m/15° latch, reveal center+3/5×두 frame | LiDAR route·occlusion·reveal·replay |
 | 4 | Chapter 4 | 네 비교 축, reason별 정직한 요약, 완료·Chapter 3 재시도·전체 reset | AR teardown과 실제 lifecycle |
 
 ## 완료와 우회 진입을 분리하기
@@ -43,22 +43,27 @@ SceneKit에서 현실 공간을 쓰려면 ARKit을 명시적으로 연결하고 
 1. **world inventory** — scene에 선언된 모델과 runtime에 관찰할 실제 공간 데이터를 나눈다.
 2. **coordinate authority** — local transform, world transform, anchor와 immutable snapshot 가운데 각 계산의 기준을 적는다.
 3. **visibility contract** — rendering occlusion과 게임 성공 판정을 분리하고 sample·frame·deadline 조건을 수치로 정한다.
-4. **responsibility map** — Entity/Component/System, coordinator, 순수 policy, UI state가 소유할 일을 나눈다.
-5. **lifetime map** — view, session, AR generation, hide cycle과 cancellable callback의 종료 시점을 적는다.
-6. **verification split** — type-check·단위 정책·generic build와 실제 기기 관찰 항목을 별도 목록으로 만든다.
+4. **movement contract** — floor footprint, 몸통 clearance, 측면 route, scene-time 속도와 live obstruction 복구를 적는다.
+5. **responsibility map** — Entity/Component/System, coordinator, 순수 policy, UI state가 소유할 일을 나눈다.
+6. **lifetime map** — view, session, AR generation, hide cycle, 학습 sheet와 cancellable callback의 종료·일시 정지 시점을 적는다.
+7. **verification split** — type-check·단위 정책·generic build와 실제 기기 관찰 항목을 별도 목록으로 만든다.
 
 ## 스스로 답할 질문
 
 - 이 기능은 선언된 3D 장면만으로 충분한가, 실제 공간 관찰이 필요한가?
 - camera와 target의 좌표는 어느 시점의 어느 snapshot에서 왔는가?
+- 최초 준비 latch와 지금 보이는 telemetry를 구분하고 있는가?
+- preview한 중앙 hit과 사용자가 실제로 탭한 hit을 다시 검증하는가?
 - 한 frame의 우연한 결과를 성공으로 오해하지 않도록 어떤 연속 조건이 필요한가?
+- 이동 route가 floor와 실제 몸통 clearance를 만족하고, 새 장애물에서 중단되는가?
 - retry가 이전 anchor·task·callback을 남기지 않는가?
+- 학습 sheet나 앱 비활성화 시간을 active deadline에서 빼고 queued event를 한 번만 처리하는가?
 - 권한이나 기기 조건으로 우회했을 때 실제 체험을 완료한 것처럼 보이지 않는가?
 - 자동 검증과 실기기 대기를 명시적으로 나누었는가?
 
 ## 현재 검증 경계
 
-문서 source와 snippet type-check, generic iPhoneOS build, local DocC convert가 성공하더라도 실제 배포와 LiDAR 경험이 완료된 것은 아니다. 실제 크기·floor fit·scan 표시·4/5 hide·3/5 reveal·replay·before/after 증거는 모두 실기기 대기이며, 공개 route·언어·theme·desktop/mobile 접근성은 후속 배포 검증 범위다.
+문서 source와 snippet type-check, generic iPhoneOS build, local DocC convert가 성공하더라도 실제 배포와 LiDAR 경험이 완료된 것은 아니다. 실제 크기·floor fit·scan 표시·측면 route·4/5 hide·3/5 reveal·replay·before/after 증거는 모두 실기기 대기이며, 공개 route·언어·theme·desktop/mobile 접근성은 후속 배포 검증 범위다.
 
 ## 관련 문서
 

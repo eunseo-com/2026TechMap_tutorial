@@ -5,6 +5,23 @@ import simd
 
 @MainActor
 final class RealityOcclusionObservationProviderTests: XCTestCase {
+    func test_trackingLossInvalidatesThePoseAndAllSamplesWithoutCastingRays() {
+        let provider = RealityOcclusionObservationProvider()
+        var snapshot = frame(timestamp: 10)
+        snapshot.hasNormalTracking = false
+        var projectionCount = 0
+        let observation = provider.makeObservation(
+            captureFrame: { snapshot },
+            localBoundsMinimum: [-0.1, 0, -0.1], localBoundsMaximum: [0.1, 0.18, 0.1],
+            pigWorldTransform: matrix_identity_float4x4,
+            project: { _, _ in projectionCount += 1; return CGPoint(x: 100, y: 100) },
+            sceneUnderstandingHit: { _ in XCTFail("Unreliable tracking must not be cast"); return nil }
+        )
+        XCTAssertEqual(projectionCount, 0)
+        XCTAssertEqual(observation?.samples, invalidSamples())
+        XCTAssertNil(observation?.cameraPose, "relocalization must not latch a false movement")
+    }
+
     func test_rotatedLocalBoundsBecomeEightWorldCornersAndFiveSameFrameProjections() {
         let provider = RealityOcclusionObservationProvider()
         var pigTransform = simd_float4x4(simd_quatf(

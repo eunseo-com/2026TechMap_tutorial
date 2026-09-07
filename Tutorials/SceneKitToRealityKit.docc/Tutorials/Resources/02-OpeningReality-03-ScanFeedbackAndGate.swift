@@ -1,186 +1,179 @@
-// Production: PiggyEscape/PiggyEscape/Sources/Escape/EscapeRootView.swift
-// Production: PiggyEscape/PiggyEscape/Sources/Escape/EscapeRootCoordinator.swift
-// Production: PiggyEscape/PiggyEscape/Sources/Escape/RealityScanFeedbackView.swift
-// Production: PiggyEscape/PiggyEscape/Sources/Reality/RealityEnvironmentReadiness.swift
+// Production: PiggyEscape/PiggyEscape/Sources/Reality/RealityScanTelemetry.swift
+// Production: PiggyEscape/PiggyEscape/Sources/Reality/RealityMeshScanProjector.swift
+// Production: PiggyEscape/PiggyEscape/Sources/Reality/RealityTargetPreview.swift
 // Production: PiggyEscape/PiggyEscape/Sources/Reality/RealityHideARView.swift
-// Production: PiggyEscape/PiggyEscape/Sources/Reality/RealityAcceptedSurfaceMarker.swift
-// Contract tests: PiggyEscape/PiggyEscapeTests/EscapeRootCoordinatorTests.swift
-// Contract tests: PiggyEscape/PiggyEscapeTests/RealityEnvironmentReadinessTests.swift
+// Production: PiggyEscape/PiggyEscape/Sources/Escape/EscapeRootView.swift
+// Contract tests: PiggyEscape/PiggyEscapeTests/RealityScanTelemetryTests.swift
+// Contract tests: PiggyEscape/PiggyEscapeTests/RealityTargetPreviewTests.swift
 // Contract tests: PiggyEscape/PiggyEscapeTests/RealityHideARViewCoordinatorTests.swift
-// Implementation status: integrated
-// Verification: standalone iPhoneOS type-check·fresh generic Swift 5/Swift 6 strict build-for-testing·현재 Swift 5 Release build 통과; 물리 iPhone 기준 186/186 통과; 최신 190개 중 추가 4개 runtime은 device unlock 대기; UI test 0개; LiDAR 관찰·동일 기기 캡처는 실기기 대기
 
-import RealityKit
+import CoreGraphics
+import Foundation
 import simd
 
-enum RealityHideInteractionMode {
-    case preparing
-    case selectingTarget
-    case moving
-    case searching
-    case revealed
+enum ScanTrackingStatus: Equatable {
+    case initializing, normal, excessiveMotion, insufficientFeatures
+    case relocalizing, unavailable
 }
 
-struct RealityScanProgress: Equatable {
-    static let meshLabel = "공간 형태"
-    static let floorLabel = "바닥"
+/// This is a current observation, not a percentage or semantic object count.
+struct CurrentScanTelemetry: Equatable {
+    let timestamp: TimeInterval
+    let meshAnchorCount: Int
+    let meshFaceCount: Int
+    let floorAnchorCount: Int
+    let tracking: ScanTrackingStatus
 
-    let hasMesh: Bool
-    let hasClassifiedFloor: Bool
-
-    var isReady: Bool {
-        hasMesh && hasClassifiedFloor
-    }
-}
-
-struct RealityScanUpdate: Equatable {
-    let progress: RealityScanProgress
-    let becameReady: Bool
-}
-
-struct RealityScanPresentation: Equatable {
-    let showsSceneUnderstanding: Bool
-    let reduceMotion: Bool
-
-    var showsAnimatedSweep: Bool {
-        showsSceneUnderstanding && !reduceMotion
-    }
-}
-
-struct RealityEnvironmentReadiness {
-    private(set) var progress = RealityScanProgress(
-        hasMesh: false,
-        hasClassifiedFloor: false
+    static let empty = CurrentScanTelemetry(
+        timestamp: 0, meshAnchorCount: 0, meshFaceCount: 0,
+        floorAnchorCount: 0, tracking: .initializing
     )
+
+    var canSelectTargets: Bool {
+        tracking == .normal && meshAnchorCount > 0 && floorAnchorCount > 0
+    }
+
+    fileprivate var isValid: Bool {
+        timestamp.isFinite && timestamp >= 0 && meshAnchorCount >= 0
+            && meshFaceCount >= 0 && floorAnchorCount >= 0
+    }
+}
+
+/// Ordinary updates are limited to 4 Hz. Tracking and readiness changes publish
+/// immediately, while the same ARFrame timestamp never counts twice.
+struct CurrentScanTelemetryTracker {
+    static let minimumUpdateInterval: TimeInterval = 0.25
+    private(set) var latest = CurrentScanTelemetry.empty
+    private var lastObservedTimestamp: TimeInterval?
+    private var lastPublishedTimestamp: TimeInterval?
+
+    mutating func observe(_ sample: CurrentScanTelemetry) -> CurrentScanTelemetry? {
+        guard sample.isValid,
+              lastObservedTimestamp.map({ sample.timestamp > $0 }) ?? true else {
+            return nil
+        }
+        lastObservedTimestamp = sample.timestamp
+        let readinessChanged = (sample.meshAnchorCount > 0) != (latest.meshAnchorCount > 0)
+            || (sample.floorAnchorCount > 0) != (latest.floorAnchorCount > 0)
+        let urgent = sample.tracking != latest.tracking || readinessChanged
+        guard urgent || lastPublishedTimestamp.map({
+            sample.timestamp - $0 >= Self.minimumUpdateInterval
+        }) ?? true else { return nil }
+        latest = sample
+        lastPublishedTimestamp = sample.timestamp
+        return sample
+    }
+}
+
+/// Readiness remembers the first successful mesh-and-floor observation.
+/// It intentionally does not replace the current telemetry above.
+struct FirstReadyLatch {
+    private var hasMesh = false
+    private var hasFloor = false
     private var hasReportedReady = false
 
-    mutating func observe(
-        hasMesh: Bool,
-        hasClassifiedFloor: Bool
-    ) -> RealityScanUpdate? {
-        let next = RealityScanProgress(
-            hasMesh: progress.hasMesh || hasMesh,
-            hasClassifiedFloor: progress.hasClassifiedFloor || hasClassifiedFloor
-        )
-        guard next != progress else { return nil }
-        progress = next
-        let becameReady = progress.isReady && !hasReportedReady
-        hasReportedReady = hasReportedReady || progress.isReady
-        return RealityScanUpdate(progress: progress, becameReady: becameReady)
+    var isReady: Bool { hasMesh && hasFloor }
+
+    mutating func observe(_ telemetry: CurrentScanTelemetry) -> Bool {
+        guard telemetry.tracking == .normal else { return false }
+        hasMesh = hasMesh || telemetry.meshAnchorCount > 0
+        hasFloor = hasFloor || telemetry.floorAnchorCount > 0
+        let becameReady = isReady && !hasReportedReady
+        hasReportedReady = hasReportedReady || isReady
+        return becameReady
     }
 }
 
-struct RealitySurfaceHit {
+/// Production projects these selected real faces and strokes their three edges.
+/// No opaque fill or geometry between measured triangles is synthesized.
+enum ScanMeshOverlayPolicy {
+    static let maximumTriangleCount = 120
+
+    static func selectedFaceIndices(totalFaceCount: Int) -> [Int] {
+        guard totalFaceCount > 0 else { return [] }
+        let step = max(1, Int(ceil(Double(totalFaceCount) / 120)))
+        return Array(stride(from: 0, to: totalFaceCount, by: step).prefix(120))
+    }
+}
+
+struct MeasuredSurfaceHit {
     let point: SIMD3<Float>
     let normal: SIMD3<Float>
 }
 
-struct RealityHidePlan {}
+struct ValidatedHidePlan {}
 
-enum RealityHidePlanResult {
-    case accepted(RealityHidePlan)
-    case rejected
+enum SurfaceRejection { case noSurface, wrongSide, tooClose, needsFloor }
+enum SurfaceValidation {
+    case accepted(ValidatedHidePlan)
+    case rejected(SurfaceRejection)
+}
+enum TargetPreview {
+    case inactive, rejected(SurfaceRejection), ready(distance: Float)
+}
+enum ScanInteractionMode { case preparing, selectingTarget }
+
+/// ARView supplies the center hit for preview and a fresh hit at the tap point.
+/// The validator owns the vertical-side, 0.90m, floor and route checks.
+struct ScanFrameInput {
+    let telemetry: CurrentScanTelemetry
+    let cameraPosition: SIMD3<Float>
+    let centerHit: MeasuredSurfaceHit?
+    let hitAtPoint: (CGPoint) -> MeasuredSurfaceHit?
 }
 
-struct ValidatedSurfaceSelection {
-    let plan: RealityHidePlan
-    let hit: RealitySurfaceHit
+struct ScanFeedbackAndGate {
+    typealias Validator = (MeasuredSurfaceHit, SIMD3<Float>) -> SurfaceValidation
 
-    fileprivate init(plan: RealityHidePlan, hit: RealitySurfaceHit) {
-        self.plan = plan
-        self.hit = hit
-    }
-}
+    private var readiness = FirstReadyLatch()
+    private var tracker = CurrentScanTelemetryTracker()
+    private(set) var mode = ScanInteractionMode.preparing
 
-enum ValidatedSurfaceFactory {
-    static func make(
-        plannerResult: RealityHidePlanResult,
-        hit: RealitySurfaceHit
-    ) -> ValidatedSurfaceSelection? {
-        guard hit.point.allFinite,
-              hit.normal.allFinite,
-              case let .accepted(plan) = plannerResult else {
-            return nil
-        }
-        return ValidatedSurfaceSelection(plan: plan, hit: hit)
-    }
-}
-
-@MainActor
-protocol AcceptedSurfaceMarking: AnyObject {
-    func attach(to arView: ARView)
-    func show(point: SIMD3<Float>, normal: SIMD3<Float>, animated: Bool)
-    func cancel()
-}
-
-@MainActor
-final class RealityScanGate {
-    private let arView: ARView
-    private let acceptedSurfaceMarker: any AcceptedSurfaceMarking
-    private var readiness = RealityEnvironmentReadiness()
-    private(set) var interactionMode: RealityHideInteractionMode = .preparing
-    private(set) var presentation: RealityScanPresentation
-
-    init(
-        arView: ARView,
-        acceptedSurfaceMarker: any AcceptedSurfaceMarking,
-        reduceMotion: Bool
+    mutating func observe(_ telemetry: CurrentScanTelemetry) -> (
+        current: CurrentScanTelemetry?,
+        becameReady: Bool
     ) {
-        self.arView = arView
-        self.acceptedSurfaceMarker = acceptedSurfaceMarker
-        presentation = RealityScanPresentation(
-            showsSceneUnderstanding: true,
-            reduceMotion: reduceMotion
-        )
-        acceptedSurfaceMarker.attach(to: arView)
-        arView.debugOptions.insert(.showSceneUnderstanding)
+        let current = tracker.observe(telemetry)
+        return (current, readiness.observe(telemetry))
     }
 
-    var stableARViewIdentity: ObjectIdentifier {
-        ObjectIdentifier(arView)
+    var canStartChapterThreeNow: Bool {
+        mode == .preparing && readiness.isReady && tracker.latest.canSelectTargets
     }
 
-    func observe(hasMesh: Bool, hasClassifiedFloor: Bool) -> RealityScanUpdate? {
-        readiness.observe(
-            hasMesh: hasMesh,
-            hasClassifiedFloor: hasClassifiedFloor
-        )
-    }
-
-    @discardableResult
-    func startChapterThree() -> Bool {
-        guard interactionMode == .preparing,
-              readiness.progress.isReady else { return false }
-        presentation = RealityScanPresentation(
-            showsSceneUnderstanding: false,
-            reduceMotion: presentation.reduceMotion
-        )
-        arView.debugOptions.remove(.showSceneUnderstanding)
-        interactionMode = .selectingTarget
+    mutating func startChapterThree() -> Bool {
+        guard canStartChapterThreeNow else { return false }
+        mode = .selectingTarget
         return true
     }
 
-    @discardableResult
-    func acceptValidatedSurface(
-        _ selection: ValidatedSurfaceSelection
-    ) -> RealityHidePlan? {
-        guard interactionMode == .selectingTarget else { return nil }
-        acceptedSurfaceMarker.show(
-            point: selection.hit.point,
-            normal: selection.hit.normal,
-            animated: !presentation.reduceMotion
-        )
-        return selection.plan
+    func previewCenterHit(
+        _ frame: ScanFrameInput,
+        validate: Validator
+    ) -> TargetPreview {
+        guard mode == .selectingTarget else { return .inactive }
+        guard frame.telemetry.tracking == .normal,
+              let hit = frame.centerHit else { return .rejected(.noSurface) }
+        switch validate(hit, frame.cameraPosition) {
+        case .accepted:
+            return .ready(distance: simd_distance(hit.point, frame.cameraPosition))
+        case let .rejected(reason):
+            return .rejected(reason)
+        }
     }
 
-    func stop() {
-        arView.debugOptions.remove(.showSceneUnderstanding)
-        acceptedSurfaceMarker.cancel()
-    }
-}
-
-private extension SIMD3 where Scalar == Float {
-    var allFinite: Bool {
-        x.isFinite && y.isFinite && z.isFinite
+    /// Preview is advisory: tap acceptance re-runs the hit and every plan check.
+    func acceptTap(
+        at point: CGPoint,
+        frame: ScanFrameInput,
+        validate: Validator,
+        fullRouteIsClear: (ValidatedHidePlan) -> Bool
+    ) -> ValidatedHidePlan? {
+        guard mode == .selectingTarget,
+              frame.telemetry.tracking == .normal,
+              let tappedHit = frame.hitAtPoint(point),
+              case let .accepted(plan) = validate(tappedHit, frame.cameraPosition),
+              fullRouteIsClear(plan) else { return nil }
+        return plan
     }
 }

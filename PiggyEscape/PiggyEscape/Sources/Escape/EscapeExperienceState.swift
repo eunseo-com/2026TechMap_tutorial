@@ -18,7 +18,7 @@ enum EscapeExperienceEvent {
     case closedWorldFadeFinished
     case cameraAuthorized, cameraAuthorizationDenied, cameraAuthorizationRestricted, openSettings
     case meshUnsupported, environmentReady, scanDeadlineElapsed, sessionDidFail
-    case startRealHide, realTargetAccepted, movementFinished, occlusionRetryStarted
+    case startRealHide, realTargetAccepted, movementFinished, movementObstructed, occlusionRetryStarted
     case occlusionVerified, occlusionExhausted, realityPigDiscovered, sessionInterrupted
     case realityAssetLoadFailed, replayRealHide, reviewDifferences
     case retryReality, skipToComparison, finishTutorial, retryChapter3, reset
@@ -67,6 +67,7 @@ struct EscapeExperienceMachine {
         case (.realityReady, .startRealHide): state = .waitingForRealTarget
         case (.waitingForRealTarget, .realTargetAccepted): state = .walkingBehindRealObject
         case (.walkingBehindRealObject, .movementFinished): state = .verifyingOcclusion
+        case (.walkingBehindRealObject, .movementObstructed): state = .waitingForRealTarget
         case (.verifyingOcclusion, .occlusionRetryStarted): state = .walkingBehindRealObject
         case (.verifyingOcclusion, .occlusionVerified): state = .hiddenInReality
         case (.verifyingOcclusion, .occlusionExhausted): state = .waitingForRealTarget

@@ -132,6 +132,7 @@ enum EscapeRootMessage {
     static let verifyingOcclusion = "실제 물체 뒤에 잘 숨었는지 확인하고 있어."
     static let findPig = "옆으로 움직이거나 카메라 방향을 바꿔 피기를 찾아봐."
     static let selectAnotherTarget = "물체를 더 스캔하거나 다른 옆면을 선택해줘."
+    static let movementObstructed = "돌아갈 길이 좁거나 추적이 바뀌었어. 양옆 바닥을 더 비추고 다시 골라줘."
     static let scanTimedOut = "공간 형태와 바닥을 함께 읽지 못했어. 다시 스캔해봐."
     static let sessionFailed = "AR 세션을 이어갈 수 없어. 다시 스캔하거나 차이를 먼저 볼 수 있어."
     static let sessionInterrupted = "카메라 추적이 잠시 멈췄어. 기기를 안정적으로 들어줘."
@@ -159,6 +160,49 @@ final class EscapeRootCoordinator: ObservableObject {
     @Published private(set) var scanCompletionSequence = 0
     @Published private(set) var isSessionInterrupted = false
     @Published private(set) var hideCycleResetSequence = 0
+    @Published private(set) var scanVisualization = RealityScanVisualization.empty
+    @Published private(set) var isLearningPresented = false
+    private var deferredScanUpdate: RealityScanUpdate?
+    private var deferredReadiness = false
+    private var deferredDiscovery = false
+    private var isApplicationActive = true
+
+    var canPresentLearning: Bool {
+        switch machine.state {
+        case .readyForPigTap, .scanningReality, .realityReady, .waitingForRealTarget,
+             .hiddenInReality, .discoveredInReality, .comparison, .completed: true
+        default: false
+        }
+    }
+
+    @discardableResult
+    func presentLearning() -> Bool {
+        guard canPresentLearning, !isSessionInterrupted, !isLearningPresented else { return false }
+        isLearningPresented = true
+        scanDeadline?.cancel()
+        scanDeadline = nil
+        return true
+    }
+
+    func dismissLearning() {
+        guard isLearningPresented else { return }
+        isLearningPresented = false
+        let update = deferredScanUpdate
+        let ready = deferredReadiness
+        let discovered = deferredDiscovery
+        deferredScanUpdate = nil
+        deferredReadiness = false
+        deferredDiscovery = false
+        if let update { realityScanDidUpdate(update) }
+        if ready { realityScanningDidBecomeReady() }
+        if discovered { realityPigDidBecomeRevealed() }
+        if machine.state == .scanningReality { scheduleScanDeadline() }
+    }
+
+    func realityScanVisualizationDidUpdate(_ visualization: RealityScanVisualization) {
+        guard showsRealityView, !isSessionInterrupted, !isLearningPresented else { return }
+        scanVisualization = visualization
+    }
 
     var showsRealityView: Bool {
         switch machine.state {
@@ -184,7 +228,7 @@ final class EscapeRootCoordinator: ObservableObject {
     }
 
     var realityInteractionMode: RealityHideInteractionMode {
-        guard !isSessionInterrupted else { return .preparing }
+        guard !isSessionInterrupted, !isLearningPresented else { return .preparing }
         switch machine.state {
         case .waitingForRealTarget:
             return .selectingTarget
@@ -263,8 +307,13 @@ final class EscapeRootCoordinator: ObservableObject {
         _ = machine.send(.narrationFinished)
     }
 
+    func closedWorldPigDidBecomeTapped() {
+        _ = machine.send(.pigTapped)
+    }
+
     @discardableResult
     func closedWorldDiscoveryDidOccur() -> Bool {
+        dismissLearning()
         synchronizeClosedWorldProgress()
         guard machine.send(.closedWorldPigDiscovered) else { return false }
         message = EscapeRootMessage.surprised
@@ -283,6 +332,11 @@ final class EscapeRootCoordinator: ObservableObject {
 
     func realityScanDidUpdate(_ update: RealityScanUpdate) {
         guard machine.state == .scanningReality || machine.state == .realityReady else { return }
+        if isLearningPresented {
+            deferredScanUpdate = RealityScanUpdate(progress: update.progress,
+                becameReady: update.becameReady || deferredScanUpdate?.becameReady == true)
+            return
+        }
         scanProgress = update.progress
         if update.becameReady {
             scanCompletionSequence += 1
@@ -290,6 +344,7 @@ final class EscapeRootCoordinator: ObservableObject {
     }
 
     func realityScanningDidBecomeReady() {
+        if isLearningPresented { deferredReadiness = true; return }
         guard machine.send(.environmentReady) else { return }
         scanDeadline?.cancel()
         scanDeadline = nil
@@ -297,7 +352,7 @@ final class EscapeRootCoordinator: ObservableObject {
     }
 
     func startRealHide() {
-        guard !isSessionInterrupted,
+        guard !isSessionInterrupted, !isLearningPresented,
               machine.send(.startRealHide) else { return }
         message = RealityAvailabilityMessage.selectVerticalSide
     }
@@ -309,6 +364,7 @@ final class EscapeRootCoordinator: ObservableObject {
     }
 
     func realityTargetDidBecomeAccepted() {
+        dismissLearning()
         guard machine.send(.realTargetAccepted) else { return }
         lifetime.beginNewHideCycle()
         message = EscapeRootMessage.walkingToRealObject
@@ -317,6 +373,11 @@ final class EscapeRootCoordinator: ObservableObject {
     func realityMovementDidFinish() {
         guard machine.send(.movementFinished) else { return }
         message = EscapeRootMessage.verifyingOcclusion
+    }
+
+    func realityMovementWasObstructed() {
+        guard machine.send(.movementObstructed) else { return }
+        message = EscapeRootMessage.movementObstructed
     }
 
     func realityOcclusionRetryDidStart() {
@@ -335,6 +396,7 @@ final class EscapeRootCoordinator: ObservableObject {
     }
 
     func realityPigDidBecomeRevealed() {
+        if isLearningPresented { deferredDiscovery = true; return }
         guard machine.send(.realityPigDiscovered) else { return }
         message = EscapeRootMessage.surprised
         realitySurpriseSequence += 1
@@ -357,6 +419,8 @@ final class EscapeRootCoordinator: ObservableObject {
     }
 
     func realitySessionWasInterrupted() {
+        deferredDiscovery = false
+        scanVisualization = .empty
         isSessionInterrupted = true
         _ = machine.send(.sessionInterrupted)
         message = EscapeRootMessage.sessionInterrupted
@@ -365,12 +429,8 @@ final class EscapeRootCoordinator: ObservableObject {
             scanDeadline = nil
         }
         interruptionDeadline?.cancel()
-        interruptionDeadline = deadlineScheduler.schedule(
-            .interruption,
-            owner: self
-        ) { owner in
-            owner.interruptionDeadlineDidElapse()
-        }
+        interruptionDeadline = nil
+        scheduleInterruptionDeadlineIfActive()
     }
 
     func realitySessionInterruptionEnded() {
@@ -380,7 +440,7 @@ final class EscapeRootCoordinator: ObservableObject {
         interruptionDeadline = nil
         switch machine.state {
         case .scanningReality:
-            scheduleScanDeadline()
+            if !isLearningPresented { scheduleScanDeadline() }
             message = EscapeRootMessage.scanning
         case .realityReady:
             message = EscapeRootMessage.realityReady
@@ -442,6 +502,11 @@ final class EscapeRootCoordinator: ObservableObject {
         realitySurpriseSequence = 0
         realityErrorCount = 0
         scanProgress = .empty
+        scanVisualization = .empty
+        isLearningPresented = false
+        deferredScanUpdate = nil
+        deferredReadiness = false
+        deferredDiscovery = false
         scanCompletionSequence = 0
         hideCycleResetSequence = 0
         message = nil
@@ -453,14 +518,35 @@ final class EscapeRootCoordinator: ObservableObject {
     }
 
     func applicationDidBecomeActive() {
+        if !isApplicationActive {
+            isApplicationActive = true
+            if machine.state == .scanningReality { scheduleScanDeadline() }
+            if isSessionInterrupted { scheduleInterruptionDeadlineIfActive() }
+        }
         guard machine.state == .cameraDenied,
               machine.isCameraAuthorizationRecheckArmed else { return }
         resolveSettingsAuthorization(cameraAuthorizer.currentVideoAuthorization())
     }
 
+    func applicationDidBecomeInactive() {
+        isApplicationActive = false
+        scanDeadline?.cancel()
+        scanDeadline = nil
+        interruptionDeadline?.cancel()
+        interruptionDeadline = nil
+    }
+
+    private func scheduleInterruptionDeadlineIfActive() {
+        guard isApplicationActive else { return }
+        interruptionDeadline = deadlineScheduler.schedule(.interruption, owner: self) { owner in
+            owner.interruptionDeadlineDidElapse()
+        }
+    }
+
     private func beginNewRealitySession() {
         lifetime.beginNewRealitySession()
         scanProgress = .empty
+        scanVisualization = .empty
         isSessionInterrupted = false
         interruptionDeadline?.cancel()
         interruptionDeadline = nil
@@ -469,6 +555,7 @@ final class EscapeRootCoordinator: ObservableObject {
     }
 
     private func scheduleScanDeadline() {
+        guard isApplicationActive, !isLearningPresented, !isSessionInterrupted else { return }
         scanDeadline?.cancel()
         scanDeadline = deadlineScheduler.schedule(.scan, owner: self) { owner in
             owner.scanDeadlineDidElapse()
@@ -476,7 +563,8 @@ final class EscapeRootCoordinator: ObservableObject {
     }
 
     private func scanDeadlineDidElapse() {
-        guard machine.send(.scanDeadlineElapsed) else { return }
+        guard isApplicationActive, !isLearningPresented, !isSessionInterrupted,
+              machine.send(.scanDeadlineElapsed) else { return }
         scanDeadline = nil
         message = EscapeRootMessage.scanTimedOut
     }

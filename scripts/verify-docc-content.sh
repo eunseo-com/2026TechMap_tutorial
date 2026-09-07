@@ -395,19 +395,19 @@ expected = {
     ),
     "app-screen-chapter-1-closed-world.png": (
         (1024, 1536),
-        "62fc0b98e4652cacd0812271afc3ec237b31c38fb9f340864498176b550f2385",
+        "7c1e109d2295516eff624cc7b997649841106ecbf7e4b4a439f5bf2929e4562b",
     ),
     "app-screen-chapter-2-scanning.png": (
         (1024, 1536),
-        "fdedf18639979dbdbf3e1730359894bc95d2a59c04c47dd1dd769b2e8217b068",
+        "b58047bf3a1099f21c43a5f14d4f3ba93cd25279757d7f6dae5e2ce0d168c372",
     ),
     "app-screen-chapter-3-searching.png": (
         (1024, 1536),
-        "3d6b41d7d6ca55ce2b1aee08fe1d01afbef960735e2032ea8826684669a46f7d",
+        "1b77ea6f2f3325cbdbe4666a4ec361a627ac7900f9cf31e55056edbe583be68a",
     ),
     "app-screen-chapter-4-comparison.png": (
         (1024, 1536),
-        "e7bd0e4121a9ce33c3a83836f8fcaf7215641e224114d1fe0ce31e57c583559f",
+        "b316972dc9d3ddceba0dc60d1a7f2e631a8f4a88401d81281aa089a1243457d2",
     ),
 }
 errors = []
@@ -581,6 +581,11 @@ if [[ -f "$OVERVIEW" ]]; then
         '@TutorialReference(tutorial: "doc:03-RealHideAndSeek")' \
         '@Chapter(name: "Chapter 4 — Comparing Worlds")' \
         '@TutorialReference(tutorial: "doc:04-Comparison")'
+
+    require_token_order "$OVERVIEW" "overview intro must use the app's exact shared learning labels in order" \
+        '지금 볼 것' '이 말의 뜻' '코드와 연결하기' '잘 안 되면'
+    require_regex "$OVERVIEW" '(AI 생성|컨셉).*(실제 앱 실행 화면|실기기 캡처).*(아니|구분)' "overview intro must distinguish concept images from runtime evidence"
+    require_regex_count "$OVERVIEW" '(186/186|190개|222개|build-for-testing|Swift 6 strict)' 0 "overview intro must keep detailed verification history out of the first screen"
 
     require_regex_count "$OVERVIEW" '@Documentation[[:space:]]*\([[:space:]]*destination:' 1 "overview @Resources documentation block count"
     require_regex_count "$OVERVIEW" '@Documentation[[:space:]]*\([[:space:]]*destination:[[:space:]]*"/documentation/scenekittorealitykit/scenegraphdeepdive"[[:space:]]*\)' 1 "overview documentation destination"
@@ -859,6 +864,8 @@ if [[ -f "$CH1" ]]; then
     require_fixed_count "$CH1" '01-ClosedWorld-01-ExperienceState.swift' 1 "Chapter 1 canonical code mapping"
     require_fixed_count "$CH1" '01-ClosedWorld-02-C3SceneAndInput.swift' 1 "Chapter 1 canonical code mapping"
     require_fixed_count "$CH1" '01-ClosedWorld-03-AutoDiscovery.swift' 1 "Chapter 1 canonical code mapping"
+    require_fixed_count "$CH1" '1/4 · 닫힌 세계' 2 "Chapter 1 compact progress caption and alt"
+    require_regex "$CH1" '앱의 [“"]코드로 만든 세계[”"] 학습 창.*[“"]지금 볼 것[”"].*[“"]이 말의 뜻[”"].*[“"]코드와 연결하기[”"].*[“"]잘 안 되면[”"]' "Chapter 1 must bridge the exact learning title and shared labels"
     require_regex "$CH1" 'C3' "Chapter 1 must describe C3"
     require_regex "$CH1" 'HideTree' "Chapter 1 must name HideTree"
     require_regex "$CH1" 'SCNCamera' "Chapter 1 must name SCNCamera"
@@ -881,19 +888,29 @@ if [[ -f "$CH2" ]]; then
     require_fixed_count "$CH2" '02-OpeningReality-01-CameraAuthorization.swift' 1 "Chapter 2 canonical code mapping"
     require_fixed_count "$CH2" '02-OpeningReality-02-SessionReadiness.swift' 1 "Chapter 2 canonical code mapping"
     require_fixed_count "$CH2" '02-OpeningReality-03-ScanFeedbackAndGate.swift' 1 "Chapter 2 canonical code mapping"
+    require_fixed_count "$CH2" '2/4 · 현실 열기' 2 "Chapter 2 compact progress caption and alt"
+    require_regex "$CH2" '앱의 [“"]공간을 읽는다는 것[”"] 학습 창.*[“"]지금 볼 것[”"].*[“"]이 말의 뜻[”"].*[“"]코드와 연결하기[”"].*[“"]잘 안 되면[”"]' "Chapter 2 must bridge the exact learning title and shared labels"
     require_regex "$CH2" 'ARView' "Chapter 2 must describe ARView"
     require_regex "$CH2" 'ARMeshAnchor' "Chapter 2 must describe ARMeshAnchor"
     require_regex "$CH2" '(classified[[:space:]]+horizontal[[:space:]]+floor|분류된.*수평.*floor|분류된 수평 바닥)' "Chapter 2 must require a classified horizontal floor"
     require_regex "$CH2" '((mesh|메시|메쉬).*(그리고|AND|&&|둘 다|모두).*(floor|바닥)|(floor|바닥).*(그리고|AND|&&|둘 다|모두).*(mesh|메시|메쉬))' "Chapter 2 readiness must require both mesh and floor"
-    require_regex "$CH2" 'showSceneUnderstanding' "Chapter 2 must name showSceneUnderstanding"
-    require_regex "$CH2" '공간 형태' "Chapter 2 must include the '공간 형태' mesh progress label"
+    require_regex "$CH2" '(최대|초당 최대).*(4[[:space:]]*Hz|4Hz)' "Chapter 2 must describe the maximum 4 Hz current telemetry"
+    require_regex "$CH2" '(중복|같은).*(timestamp|타임스탬프).*(세지|무시|제외)' "Chapter 2 telemetry must ignore duplicate frame timestamps"
+    require_regex "$CH2" '(tracking|추적).*(변경|바뀌).*(즉시|바로)' "Chapter 2 must publish urgent tracking changes immediately"
+    require_regex "$CH2" '(최초.*준비|준비.*latch|ready.*latch).*(현재.*(관찰|snapshot|스냅샷)|최신.*상태).*(구분|별도|다르)' "Chapter 2 must distinguish latched readiness from current telemetry"
+    require_regex "$CH2" '((최대[[:space:]]*120).*(삼각형|triangle).*(선|edge)|(삼각형|triangle).*(최대[[:space:]]*120).*(선|edge))' "Chapter 2 must bound projected real mesh edges to 120 triangles"
+    require_regex "$CH2" '(채움.*(없|않)|fill.*(없|않)|unfilled)' "Chapter 2 mesh visualization must remain unfilled"
+    require_regex "$CH2" '(공간.*(chip|칩)|["“]공간["”].*(상태|표시))' "Chapter 2 must include the compact '공간' chip"
     require_regex "$CH2" '바닥' "Chapter 2 must include independent floor progress"
     require_regex "$CH2" '((one-shot|한 번만|1회).*완료|완료.*(one-shot|한 번만|1회))' "Chapter 2 must describe one-shot readiness completion"
     require_regex "$CH2" '20초' "Chapter 2 must keep the 20초 scan deadline"
     require_regex "$CH2" '10초' "Chapter 2 must keep the 10초 interruption deadline"
     require_regex "$CH2" 'CTA.*전.*(탭|tap).*(무시|거부|받지|잠금|수용하지)' "Chapter 2 must ignore target taps before its CTA"
     require_regex "$CH2" '((같은|동일한).*AR[[:space:]]*(session|세션)|(AR[[:space:]]*)?(session|세션).*(같은|동일한))' "Chapter 2 to 3 must retain the same AR session"
-    require_regex "$CH2" '(Chapter 3.*(debug|디버그).*(mesh|메시|메쉬).*(끄|끕|제거|해제|비활성)|(debug|디버그).*(mesh|메시|메쉬).*Chapter 3.*(끄|끕|제거|해제|비활성))' "Chapter 3 entry must remove the debug mesh"
+    require_regex "$CH2" '["“]숨바꼭질 시작["”][[:space:]]*CTA' "Chapter 2 ready CTA title"
+    require_regex "$CH2" '(현재.*(tracking|추적).*(mesh|메시|메쉬).*(floor|바닥)|현재.*(관찰|snapshot|스냅샷).*(모두|둘 다)).*CTA' "Chapter 2 CTA must use the current telemetry state"
+    require_regex "$CH2" '(화면|카메라).*중앙.*(preview|프리뷰|미리)' "Chapter 2 must describe the center-hit preview"
+    require_regex "$CH2" '(탭|tap).*(순간|시점|할 때).*(다시|재).*(hit|히트|검사|검증)' "Chapter 2 must re-check the tapped surface"
     require_regex "$CH2" '(Reduce Motion.*(정적|static)|(정적|static).*Reduce Motion)' "Chapter 2 must provide a static Reduce Motion alternative"
     require_regex "$CH2" '(accepted[[:space:]-]*(hit|surface).*(marker|마커)|유효.*(hit|히트|표면).*(marker|마커))' "Chapter 2 must describe a marker only for an accepted real hit"
     require_regex "$CH2" '(bounding box|바운딩 박스|사각 외곽선)' "Chapter 2 must explicitly distinguish the scan UI from fake bounding boxes"
@@ -912,6 +929,8 @@ if [[ -f "$CH3" ]]; then
     require_fixed_count "$CH3" '03-RealHideAndSeek-02-ViewSpaceSamples.swift' 1 "Chapter 3 canonical code mapping"
     require_fixed_count "$CH3" '03-RealHideAndSeek-03-StableOcclusion.swift' 1 "Chapter 3 canonical code mapping"
     require_fixed_count "$CH3" '03-RealHideAndSeek-04-CycleRecovery.swift' 1 "Chapter 3 canonical code mapping"
+    require_fixed_count "$CH3" '3/4 · 현실 숨바꼭질' 2 "Chapter 3 compact progress caption and alt"
+    require_regex "$CH3" '앱의 [“"]숨었다는 증거[”"] 학습 창.*[“"]지금 볼 것[”"].*[“"]이 말의 뜻[”"].*[“"]코드와 연결하기[”"].*[“"]잘 안 되면[”"]' "Chapter 3 must bridge the exact learning title and shared labels"
     for literal in \
         '0.18m' \
         '0.90m' \
@@ -924,6 +943,14 @@ if [[ -f "$CH3" ]]; then
         require_regex "$CH3" "$(printf '%s' "$literal" | sed 's/[.[\*^$()+?{|]/\\&/g')" "Chapter 3 must include '$literal'"
     done
     require_regex "$CH3" '((retry|재시도).*0\.18m.*(최대[[:space:]]*2회|maximum[[:space:]]*2|2회)|0\.18m.*(최대[[:space:]]*2회|maximum[[:space:]]*2|2회).*(retry|재시도))' "Chapter 3 must keep 0.18m retries capped at two"
+    require_regex "$CH3" '0\.40/0\.70/1\.0/1\.4m' "Chapter 3 must document the bounded side-distance candidates"
+    require_regex "$CH3" '0/0\.25/0\.55/0\.85m' "Chapter 3 must document the bounded extra-depth candidates"
+    require_regex "$CH3" '(convexCast|convex cast).*(sceneUnderstanding|scene-understanding)' "Chapter 3 must require a scene-understanding body-clearance cast"
+    require_regex "$CH3" '0\.45m/s' "Chapter 3 must keep the 0.45m/s movement speed"
+    require_regex "$CH3" '(제자리.*회전|turn.*in place)' "Chapter 3 must describe turning in place"
+    require_regex "$CH3" '(SceneEvents\.Update|scene[[:space:]-]*time|scene update)' "Chapter 3 movement must use scene-time updates"
+    require_regex "$CH3" '(이동 중|걷는 중).*(새|최신|계속).*(충돌|장애물|mesh|메시|메쉬).*(검사|확인)' "Chapter 3 must re-check live obstruction while moving"
+    require_regex "$CH3" '(스캔하지 않은|관찰하지 않은|측정하지 못한).*(공간).*(안전|통과).*(보장하지|보증하지)' "Chapter 3 must not promise safety in unscanned space"
     require_regex "$CH3" '((8|여덟).*(corner|모서리)|(corner|모서리).*(8|여덟))' "Chapter 3 must derive samples from eight bounds corners"
     require_regex "$CH3" '(current camera.*right.*up|현재.*camera.*right.*up)' "Chapter 3 samples must use current camera right/up"
     require_regex "$CH3" 'center.*top.*bottom.*left.*right' "Chapter 3 must name center/top/bottom/left/right in order"
@@ -936,6 +963,10 @@ if [[ -f "$CH3" ]]; then
     require_regex "$CH3" '0\.15m.*15°.*latch' "Chapter 3 must latch 0.15m or 15° movement"
     require_regex "$CH3" 'center.*3/5.*(서로 다른|different).*(두|2).*(frame|프레임|관찰)' "Chapter 3 reveal must require center + 3/5 across two different frames"
     require_regex "$CH3" '((one-shot|한 번만|1회).*(reveal|재발견|발견)|(reveal|재발견).*one-shot)' "Chapter 3 reveal must be one-shot"
+    require_regex "$CH3" '(tracking|추적).*(불안정|normal.*아니).*(다섯|5).*(invalid|무효).*(pose|포즈).*(없|nil)' "Chapter 3 must invalidate all five samples and omit pose when tracking is invalid"
+    require_regex "$CH3" '(불안정|무효).*(pose|포즈).*(0\.15m|15°).*(세지|포함하지|인정하지)' "Chapter 3 must not count invalid tracking as viewpoint movement"
+    require_regex "$CH3" '(학습 (sheet|시트|창)|설명 (sheet|시트|창)).*(일시 정지|멈추|중단).*(event|이벤트|callback|콜백).*(한 번|1회).*(처리|전달)' "Chapter 3 must describe learning-sheet event deferral"
+    require_regex "$CH3" '(학습 (sheet|시트|창)|설명 (sheet|시트|창)|비활성).*(deadline|시간|타이머).*(active|활성).*(시간|구간)' "Chapter 3 must describe active-time deadlines"
     require_fixed_count "$CH3" '옆으로 움직이거나 카메라 방향을 바꿔 피기를 찾아봐.' 1 "Chapter 3 search guidance"
     require_regex "$CH3" '(verified hide|가림.*확인.*뒤에만|숨김.*검증.*뒤에만)' "Chapter 3 search guidance must appear only after verified hiding"
     require_fixed_count "$CH3" '<doc:02-OpeningTheDoor>' 1 "Chapter 3 previous link"
@@ -950,6 +981,8 @@ if [[ -f "$CH4" ]]; then
     require_fixed_count "$CH4" '실패·복구:' 2 "Chapter 4 failure-recovery count"
     require_fixed_count "$CH4" '04-Comparison-01-ComparisonModel.swift' 1 "Chapter 4 canonical code mapping"
     require_fixed_count "$CH4" '04-Comparison-02-ReplayRouting.swift' 1 "Chapter 4 canonical code mapping"
+    require_fixed_count "$CH4" '4/4 · 두 세계 비교' 2 "Chapter 4 compact progress caption and alt"
+    require_regex "$CH4" '앱의 [“"]두 세계의 책임[”"] 학습 창.*[“"]지금 볼 것[”"].*[“"]이 말의 뜻[”"].*[“"]코드와 연결하기[”"].*[“"]잘 안 되면[”"]' "Chapter 4 must bridge the exact learning title and shared labels"
     require_token_order "$CH4" "Chapter 4 comparison axes must be world, coordinates, visibility, responsibilities in that order" \
         world coordinates visibility responsibilities
     for reason in \
@@ -967,6 +1000,8 @@ if [[ -f "$CH4" ]]; then
     require_regex "$CH4" '튜토리얼 완료' "Chapter 4 must include the completion CTA"
     require_regex "$CH4" 'Chapter 3 다시 하기' "Chapter 4 must include the Chapter 3 replay CTA"
     require_regex "$CH4" '처음부터 다시 보기' "Chapter 4 must include the full reset CTA"
+    require_regex "$CH4" '(일반|표준).*(Dynamic Type|글자).*(좌우|나란히|side-by-side).*(답|카드)' "Chapter 4 must describe paired answers at standard Dynamic Type"
+    require_regex "$CH4" '(접근성|큰 글자).*(세로|위아래|stack|쌓)' "Chapter 4 must describe stacked answers only at accessibility sizes"
     require_fixed_count "$CH4" '<doc:03-RealHideAndSeek>' 1 "Chapter 4 previous link"
     require_regex "$CH4" '실기기 대기' "Chapter 4 bypass reasons must retain '실기기 대기'"
 fi
@@ -993,6 +1028,9 @@ if [[ -f "$ECS_ARTICLE" ]]; then
     require_regex "$ECS_ARTICLE" '(coordinator|코디네이터).*(policy|정책)|(policy|정책).*(coordinator|코디네이터)' "RealityKitECS must distinguish coordinator/policy code from RealityKit Systems"
     require_regex "$ECS_ARTICLE" '((mesh|메시|메쉬).*(그리고|AND|&&|둘 다|모두|와|과).*(floor|바닥)|(floor|바닥).*(그리고|AND|&&|둘 다|모두|와|과).*(mesh|메시|메쉬))' "RealityKitECS must describe mesh-and-floor readiness"
     require_regex "$ECS_ARTICLE" '((같은|동일한).*(session|세션).*Chapter 3|Chapter 3.*(같은|동일한).*(session|세션))' "RealityKitECS must preserve the same Chapter 2 to 3 session"
+    require_regex "$ECS_ARTICLE" '(현재.*(telemetry|관찰|snapshot|스냅샷)).*(최초.*준비|readiness.*latch)|(최초.*준비|readiness.*latch).*(현재.*(telemetry|관찰|snapshot|스냅샷))' "RealityKitECS must separate current telemetry from readiness latching"
+    require_regex "$ECS_ARTICLE" '(convexCast|convex cast)' "RealityKitECS must explain body-clearance casts"
+    require_regex "$ECS_ARTICLE" '(0\.45m/s|scene[[:space:]-]*time|SceneEvents\.Update)' "RealityKitECS must explain scene-time movement"
 fi
 
 if [[ -f "$DEVICE_ARTICLE" ]]; then
@@ -1003,6 +1041,8 @@ if [[ -f "$DEVICE_ARTICLE" ]]; then
     require_regex "$DEVICE_ARTICLE" '(session|세션).*시작.*(ready|readiness|준비 완료).*(아니|동일하지|별개|구분|같지)' "DeviceCameraDiagnostics must not equate session start with environment readiness"
     require_regex "$DEVICE_ARTICLE" '((mesh|메시|메쉬).*(그리고|AND|&&|둘 다|모두|와|과).*(classified|분류된).*(floor|바닥)|(classified|분류된).*(floor|바닥).*(그리고|AND|&&|둘 다|모두|와|과).*(mesh|메시|메쉬))' "DeviceCameraDiagnostics must require mesh plus classified floor readiness"
     require_regex "$DEVICE_ARTICLE" '실기기 대기' "DeviceCameraDiagnostics must mark physical scan/occlusion/reveal evidence as '실기기 대기'"
+    require_regex "$DEVICE_ARTICLE" '(4[[:space:]]*Hz|4Hz).*(tracking|추적).*(즉시|바로)' "DeviceCameraDiagnostics must cover throttled telemetry and urgent tracking"
+    require_regex "$DEVICE_ARTICLE" '(186/186|222개|Swift 6 strict)' "DeviceCameraDiagnostics must carry the detailed verification history removed from the overview"
 fi
 
 if [[ -f "$MIGRATION_ARTICLE" ]]; then
@@ -1015,7 +1055,7 @@ if [[ -f "$MIGRATION_ARTICLE" ]]; then
     require_regex "$MIGRATION_ARTICLE" '실기기 대기' "MigrationWorksheet must preserve pending physical verification"
 fi
 
-forbid_catalog_regex "old 0.45m placement distance is forbidden" '0\.45m'
+forbid_catalog_regex "old standalone 0.45m placement distance is forbidden" '0\.45m([^/]|$)'
 forbid_catalog_regex "old 45cm placement distance is forbidden" '45[[:space:]]*cm'
 forbid_catalog_regex "old raw 0.45 placement threshold is forbidden" '(simd_distance|minimumCameraDistance|cameraDistance).*(>=|>|=)[[:space:]]*0\.45([^0-9]|$)'
 forbid_catalog_regex "old 0.35m pig height is forbidden" '(돼지.{0,24}높이.{0,12}0\.35m|높이.{0,12}0\.35m.{0,24}돼지)'
@@ -1027,6 +1067,7 @@ forbid_catalog_regex "the old additive mesh-distance rule is forbidden" 'meshDis
 forbid_catalog_regex "mesh-or-floor readiness is forbidden" 'hasObservedMesh[[:space:]]*\|\|[[:space:]]*hasObservedFloor'
 forbid_catalog_regex "movement completion cannot directly complete hiding" '(movementFinished.*(hiddenInReality|occlusionVerified)|(이동|movement).*완료.*(즉시|바로|직접).*(숨김|가림).*완료)'
 forbid_catalog_regex "outdated Swift 6 strict failure or pending status is forbidden" 'Swift 6 strict.{0,16}(실패|대기)'
+forbid_catalog_regex "opaque showSceneUnderstanding debug geometry is forbidden" 'showSceneUnderstanding'
 forbid_catalog_regex "a single center ray cannot complete hiding" '(중심.*(한 점|ray|레이).*(만으로|하나로).*(숨김|가림).*(성공|완료)|single[[:space:]-]*center[[:space:]-]*ray.*(success|complete))'
 forbid_catalog_regex "Chapter 2 scanning must not attach a pig anchor" '((scanning|스캔).*(pig|돼지).*(anchor|앵커).*(attach|부착|추가)[[:space:]]*[.(]|(scanning|스캔).*anchor\.addChild)'
 forbid_catalog_regex "fabricated object-recognition labels are forbidden" '((의자|소파)[[:space:]]*(인식 완료|감지 완료)|objectSemanticLabel|fakeSemanticLabel)'
@@ -1067,6 +1108,13 @@ for snippet_name in "${CANONICAL_SNIPPETS[@]}"; do
     fi
     require_regex "$snippet_path" '^[[:space:]]*//[[:space:]]*Production:' "$snippet_name must declare its Production source path"
     require_regex "$snippet_path" '^[[:space:]]*//[[:space:]]*Contract tests:' "$snippet_name must declare its Contract tests path"
+    while IFS= read -r declared_path; do
+        if [[ "$declared_path" == /* || "$declared_path" == ".." || "$declared_path" == ../* || "$declared_path" == */../* ]]; then
+            fail "$snippet_name declares an unsafe source/test path: $declared_path"
+        elif [[ ! -f "$REPO_ROOT/$declared_path" ]]; then
+            fail "$snippet_name declares a missing source/test file: $declared_path"
+        fi
+    done < <(sed -E -n 's#^[[:space:]]*//[[:space:]]*(Production|Contract tests):[[:space:]]*(.+)[[:space:]]*$#\2#p' "$snippet_path")
     if grep -E -n -- '(TODO|TBD|<#[^>]*#>|//.*(\.\.\.|…))' "$snippet_path" > "$VERIFY_TEMP_DIR/snippet-placeholder.log" 2>/dev/null; then
         fail "$snippet_name contains a placeholder or omitted code"
         sed "s#^#$CATALOG_REL/Tutorials/Resources/$snippet_name:#" "$VERIFY_TEMP_DIR/snippet-placeholder.log" >&2

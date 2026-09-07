@@ -8,6 +8,7 @@ struct RealityOcclusionFrameSnapshot {
     let cameraTransform: simd_float4x4
     let viewportBounds: CGRect
     let interfaceOrientation: UIInterfaceOrientation
+    var hasNormalTracking = true
 }
 
 @MainActor
@@ -34,7 +35,8 @@ struct RealityOcclusionObservationProvider: RealityOcclusionObservationProviding
                     timestamp: frame.timestamp,
                     cameraTransform: frame.camera.transform,
                     viewportBounds: arView.bounds,
-                    interfaceOrientation: arView.window?.windowScene?.interfaceOrientation ?? .unknown
+                    interfaceOrientation: arView.window?.windowScene?.interfaceOrientation ?? .unknown,
+                    hasNormalTracking: frame.camera.trackingState == .normal
                 )
             },
             localBoundsMinimum: localBounds.min,
@@ -65,6 +67,10 @@ struct RealityOcclusionObservationProvider: RealityOcclusionObservationProviding
 
         let cameraPose = Self.cameraPose(from: frame.cameraTransform)
         guard frame.timestamp.isFinite else { return nil }
+        guard frame.hasNormalTracking else {
+            return RealityOcclusionObservation(frameTimestamp: frame.timestamp,
+                                               samples: Self.invalidSamples, cameraPose: nil)
+        }
         guard let cameraPose,
               frame.interfaceOrientation != .unknown,
               !frame.viewportBounds.isEmpty,
