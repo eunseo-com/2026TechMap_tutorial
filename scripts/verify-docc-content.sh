@@ -863,6 +863,7 @@ if [[ -f "$CH1" ]]; then
     require_fixed_count "$CH1" '01-ClosedWorld-01-ExperienceState.swift' 1 "Chapter 1 canonical code mapping"
     require_fixed_count "$CH1" '01-ClosedWorld-02-C3SceneAndInput.swift' 1 "Chapter 1 canonical code mapping"
     require_fixed_count "$CH1" '01-ClosedWorld-03-AutoDiscovery.swift' 1 "Chapter 1 canonical code mapping"
+    require_fixed_count "$CH1" '1/4 · 닫힌 세계' 2 "Chapter 1 compact progress caption and alt"
     require_regex "$CH1" 'C3' "Chapter 1 must describe C3"
     require_regex "$CH1" 'HideTree' "Chapter 1 must name HideTree"
     require_regex "$CH1" 'SCNCamera' "Chapter 1 must name SCNCamera"
@@ -885,6 +886,7 @@ if [[ -f "$CH2" ]]; then
     require_fixed_count "$CH2" '02-OpeningReality-01-CameraAuthorization.swift' 1 "Chapter 2 canonical code mapping"
     require_fixed_count "$CH2" '02-OpeningReality-02-SessionReadiness.swift' 1 "Chapter 2 canonical code mapping"
     require_fixed_count "$CH2" '02-OpeningReality-03-ScanFeedbackAndGate.swift' 1 "Chapter 2 canonical code mapping"
+    require_fixed_count "$CH2" '2/4 · 현실 열기' 2 "Chapter 2 compact progress caption and alt"
     require_regex "$CH2" 'ARView' "Chapter 2 must describe ARView"
     require_regex "$CH2" 'ARMeshAnchor' "Chapter 2 must describe ARMeshAnchor"
     require_regex "$CH2" '(classified[[:space:]]+horizontal[[:space:]]+floor|분류된.*수평.*floor|분류된 수평 바닥)' "Chapter 2 must require a classified horizontal floor"
@@ -924,6 +926,7 @@ if [[ -f "$CH3" ]]; then
     require_fixed_count "$CH3" '03-RealHideAndSeek-02-ViewSpaceSamples.swift' 1 "Chapter 3 canonical code mapping"
     require_fixed_count "$CH3" '03-RealHideAndSeek-03-StableOcclusion.swift' 1 "Chapter 3 canonical code mapping"
     require_fixed_count "$CH3" '03-RealHideAndSeek-04-CycleRecovery.swift' 1 "Chapter 3 canonical code mapping"
+    require_fixed_count "$CH3" '3/4 · 현실 숨바꼭질' 2 "Chapter 3 compact progress caption and alt"
     for literal in \
         '0.18m' \
         '0.90m' \
@@ -974,6 +977,7 @@ if [[ -f "$CH4" ]]; then
     require_fixed_count "$CH4" '실패·복구:' 2 "Chapter 4 failure-recovery count"
     require_fixed_count "$CH4" '04-Comparison-01-ComparisonModel.swift' 1 "Chapter 4 canonical code mapping"
     require_fixed_count "$CH4" '04-Comparison-02-ReplayRouting.swift' 1 "Chapter 4 canonical code mapping"
+    require_fixed_count "$CH4" '4/4 · 두 세계 비교' 2 "Chapter 4 compact progress caption and alt"
     require_token_order "$CH4" "Chapter 4 comparison axes must be world, coordinates, visibility, responsibilities in that order" \
         world coordinates visibility responsibilities
     for reason in \
