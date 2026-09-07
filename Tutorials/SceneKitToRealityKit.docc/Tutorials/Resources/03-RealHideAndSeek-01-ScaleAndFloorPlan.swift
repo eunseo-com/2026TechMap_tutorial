@@ -126,6 +126,8 @@ struct HidePlan {
     let destination: SIMD3<Float>
     let retreatDirection: SIMD3<Float>
     let floorRegion: ImmutableFloorRegion
+    // Snapshot for choosing a safe initial spawn in the later route search.
+    let cameraPosition: SIMD3<Float>
 }
 
 enum HidePlanResult {
@@ -176,7 +178,8 @@ enum HidePlanner {
             start: start,
             destination: destination,
             retreatDirection: -towardCamera,
-            floorRegion: floorRegion
+            floorRegion: floorRegion,
+            cameraPosition: cameraPosition
         ))
     }
 }

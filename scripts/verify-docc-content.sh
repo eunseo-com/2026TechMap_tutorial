@@ -943,7 +943,10 @@ if [[ -f "$CH3" ]]; then
         require_regex "$CH3" "$(printf '%s' "$literal" | sed 's/[.[\*^$()+?{|]/\\&/g')" "Chapter 3 must include '$literal'"
     done
     require_regex "$CH3" '((retry|재시도).*0\.18m.*(최대[[:space:]]*2회|maximum[[:space:]]*2|2회)|0\.18m.*(최대[[:space:]]*2회|maximum[[:space:]]*2|2회).*(retry|재시도))' "Chapter 3 must keep 0.18m retries capped at two"
-    require_regex "$CH3" '0\.40/0\.70/1\.0/1\.4m' "Chapter 3 must document the bounded side-distance candidates"
+    require_regex "$CH3" '0\.40/0\.50/0\.60/0\.70/0\.80/1\.0/1\.2/1\.4m' "Chapter 3 must document the bounded side-distance candidates"
+    require_regex "$CH3" '0/0\.15/0\.30/0\.45/0\.60m' "Chapter 3 must document adaptive initial spawn candidates"
+    require_regex "$CH3" '선택 당시 카메라에서 0\.90m' "Chapter 3 must keep the route spawn camera clearance"
+    require_regex "$CH3" '성공한 route의 첫 점' "Chapter 3 must place the pig at the accepted route start"
     require_regex "$CH3" '0/0\.25/0\.55/0\.85m' "Chapter 3 must document the bounded extra-depth candidates"
     require_regex "$CH3" '(convexCast|convex cast).*(sceneUnderstanding|scene-understanding)' "Chapter 3 must require a scene-understanding body-clearance cast"
     require_regex "$CH3" '0\.45m/s' "Chapter 3 must keep the 0.45m/s movement speed"

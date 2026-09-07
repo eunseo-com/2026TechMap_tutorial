@@ -68,7 +68,7 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
         XCTAssertEqual(lastMessage, RealityAvailabilityMessage.unavailable)
     }
 
-    func test_hideRejectionsMapToTheApprovedGuidance() {
+    func test_hideAndRouteRejectionsMapToTheApprovedGuidance() {
         let coordinator = RealityHideARView.Coordinator(
             meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true)
         )
@@ -76,6 +76,10 @@ final class RealityHideARViewCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.message(for: .selectVerticalSide), RealityAvailabilityMessage.selectVerticalSide)
         XCTAssertEqual(coordinator.message(for: .moveFartherAway), RealityAvailabilityMessage.moveFartherAway)
         XCTAssertEqual(coordinator.message(for: .findFloor), RealityAvailabilityMessage.scanFirst)
+        XCTAssertEqual(coordinator.message(for: RealityWalkRouteFailure.invalidPlan), RealityAvailabilityMessage.selectVerticalSide)
+        XCTAssertEqual(coordinator.message(for: RealityWalkRouteFailure.insufficientFloor), RealityAvailabilityMessage.routeInsufficientFloor)
+        XCTAssertEqual(coordinator.message(for: RealityWalkRouteFailure.cameraTooClose), RealityAvailabilityMessage.routeCameraTooClose)
+        XCTAssertEqual(coordinator.message(for: RealityWalkRouteFailure.movementObstructed), RealityAvailabilityMessage.routeObstructed)
     }
 
     func test_scanningReadinessRequiresBothMeshAndClassifiedFloorBeforeReportingOnce() {

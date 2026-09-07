@@ -63,9 +63,29 @@
 
 학습 sheet가 열려 있을 때 AR 입력과 active-time deadline은 멈춘다. 닫을 때 이미 큐에 있던 최신 scan·준비·발견 event는 한 번만 처리하며, 비활성화 시간은 scan·interruption deadline에 포함하지 않는다.
 
-## 현재 자동 검증 경계
+## 물체를 눌렀는데 경로가 거절될 때
 
-2026-09-07 iPhone 16 Pro(iOS 26.6.1)에서 현재 unit XCTest 223/223이 실행되어 실패·건너뛴 테스트 없이 통과했다. 최초 222개 실행에서 발견한 자막 완료의 background publishing 경고는, 실제 `SCNView` 렌더링 회귀를 추가하고 `SKAction.run(_:queue:)`의 완료 큐를 `.main`으로 지정한 뒤 같은 전체 실행에서 관찰되지 않았다. `@MainActor` 선언만으로 기존 렌더러의 동기 콜백 실행 큐가 바뀌지는 않는다는 경계를 검사한다.
+선택 preview는 세로 면·거리·바닥만 확인한다. 전체 몸통 경로는 탭 때 검사하므로, preview가 유효해도 숨기를 시작하지 못할 수 있다. 이는 물체 종류를 의미적으로 인식했다는 표시도 아니다.
+
+경로의 초기 출발점이 가구 아래쪽 돌출부 안에 있으면, 출발점을 공유하는 모든 후보가 함께 막힐 수 있다. 또 기존 측면 후보 0.40m는 충돌하고 0.70m는 인식 바닥 밖인데, 그 사이의 0.50m 통로는 열려 있는 경우가 있다. 두 경우를 독립적인 장애물 사각형 검사와 실제 production planner 회귀로 재현했다. 현재 탐색은 배치 전 출발점과 측면 간격을 함께 검사하며, 성공한 route의 첫 점을 실제 배치에 사용한다. 충돌 검사를 끄거나 기존 출발점에서 물체를 통과시키는 방식은 사용하지 않는다.
+
+거절 이유를 나누어 확인한다.
+
+- **바닥 부족**: 물체 앞·양옆·뒤를 포함한 인식 바닥이 돼지의 전체 footprint를 지지하는지 확인한다.
+- **카메라 근접**: 물체 탭 거리뿐 아니라 새 출발점도 카메라에서 0.90m 이상인지 확인한다.
+- **충돌**: 바닥·거리 조건을 통과한 후보도 실제 몸통 검사에서 막히는지 확인하고 다른 옆면을 선택한다.
+
+이 회귀는 길이 있어도 거절하던 코드 경계를 증명한다. 사용자 방의 당시 mesh·floor snapshot을 확보한 것은 아니므로 해당 실환경의 유일 원인이나 완전한 해결로 단정하지 않는다.
+
+## 이번 경로 보수의 자동 검증 경계
+
+2026-09-08 실제 production Swift를 사용하는 host 정책 XCTest 55/55가 통과했다. 돌출 가구·중간 폭 통로의 nil-route RED 뒤 경로 확장, 카메라 거리, 실패 이유, 충돌 결과 캐시와 실제 시작점 전달을 검사한다. generic iPhoneOS Swift 5와 Swift 6 strict 앱·테스트 묶음도 모두 컴파일·링크에 성공했다. AppIntents dependency 부재 metadata 경고는 별도 환경 메시지이며 소스 컴파일 오류는 없었다.
+
+현재 전체 unit test inventory는 230개다. 연결된 iPhone이 잠겨 있어 이번 수정 후 230개 전체를 기기에서 실행하거나 새 앱을 설치한 것은 아니다. 아래 223/223은 직전 코드의 실행 기준선이며, 새 수정의 실기기 성공 증거가 아니다. 실제 사용자 물체에서 숨기·찾기가 이어지는지는 여전히 확인이 필요하다.
+
+## 직전 자동 검증 기준선
+
+2026-09-07 iPhone 16 Pro(iOS 26.6.1)에서 당시 unit XCTest 223/223이 실행되어 실패·건너뛴 테스트 없이 통과했다. 최초 222개 실행에서 발견한 자막 완료의 background publishing 경고는, 실제 `SCNView` 렌더링 회귀를 추가하고 `SKAction.run(_:queue:)`의 완료 큐를 `.main`으로 지정한 뒤 같은 전체 실행에서 관찰되지 않았다. `@MainActor` 선언만으로 기존 렌더러의 동기 콜백 실행 큐가 바뀌지는 않는다는 경계를 검사한다.
 
 수정 후 generic iPhoneOS Swift 5·Swift 6 strict `build-for-testing`도 exit 0이다. source compile warning은 없으며 AppIntents dependency 부재 metadata 경고와 기기 진단 수집의 환경 메시지는 별도로 남았다. 앞선 사용성 checkpoint의 production host 정책 48/48, browser failure contract 13/13, Swift 5 Release build와 공개 Pages 배포도 통과했다.
 

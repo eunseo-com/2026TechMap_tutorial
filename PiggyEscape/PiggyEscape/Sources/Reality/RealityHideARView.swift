@@ -427,6 +427,19 @@ struct RealityHideARView: UIViewRepresentable {
             }
         }
 
+        func message(for failure: RealityWalkRouteFailure) -> String {
+            switch failure {
+            case .invalidPlan:
+                RealityAvailabilityMessage.selectVerticalSide
+            case .insufficientFloor:
+                RealityAvailabilityMessage.routeInsufficientFloor
+            case .cameraTooClose:
+                RealityAvailabilityMessage.routeCameraTooClose
+            case .movementObstructed:
+                RealityAvailabilityMessage.routeObstructed
+            }
+        }
+
         func updateScanPresentation(_ presentation: RealityScanPresentation) {
             guard scanPresentation != presentation else { return }
             scanPresentation = presentation
@@ -858,16 +871,15 @@ struct RealityHideARView: UIViewRepresentable {
                 reportSelectionFeedback(message(for: rejection))
             case let .accepted(plan):
                 let clearance = RealityWalkClearance(arView: arView)
-                guard let route = RealityWalkRoutePlanner.route(for: plan, isSegmentClear: {
-                    clearance.isClear(from: $0, to: $1)
-                }), let destination = route.points.last else {
-                    reportSelectionFeedback(EscapeRootMessage.movementObstructed)
+                var routeFailure: RealityWalkRouteFailure?
+                guard let route = RealityWalkRoutePlanner.route(
+                    for: plan,
+                    onFailure: { routeFailure = $0 },
+                    isSegmentClear: { clearance.isClear(from: $0, to: $1) }
+                ), let routedPlan = plan.routed(along: route) else {
+                    reportSelectionFeedback(message(for: routeFailure ?? .invalidPlan))
                     return
                 }
-                let routedPlan = RealityHidePlan(
-                    start: plan.start, destination: destination, retreatDirection: plan.retreatDirection,
-                    floorRegion: plan.floorRegion, waypoints: Array(route.points.dropFirst())
-                )
                 _ = processTargetSelection(
                     plan: routedPlan,
                     acceptedHit: RealitySurfaceHit(
