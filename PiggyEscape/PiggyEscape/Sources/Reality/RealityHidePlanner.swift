@@ -100,6 +100,7 @@ struct RealityHidePlan: Equatable {
     let destination: SIMD3<Float>
     let retreatDirection: SIMD3<Float>
     let floorRegion: RealityFloorRegion
+    var waypoints: [SIMD3<Float>] = []
 }
 
 struct RealityHideAttempt: Equatable {

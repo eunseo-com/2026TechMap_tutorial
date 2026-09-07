@@ -6,6 +6,34 @@ import simd
 
 @MainActor
 final class RealityHideARViewCoordinatorTests: XCTestCase {
+    func test_learningDuringSurpriseLoadCancelsDiscoveryAndRequiresFreshObservations() {
+        let loader = ControlledRealityEntityLoader()
+        let visual = RealityPigVisualController.makeForTesting(entityLoader: loader.load)
+        var revealCount = 0
+        let coordinator = RealityHideARView.Coordinator(
+            meshSupport: FakeRealityMeshSupport(supportsMeshWithClassification: true),
+            visualController: visual, monotonicNow: { 0 }, onRevealed: { revealCount += 1 }
+        )
+        _ = coordinator.acceptHideTarget(destination: [0.6, 0, -1.7], initialPosition: [0, 0, -0.8])
+        loader.succeedNext()
+        loader.succeedNext()
+        let reference = RealityCameraPose(position: .zero, forward: [0, 0, -1])
+        let moved = RealityCameraPose(position: [0.2, 0, 0], forward: [0, 0, -1])
+        recordStableHide(in: coordinator, referencePose: reference)
+        XCTAssertFalse(coordinator.processRevealObservation(observation(timestamp: 3, states: visibleSamples(), pose: moved)))
+        XCTAssertTrue(coordinator.processRevealObservation(observation(timestamp: 4, states: visibleSamples(), pose: moved)))
+        coordinator.isInteractionSuspended = true
+        loader.succeedNext()
+        XCTAssertEqual(coordinator.status, .hidden)
+        XCTAssertEqual(revealCount, 0)
+        coordinator.isInteractionSuspended = false
+        XCTAssertFalse(coordinator.processRevealObservation(observation(timestamp: 5, states: visibleSamples(), pose: moved)))
+        XCTAssertTrue(coordinator.processRevealObservation(observation(timestamp: 6, states: visibleSamples(), pose: moved)))
+        loader.succeedNext()
+        XCTAssertEqual(coordinator.status, .revealed)
+        XCTAssertEqual(revealCount, 1)
+    }
+
     func test_pigSceneAttachmentWaitsForAnAcceptedTargetAndRunsOnce() {
         var gate = RealityPigSceneAttachmentGate()
 

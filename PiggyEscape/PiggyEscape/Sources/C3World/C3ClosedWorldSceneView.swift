@@ -49,15 +49,18 @@ private final class C3TaskAutoDiscoveryCancellable: C3AutoDiscoveryCancellable {
 struct C3ClosedWorldSceneView: UIViewRepresentable {
     private let reduceMotionEnabled: Bool
     private let onNarrationFinished: () -> Void
+    private let onPigTapped: () -> Void
     private let onDiscovered: () -> Void
 
     init(
         reduceMotionEnabled: Bool = false,
         onNarrationFinished: @escaping () -> Void = {},
+        onPigTapped: @escaping () -> Void = {},
         onDiscovered: @escaping () -> Void = {}
     ) {
         self.reduceMotionEnabled = reduceMotionEnabled
         self.onNarrationFinished = onNarrationFinished
+        self.onPigTapped = onPigTapped
         self.onDiscovered = onDiscovered
     }
 
@@ -107,6 +110,7 @@ struct C3ClosedWorldSceneView: UIViewRepresentable {
     func makeCoordinator() -> Coordinator {
         Coordinator(
             onDiscovered: onDiscovered,
+            onPigTapped: onPigTapped,
             reduceMotionEnabled: reduceMotionEnabled
         )
     }
@@ -118,16 +122,19 @@ struct C3ClosedWorldSceneView: UIViewRepresentable {
         weak var scnView: SCNView?
 
         private let onDiscovered: () -> Void
+        private let onPigTapped: () -> Void
         private let autoDiscoveryScheduler: C3AutoDiscoveryScheduling
         private var autoDiscoveryTask: C3AutoDiscoveryCancellable?
 
         init(
             onDiscovered: @escaping () -> Void,
+            onPigTapped: @escaping () -> Void = {},
             reduceMotionEnabled: Bool = false,
             autoDiscoveryScheduler: C3AutoDiscoveryScheduling? = nil
         ) {
             self.world = C3ClosedWorld(reduceMotionEnabled: reduceMotionEnabled)
             self.onDiscovered = onDiscovered
+            self.onPigTapped = onPigTapped
             self.autoDiscoveryScheduler = autoDiscoveryScheduler ?? C3TaskAutoDiscoveryScheduler()
         }
 
@@ -168,7 +175,7 @@ struct C3ClosedWorldSceneView: UIViewRepresentable {
                   isEscapePigDescendant(hit.node) else {
                 return
             }
-            _ = world.tapPig()
+            if world.tapPig() { onPigTapped() }
         }
 
         @objc func handlePan(_ gesture: UIPanGestureRecognizer) {

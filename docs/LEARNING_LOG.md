@@ -28,6 +28,47 @@
 
 ## 항목
 
+### L-20260907-163 — 최신 AR 사용성 변경의 실기기 검증은 연결 불가로 보류
+
+- 상태: 실기기 대기
+- 발생 태스크: AR 시야·실시간 스캔·자연스러운 이동 개선
+- 재현: read-only 기기 목록에서 paired iPhone 16 Pro가 unavailable이며 사용자가 현재 연결이 어렵다고 답했다.
+- 관찰: 이번 변경 앱을 실제 카메라/LiDAR로 실행하거나 촬영하지 않았다. Simulator도 부팅·실행하지 않았다.
+- 영향: 실제 시야 확보, 메시 선의 정합·추적 품질, 물체 주변 통로 검사, 회전·걷기·발견 체감은 미검증이다.
+- 조치: 실제 production 순수 정책을 Mac의 XCTest에서 실행하고 iPhoneOS app/test bundle 컴파일로 검증 범위를 나누었다. 실제 실행 화면을 컨셉 이미지로 대신 증명하지 않는다.
+- 검증: 최신 정책 runtime 48개·0 failures. AR·SwiftUI integration assertions는 iPhone 연결 뒤 실행해야 한다.
+- 배운 점: 컴파일, 정책 runtime, 실기기 사용성은 서로 다른 완료 증거다.
+
+### L-20260907-162 — 학습 창·추적 중단이 발견 수명과 분리되어 있었음
+
+- 상태: 보수 후 통합 runtime 대기
+- 발생 태스크: AR 사용성 개선 코드 검토
+- 재현: 숨김 뒤 발견 포즈 비동기 로딩 중 학습 창을 열거나, 유효한 가림/발견 관찰 사이에 tracking limited 프레임을 넣는다. Chapter 1 돼지 이동 중에도 학습 버튼을 확인한다.
+- 관찰: 발견 포즈 콜백은 suspension을 반영하지 않았고 루트 큐의 one-shot 준비/발견 이벤트가 sheet 뒤에서 진행될 수 있었다. 관찰 provider는 tracking state를 검사하지 않았다. C3 내부 탭은 루트 busy 상태로 전달되지 않았다. 가로 화면 38pt 안내는 일반 글씨에서 스크롤이 막혀 있었다.
+- 조치: 포즈 요청 generation·취소, sheet 중 큐 결과 지연 후 1회 처리, tracking loss의 무효 다섯 점과 nil pose, C3 수락 탭 전달, 44pt 가로 안내 내 스크롤을 추가했다. 비활성화 시 이동/검증 취소와 스캔/중단 deadline 일시 정지도 연결했다.
+- 검증: 새 root·provider·visual regression은 iPhoneOS bundle에 포함한다. loss 사이의 visible stability 회귀를 포함한 순수 정책 48개는 runtime 통과했으며 AR integration 실행은 L-20260907-163과 같이 대기다.
+- 배운 점: 센서 관찰·모델 로딩·SwiftUI sheet·루트 지연 callback은 모두 같은 중단 의미를 가져야 한다.
+
+### L-20260907-161 — no-Simulator 정책 테스트 실행 환경과 새 API RED
+
+- 상태: 해결
+- 발생 태스크: 순수 정책 회귀 실행 경로 추가
+- 재현: `bash scripts/test-reality-policies.sh`; 새 tracker/preview/route/timeline 및 movementObstructed 이벤트를 구현하기 전에 실행했다.
+- 관찰: 처음에는 macOS XCTest 모듈·Swift assertion overlay·private XCTestCore 탐색 경로가 없어 컴파일/로딩이 실패했고, Apple XCTest에는 corelibs의 XCTMain 호출을 사용할 수 없었다. 이후 실제 새 타입/이벤트 부재 RED, route skeleton의 15개 중 3개 assertion 실패를 확인했다. 기존 테스트 helper `pose(position:)`는 macOS NSObject.pose(as:)와 이름이 겹쳤다.
+- 조치: 설치 Xcode의 framework·Swift test library·private framework 경로를 명시하고 XCTestSuite로 동일한 테스트 메서드를 실행한다. helper 이름만 makeCameraPose로 명확히 바꾸었다. 새 타입과 실제 bounded route/scene-time motion 정책을 구현했다.
+- 검증: 마지막 정책 실행은 48개·0 failures·exit 0. 이 실행은 ARKit/SwiftUI 렌더링을 모방하지 않으며 순수 production Swift만 검증한다.
+- 배운 점: 테스트 harness 실패와 제품 정책 실패를 구별하고, runtime에 필요한 라이브러리 경로도 재현 명령에 고정한다.
+
+### L-20260907-160 — AR 설명창이 시야를 가리고 이동이 물체를 가로지름
+
+- 상태: 코드 보수, 시각·실기기 검증 대기
+- 발생 태스크: AR 사용성 개선
+- 재현: 기존 EscapeRootView의 상단 스캔 카드·하단 title3 패널, 준비 완료에서 취소되는 scan subscription, 앞/뒤 두 점을 잇는 RealityPigVisualController.walk(to:)를 확인한다.
+- 관찰: 작은 화면에서 두 큰 설명 영역이 카메라를 덮으며, 준비 후 실시간 공간 상태 표시가 멈춘다. 이동은 실제 물체를 돌아가는 경로 없이 직선 이동하고, 도착 시점은 wall-clock으로 추정했다.
+- 조치: 작은 HUD/명시적 학습 sheet·현재 frame 기반 4Hz telemetry·실제 메시 선·실시간 표면 preview·바닥 내 측면 경로와 실제 몸통 convex cast·scene update 기반 회전/이동을 연결했다. 통로가 막히면 선택으로 복구한다.
+- 검증: 새 iPhoneOS build-for-testing과 정책 runtime 결과를 WORK_LOG에 기록한다. 프로젝트 생성 시 sandbox 밖 Tuist session 기록 권한 오류는 승인된 명령 재실행으로 해결했다. 공개 DocC/새 이미지 동기화는 다음 단계다.
+- 배운 점: 탭 통과 설정만으로 시야 문제가 해결되지는 않으며, 시각적 가림과 이동 경로의 충돌 검사는 별개다.
+
 ### L-20260903-159 — 성공한 Pages run에 공식 Actions Node 20 deprecation이 남음
 
 - 상태: 해결

@@ -6,6 +6,7 @@ import simd
 enum RealityPigVisualError: Error, Equatable {
     case assetLoadFailed(C3PigPose)
     case invalidVisualBounds(C3PigPose)
+    case movementObstructed
 }
 
 @MainActor
@@ -26,9 +27,11 @@ final class RealityPigVisualController {
     private let skipsAssetLoadingAndTiming: Bool
     private let entityLoader: EntityLoader
     private var modelLoad: AnyCancellable?
-    private var movementCompletion: DispatchWorkItem?
+    private var movementSubscription: (any Cancellable)?
+    private var movementGeneration = 0
     private var surpriseRestoreCompletion: DispatchWorkItem?
     private var requestedPose: C3PigPose?
+    private var poseGeneration = 0
 
     init() {
         outerEntity = Entity()
@@ -62,45 +65,71 @@ final class RealityPigVisualController {
     }
 
     func walk(to destination: SIMD3<Float>, completion: @escaping (PoseResult) -> Void) {
-        movementCompletion?.cancel()
-        face(toward: destination)
+        walk(along: [destination], completion: completion)
+    }
+
+    func walk(
+        along destinations: [SIMD3<Float>],
+        isSegmentClear: @escaping (SIMD3<Float>, SIMD3<Float>, Float) -> Bool = { _, _, _ in true },
+        completion: @escaping (PoseResult) -> Void
+    ) {
+        cancelMovement()
+        let generation = movementGeneration
         setPose(.running) { [weak self] result in
-            guard let self else { return }
+            guard let self, self.movementGeneration == generation else { return }
             guard case .success = result else {
                 completion(result)
                 return
             }
+            let points = [self.worldPosition] + destinations
+            let forward = self.outerEntity.orientation.act(SIMD3<Float>(0, 0, 1))
+            guard let timeline = RealityWalkTimeline(points: points, initialYaw: atan2(forward.x, forward.z)) else {
+                completion(.failure(.movementObstructed))
+                return
+            }
+            let bounds = self.outerEntity.visualBounds(recursive: true, relativeTo: self.outerEntity)
+            let halfX = max(abs(bounds.min.x), abs(bounds.max.x))
+            let halfZ = max(abs(bounds.min.z), abs(bounds.max.z))
+            let radius = max(RealityWalkRoutePlanner.footprintRadius, hypot(halfX, halfZ) + 0.025)
+            guard radius.isFinite,
+                  zip(points, points.dropFirst()).allSatisfy({ isSegmentClear($0.0, $0.1, radius) }) else {
+                completion(.failure(.movementObstructed))
+                return
+            }
             if self.skipsAssetLoadingAndTiming {
-                self.outerEntity.setPosition(destination, relativeTo: nil)
+                self.apply(timeline.sample(at: timeline.duration))
                 self.setPose(.idle, completion: completion)
                 return
             }
-
-            let distance = simd_distance(self.worldPosition, destination)
-            let duration = TimeInterval(min(max(distance / 0.65, 0.5), 3.0))
-            let target = Transform(
-                scale: self.outerEntity.scale,
-                rotation: self.outerEntity.orientation,
-                translation: destination
-            )
-            self.outerEntity.move(
-                to: target,
-                relativeTo: self.outerEntity.parent,
-                duration: duration,
-                timingFunction: .easeInOut
-            )
-
-            let work = DispatchWorkItem { [weak self] in
-                self?.setPose(.idle, completion: completion)
+            guard let scene = self.outerEntity.scene else {
+                completion(.failure(.movementObstructed))
+                return
             }
-            self.movementCompletion = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: work)
+            var elapsed: TimeInterval = 0
+            self.movementSubscription = scene.subscribe(to: SceneEvents.Update.self) { [weak self] event in
+                guard let self, self.movementGeneration == generation,
+                      event.deltaTime.isFinite, event.deltaTime > 0 else { return }
+                // A delayed frame must not teleport through newly measured geometry.
+                elapsed += min(event.deltaTime, 0.1)
+                let sample = timeline.sample(at: elapsed)
+                if simd_distance(self.worldPosition, sample.position) > 0.0001,
+                   !isSegmentClear(self.worldPosition, sample.position, radius) {
+                    self.cancelMovement()
+                    completion(.failure(.movementObstructed))
+                    return
+                }
+                self.apply(sample)
+                if sample.isComplete {
+                    self.movementSubscription?.cancel()
+                    self.movementSubscription = nil
+                    self.setPose(.idle, completion: completion)
+                }
+            }
         }
     }
 
     func showSurprised(completion: @escaping (PoseResult) -> Void = { _ in }) {
-        movementCompletion?.cancel()
-        movementCompletion = nil
+        cancelMovement()
         setPose(.surprised, completion: completion)
     }
 
@@ -144,27 +173,35 @@ final class RealityPigVisualController {
         modelLoad?.cancel()
         modelLoad = nil
         requestedPose = nil
-        movementCompletion?.cancel()
-        movementCompletion = nil
+        poseGeneration &+= 1
+        cancelMovement()
         surpriseRestoreCompletion?.cancel()
         surpriseRestoreCompletion = nil
     }
 
-    private func face(toward destination: SIMD3<Float>) {
-        let delta = destination - worldPosition
-        guard delta.allFinite,
-              abs(delta.x) > 0.0001 || abs(delta.z) > 0.0001 else { return }
+    private func apply(_ sample: RealityWalkSample) {
+        outerEntity.setPosition(sample.position, relativeTo: nil)
         outerEntity.orientation = simd_quatf(
-            angle: atan2(delta.x, delta.z),
+            angle: sample.yaw,
             axis: SIMD3(0, 1, 0)
         )
     }
 
+    private func cancelMovement() {
+        movementGeneration &+= 1
+        movementSubscription?.cancel()
+        movementSubscription = nil
+        outerEntity.stopAllAnimations(recursive: false)
+    }
+
     private func setPose(_ pose: C3PigPose, completion: @escaping (PoseResult) -> Void) {
+        poseGeneration &+= 1
+        let generation = poseGeneration
         requestedPose = pose
         modelLoad?.cancel()
-        modelLoad = entityLoader(assetName(for: pose)) { [weak self] result in
-            guard let self, self.requestedPose == pose else { return }
+        modelLoad = nil
+        let load = entityLoader(assetName(for: pose)) { [weak self] result in
+            guard let self, self.poseGeneration == generation, self.requestedPose == pose else { return }
             self.requestedPose = nil
             switch result {
             case let .success(entity):
@@ -178,6 +215,11 @@ final class RealityPigVisualController {
             case .failure:
                 completion(.failure(.assetLoadFailed(pose)))
             }
+        }
+        if poseGeneration == generation, requestedPose == pose {
+            modelLoad = load
+        } else {
+            load?.cancel()
         }
     }
 

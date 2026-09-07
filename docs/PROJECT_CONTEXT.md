@@ -36,6 +36,8 @@
 
 ## 검증 상태
 
+- 2026-09-07 추가 사용성 범위: [AR 개선 명세](superpowers/specs/2026-09-07-ar-usability-polish.md)에 따라 작은 HUD/학습 sheet, 실제 4Hz 메시·바닥·추적 snapshot, 측정된 옆면 preview, 몸통 convex cast를 통과한 측면 경로와 scene update 기반 이동을 추가했다. 불안정 tracking은 가림/발견 입력에서 무효화하고 학습·비활성화 수명을 보수했다. 이번 순수 정책 runtime은 48/48, iPhoneOS compile/link 기준 테스트 inventory는 222개다. 전체 222개 iPhone runtime·실제 LiDAR 시각 확인은 실행하지 않았다. 사용자가 현재 기기 연결이 어렵다고 답했으므로 Simulator 없이 DocC/이미지/Pages 동기화를 이어간다. 현재 공개 사이트는 이 추가 개선 전 버전이다. 아래 190개 및 공개 배포 기록은 9월 3일 기준선이다.
+
 - 자동 검증: 현재 worktree에는 정적 집계상 190개 XCTest가 있다. `2c4d854` 기준 physical focused 4/4와 full suite 186/186은 exit 0으로 통과했다. 이후 Chapter 1 Reduce Motion 2개와 C3 cancellation handle의 compile-time Sendable·실제 coordinator deinit 취소 회귀 2개를 추가했다. 현재 Swift 5와 Swift 6 strict의 fresh generic iPhoneOS `build-for-testing`은 모두 exit 0이지만, 최신 read-only 잠금 상태가 `passcodeRequired: true`라 새 4개를 포함한 runtime은 이번 범위에서 0건이다. Task 9의 UI test target·launch fixture·XCUITest는 명시적 no-Simulator 범위에 따라 계속 보류한다.
 - 언어 모드: 프로젝트 설정은 Swift 5를 유지한다. `C3AutoDiscoveryCancellable`이 checked `Sendable` 계약을 가지며 immutable `Task<Void, Never>` production wrapper와 nonisolated `deinit` 정리를 함께 보존한다. 2026-09-03 fresh generic iPhoneOS Swift 6 strict app·unit-test bundle compile/link가 exit 0이므로 이 preparation diagnostic은 닫혔지만 프로젝트 언어 모드를 Swift 6으로 전환한 것은 아니다.
 - 실기기 검증: 최신 read-only 확인은 paired physical iPhone 16 Pro(iPhone17,1), iOS 26.6, Developer Mode·DDI usable을 확인했지만 현재 `passcodeRequired: true`다. 잠금 우회 없이 focused 실행을 생략했으므로 이번 Task 9 runtime은 0건이며, 기준 186/186만 유효하다. 사용자 상호작용이나 capture가 없으므로 visual/LiDAR acceptance는 주장하지 않는다. 카메라 권한·Settings 복구, 0.18m 크기, 다섯 점 LiDAR mesh 가림, 0.15m/15° 이동 재발견, replay와 증거 스크린샷은 여전히 `실기기 대기`다.

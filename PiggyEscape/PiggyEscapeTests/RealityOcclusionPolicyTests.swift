@@ -1,6 +1,8 @@
 import XCTest
 import simd
+#if !REALITY_POLICY_HOST_TESTS
 @testable import PiggyEscape
+#endif
 
 final class PigOcclusionSamplerTests: XCTestCase {
     func test_rotatedBoundsUseEightyPercentCameraSpaceSupportForFiveDistinctSamples() {
@@ -207,8 +209,8 @@ final class OcclusionSampleStateTests: XCTestCase {
 final class StableHideMonitorTests: XCTestCase {
     func test_hideRequiresAllFiveValidCenterBlockedAndFourBlockedOnTwoUniqueFrames() {
         var monitor = StableHideMonitor(startTime: 10)
-        let firstPose = pose(position: .zero)
-        let secondPose = pose(position: SIMD3<Float>(0.01, 0, 0))
+        let firstPose = makeCameraPose(position: .zero)
+        let secondPose = makeCameraPose(position: SIMD3<Float>(0.01, 0, 0))
 
         XCTAssertEqual(
             monitor.update(
@@ -237,7 +239,7 @@ final class StableHideMonitorTests: XCTestCase {
 
     func test_duplicateAndOlderTimestampsAreIgnoredWithoutConsumingOrResettingStability() {
         var monitor = StableHideMonitor(startTime: 0)
-        let pose = pose(position: .zero)
+        let pose = makeCameraPose(position: .zero)
 
         XCTAssertEqual(monitor.update(
             observation(timestamp: 4, states: hiddenCandidate(), pose: pose),
@@ -266,7 +268,7 @@ final class StableHideMonitorTests: XCTestCase {
             states(center: .blocked, top: .blocked, bottom: .blocked, left: .visible, right: .visible),
             states(center: .visible, top: .blocked, bottom: .blocked, left: .blocked, right: .blocked),
         ]
-        let pose = pose(position: .zero)
+        let pose = makeCameraPose(position: .zero)
 
         for (index, resetState) in resetStates.enumerated() {
             var monitor = StableHideMonitor(startTime: 0)
@@ -292,7 +294,7 @@ final class StableHideMonitorTests: XCTestCase {
     func test_missingSampleOrInvalidCameraPoseInvalidatesWholeHideObservation() {
         var missingSample = hiddenCandidate()
         missingSample[.right] = nil
-        let validPose = pose(position: .zero)
+        let validPose = makeCameraPose(position: .zero)
         let invalidPose = RealityCameraPose(position: .zero, forward: .zero)
         var monitor = StableHideMonitor(startTime: 0)
 
@@ -320,7 +322,7 @@ final class StableHideMonitorTests: XCTestCase {
 
     func test_sixtiethUniqueFrameIsEvaluatedAndCanCompleteHide() {
         var monitor = StableHideMonitor(startTime: 0)
-        let pose = pose(position: .zero)
+        let pose = makeCameraPose(position: .zero)
 
         for frame in 1...58 {
             XCTAssertEqual(monitor.update(
@@ -341,7 +343,7 @@ final class StableHideMonitorTests: XCTestCase {
 
     func test_failedSixtiethFrameExhaustsAndSixtyFirstFrameIsNotProcessed() {
         var monitor = StableHideMonitor(startTime: 0)
-        let pose = pose(position: .zero)
+        let pose = makeCameraPose(position: .zero)
 
         for frame in 1...59 {
             XCTAssertEqual(monitor.update(
@@ -361,7 +363,7 @@ final class StableHideMonitorTests: XCTestCase {
     }
 
     func test_frameAtOrAfterDeadlineIsExcludedButFrameBeforeDeadlineIsEvaluated() {
-        let pose = pose(position: .zero)
+        let pose = makeCameraPose(position: .zero)
         var canFinish = StableHideMonitor(startTime: 20)
         XCTAssertEqual(canFinish.update(
             observation(timestamp: 1, states: hiddenCandidate(), pose: pose),
@@ -394,9 +396,20 @@ final class StableHideMonitorTests: XCTestCase {
 }
 
 final class RealityRevealMonitorObservationTests: XCTestCase {
+    func test_trackingLossBetweenVisibleFramesRequiresTwoFreshValidFrames() {
+        let reference = makeCameraPose(position: .zero)
+        let moved = makeCameraPose(position: [0.2, 0, 0])
+        var monitor = RealityRevealMonitor(referencePose: reference)
+        XCTAssertFalse(monitor.update(observation(timestamp: 1, states: visibleStates(), pose: moved)))
+        let invalid = RealityOcclusionObservation(frameTimestamp: 2, samples: [:], cameraPose: nil)
+        XCTAssertFalse(monitor.update(invalid))
+        XCTAssertFalse(monitor.update(observation(timestamp: 3, states: visibleStates(), pose: moved)))
+        XCTAssertTrue(monitor.update(observation(timestamp: 4, states: visibleStates(), pose: moved)))
+    }
+
     func test_exactTranslationLatchesAndTwoUniqueThreeOfFiveVisibleFramesDiscoverOnce() {
-        let reference = pose(position: .zero)
-        let exactMove = pose(position: SIMD3<Float>(0.15, 0, 0))
+        let reference = makeCameraPose(position: .zero)
+        let exactMove = makeCameraPose(position: SIMD3<Float>(0.15, 0, 0))
         var monitor = RealityRevealMonitor(referencePose: reference)
 
         XCTAssertFalse(monitor.update(observation(
@@ -419,7 +432,7 @@ final class RealityRevealMonitorObservationTests: XCTestCase {
 
     func test_exactFifteenDegreeRotationLatchesMovement() {
         let angle: Float = .pi / 12
-        let reference = pose(position: .zero)
+        let reference = makeCameraPose(position: .zero)
         let exactTurn = RealityCameraPose(
             position: .zero,
             forward: SIMD3<Float>(sin(angle), 0, -cos(angle))
@@ -440,7 +453,7 @@ final class RealityRevealMonitorObservationTests: XCTestCase {
     }
 
     func test_subthresholdTranslationAndRotationDoNotEnableReveal() {
-        let reference = pose(position: .zero)
+        let reference = makeCameraPose(position: .zero)
         let angle: Float = (.pi / 12) - 0.001
         var translation = RealityRevealMonitor(referencePose: reference)
         var rotation = RealityRevealMonitor(referencePose: reference)
@@ -448,12 +461,12 @@ final class RealityRevealMonitorObservationTests: XCTestCase {
         XCTAssertFalse(translation.update(observation(
             timestamp: 1,
             states: visibleStates(),
-            pose: pose(position: SIMD3<Float>(0.149, 0, 0))
+            pose: makeCameraPose(position: SIMD3<Float>(0.149, 0, 0))
         )))
         XCTAssertFalse(translation.update(observation(
             timestamp: 2,
             states: visibleStates(),
-            pose: pose(position: SIMD3<Float>(0.149, 0, 0))
+            pose: makeCameraPose(position: SIMD3<Float>(0.149, 0, 0))
         )))
         XCTAssertFalse(translation.hasMeaningfulViewpointChange)
 
@@ -475,7 +488,7 @@ final class RealityRevealMonitorObservationTests: XCTestCase {
     }
 
     func test_rotationTwoMillionthsOfARadianBelowThresholdDoesNotLatch() {
-        let reference = pose(position: .zero)
+        let reference = makeCameraPose(position: .zero)
         let angle = RealityRevealMonitor.minimumRotation - 0.000_002
         let shortTurn = RealityCameraPose(
             position: .zero,
@@ -497,8 +510,8 @@ final class RealityRevealMonitorObservationTests: XCTestCase {
     }
 
     func test_duplicateAndOlderRevealFramesDoNotAdvanceStability() {
-        let reference = pose(position: .zero)
-        let moved = pose(position: SIMD3<Float>(0.15, 0, 0))
+        let reference = makeCameraPose(position: .zero)
+        let moved = makeCameraPose(position: SIMD3<Float>(0.15, 0, 0))
         var monitor = RealityRevealMonitor(referencePose: reference)
 
         XCTAssertFalse(monitor.update(observation(timestamp: 7, states: visibleStates(), pose: moved)))
@@ -513,8 +526,8 @@ final class RealityRevealMonitorObservationTests: XCTestCase {
             states(center: .blocked, top: .visible, bottom: .visible, left: .visible, right: .visible),
             states(center: .visible, top: .visible, bottom: .blocked, left: .blocked, right: .blocked),
         ]
-        let reference = pose(position: .zero)
-        let moved = pose(position: SIMD3<Float>(0.15, 0, 0))
+        let reference = makeCameraPose(position: .zero)
+        let moved = makeCameraPose(position: SIMD3<Float>(0.15, 0, 0))
 
         for (index, resetState) in resetStates.enumerated() {
             var monitor = RealityRevealMonitor(referencePose: reference)
@@ -543,8 +556,8 @@ final class RealityRevealMonitorObservationTests: XCTestCase {
     }
 
     func test_invalidObservationCanLatchMovementButCannotCountAsVisible() {
-        let reference = pose(position: .zero)
-        let moved = pose(position: SIMD3<Float>(0.15, 0, 0))
+        let reference = makeCameraPose(position: .zero)
+        let moved = makeCameraPose(position: SIMD3<Float>(0.15, 0, 0))
         var monitor = RealityRevealMonitor(referencePose: reference)
 
         XCTAssertFalse(monitor.update(observation(
@@ -564,8 +577,8 @@ final class RealityRevealMonitorObservationTests: XCTestCase {
     }
 
     func test_secondSuccessfulHidePoseIsTheOnlyRevealReference() {
-        let firstPose = pose(position: .zero)
-        let secondPose = pose(position: SIMD3<Float>(0.15, 0, 0))
+        let firstPose = makeCameraPose(position: .zero)
+        let secondPose = makeCameraPose(position: SIMD3<Float>(0.15, 0, 0))
         var hide = StableHideMonitor(startTime: 0)
 
         XCTAssertEqual(hide.update(
@@ -614,7 +627,7 @@ private func makeCorners(
     return corners
 }
 
-private func pose(position: SIMD3<Float>) -> RealityCameraPose {
+private func makeCameraPose(position: SIMD3<Float>) -> RealityCameraPose {
     RealityCameraPose(position: position, forward: SIMD3<Float>(0, 0, -1))
 }
 

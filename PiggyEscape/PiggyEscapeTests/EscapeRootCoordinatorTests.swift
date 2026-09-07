@@ -4,6 +4,81 @@ import XCTest
 
 @MainActor
 final class EscapeRootCoordinatorTests: XCTestCase {
+    func test_backgroundTimeDoesNotConsumeScanOrInterruptionDeadlines() {
+        let authorizer = FakeCameraAuthorizer()
+        let scheduler = RecordingRealityDeadlineScheduler()
+        let coordinator = makeCoordinator(authorizer: authorizer, deadlineScheduler: scheduler)
+        reachCameraRequest(coordinator)
+        authorizer.resolve(.authorized)
+        coordinator.applicationDidBecomeInactive()
+        coordinator.realitySessionWasInterrupted()
+        XCTAssertEqual(scheduler.scheduledDurations, [20])
+        coordinator.applicationDidBecomeActive()
+        XCTAssertEqual(scheduler.scheduledDurations, [20, 10])
+        coordinator.realitySessionInterruptionEnded()
+        XCTAssertEqual(scheduler.scheduledDurations, [20, 10, 20])
+    }
+
+    func test_acceptedClosedWorldTapMarksTheRootBusyBeforeAutomaticDiscovery() {
+        let coordinator = makeCoordinator(authorizer: FakeCameraAuthorizer())
+        coordinator.closedWorldNarrationDidFinish()
+        XCTAssertTrue(coordinator.canPresentLearning)
+        coordinator.closedWorldPigDidBecomeTapped()
+        XCTAssertEqual(coordinator.machine.state, .walkingBehindTree)
+        XCTAssertFalse(coordinator.canPresentLearning)
+        XCTAssertFalse(coordinator.presentLearning())
+    }
+
+    func test_learningPausesTheScanDeadlineAndRestartsItOnceAfterDismissal() {
+        let authorizer = FakeCameraAuthorizer()
+        let scheduler = RecordingRealityDeadlineScheduler()
+        let coordinator = makeCoordinator(authorizer: authorizer, deadlineScheduler: scheduler)
+        reachCameraRequest(coordinator)
+        authorizer.resolve(.authorized)
+        XCTAssertTrue(coordinator.presentLearning())
+        XCTAssertFalse(coordinator.presentLearning())
+        XCTAssertEqual(scheduler.cancelCount, 1)
+        XCTAssertEqual(scheduler.scheduledDurations, [20])
+        coordinator.dismissLearning()
+        coordinator.dismissLearning()
+        XCTAssertEqual(scheduler.scheduledDurations, [20, 20])
+    }
+
+    func test_readinessQueuedBeforeLearningIsNotLostOrDeliveredUnderTheSheet() {
+        let authorizer = FakeCameraAuthorizer()
+        let coordinator = makeCoordinator(authorizer: authorizer)
+        reachCameraRequest(coordinator)
+        authorizer.resolve(.authorized)
+        XCTAssertTrue(coordinator.presentLearning())
+        coordinator.realityScanDidUpdate(.init(progress: .init(hasMesh: true, hasClassifiedFloor: true), becameReady: true))
+        coordinator.realityScanningDidBecomeReady()
+        XCTAssertEqual(coordinator.machine.state, .scanningReality)
+        XCTAssertEqual(coordinator.scanCompletionSequence, 0)
+        coordinator.dismissLearning()
+        XCTAssertEqual(coordinator.machine.state, .realityReady)
+        XCTAssertEqual(coordinator.scanCompletionSequence, 1)
+    }
+
+    func test_discoveryAlreadyQueuedBeforeLearningIsDeliveredOnceAfterDismissal() {
+        let authorizer = FakeCameraAuthorizer()
+        let coordinator = makeCoordinator(authorizer: authorizer)
+        reachCameraRequest(coordinator)
+        authorizer.resolve(.authorized)
+        coordinator.realityScanningDidBecomeReady()
+        coordinator.startRealHide()
+        coordinator.realityTargetDidBecomeAccepted()
+        coordinator.realityMovementDidFinish()
+        coordinator.realityOcclusionDidBecomeVerified()
+        XCTAssertTrue(coordinator.presentLearning())
+        coordinator.realityPigDidBecomeRevealed()
+        XCTAssertEqual(coordinator.machine.state, .hiddenInReality)
+        XCTAssertEqual(coordinator.realitySurpriseSequence, 0)
+        coordinator.dismissLearning()
+        coordinator.dismissLearning()
+        XCTAssertEqual(coordinator.machine.state, .discoveredInReality)
+        XCTAssertEqual(coordinator.realitySurpriseSequence, 1)
+    }
+
     func test_closedWorldDiscoveryWaitsForFadeBeforeRequestingCamera() {
         let authorizer = FakeCameraAuthorizer()
         let coordinator = makeCoordinator(authorizer: authorizer)

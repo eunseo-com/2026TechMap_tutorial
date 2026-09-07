@@ -5,16 +5,21 @@ struct ChapterProgressView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            ForEach(1...4, id: \.self) { number in
-                Capsule()
-                    .fill(number <= chapterNumber ? Color.yellow : Color.white.opacity(0.34))
-                    .frame(height: 5)
+            Text("\(chapterNumber)/4 · \(chapterTitle)")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white)
+            HStack(spacing: 3) {
+                ForEach(1...4, id: \.self) { number in
+                    Capsule()
+                        .fill(number <= chapterNumber ? Color.yellow : Color.white.opacity(0.34))
+                        .frame(width: 9, height: 4)
+                }
             }
+            .accessibilityHidden(true)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .frame(maxWidth: 520)
-        .background(.black.opacity(0.30), in: Capsule())
+        .padding(.vertical, 10)
+        .background(.black.opacity(0.76), in: Capsule())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("4개 챕터 중 \(chapterNumber)번째, \(chapterTitle)")
     }

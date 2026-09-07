@@ -4,6 +4,37 @@ import XCTest
 
 @MainActor
 final class RealityPigVisualControllerTests: XCTestCase {
+    func test_obstructedInstalledFootprintDoesNotMoveOrReportSuccess() {
+        let controller = RealityPigVisualController.makeForTesting()
+        var result: RealityPigVisualController.PoseResult?
+        var measuredRadius: Float = 0
+        controller.walk(along: [[1, 0, 0]], isSegmentClear: { _, _, radius in
+            measuredRadius = radius
+            return false
+        }) { result = $0 }
+        XCTAssertGreaterThanOrEqual(measuredRadius, RealityWalkRoutePlanner.footprintRadius)
+        XCTAssertEqual(controller.worldPosition, .zero)
+        guard case .failure(.movementObstructed)? = result else { return XCTFail("Expected obstruction") }
+    }
+
+    func test_cancelledPoseLoadCannotSatisfyANewerRequestForTheSamePose() {
+        var completions: [(Result<Entity, Error>) -> Void] = []
+        let controller = RealityPigVisualController.makeForTesting { _, completion in
+            completions.append(completion)
+            return nil
+        }
+        var oldCount = 0
+        var currentCount = 0
+        controller.showSurprised { _ in oldCount += 1 }
+        controller.cancelPendingWork()
+        controller.showSurprised { _ in currentCount += 1 }
+        completions[0](.success(ModelEntity(mesh: .generateBox(size: 0.3))))
+        XCTAssertEqual(oldCount, 0)
+        XCTAssertEqual(currentCount, 0)
+        completions[1](.success(ModelEntity(mesh: .generateBox(size: 0.3))))
+        XCTAssertEqual(currentCount, 1)
+    }
+
     func test_eachPoseKeepsItsOwnEighteenCentimeterBaseline() {
         typealias PendingLoad = (asset: String, completion: (Result<Entity, Error>) -> Void)
         var pendingLoads: [PendingLoad] = []
