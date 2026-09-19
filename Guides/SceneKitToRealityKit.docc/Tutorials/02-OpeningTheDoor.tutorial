@@ -1,0 +1,107 @@
+@Tutorial(time: 30, projectFiles: "OpeningTheDoor-Lab.zip") {
+    @Intro(title: "내 방 바닥에 돼지 놓기") {
+        이번에는 화면 속 방을 벗어납니다. iPhone 카메라로 바닥을 비추고, 손가락으로 누른 자리에 작은 돼지를 놓아 봅니다.
+
+        AR을 지원하는 실제 iPhone 또는 iPad가 필요합니다. Mac의 시뮬레이터로는 이 장을 진행할 수 없습니다. 기기가 없다면 <doc:04-Comparison>부터 해도 괜찮습니다.
+    }
+
+    @Section(title: "준비 · iPhone에서 앱 실행하기") {
+        @ContentAndMedia {
+            1장 프로젝트는 그대로 두고 새 앱을 만듭니다. **실습 자료 내려받기**를 눌러 ZIP을 풀어 두세요. 1장의 파일 대신 이번 자료의 `Starter`를 사용합니다.
+
+            | 가져올 파일 | 하는 일 |
+            | --- | --- |
+            | `SpatialSupport.swift` | 카메라를 열고 탭한 위치를 찾습니다 |
+            | `TutorialPig.swift` | 돼지 모델을 불러옵니다 |
+            | `Piggy.usdc` | 돼지 모델입니다 |
+
+            처음 실물 기기로 실행하면 계정과 기기 설정에 시간이 더 걸릴 수 있습니다. 아래 준비 단계부터 하나씩 확인하세요.
+        }
+        @Steps {
+            @Step {
+                **OpeningTheDoorLab 만들기** Xcode에서 **File → New → Project… → iOS → App**을 고릅니다. Product Name은 `OpeningTheDoorLab`, Organization Identifier는 `com.example`로 입력하세요. Interface는 `SwiftUI`, Language는 `Swift`, Storage와 Testing System은 `None`으로 선택하고 저장합니다.
+
+                **확인** 왼쪽에 `OpeningTheDoorLabApp.swift`와 `ContentView.swift`가 보입니다. 앞으로 코드를 붙여 넣을 곳은 `ContentView.swift`입니다.
+            }
+            @Step {
+                **준비 파일 세 개 가져오기** Finder에서 이번 자료의 `Starter`를 여세요. 위 표의 세 파일만 선택해 Xcode 왼쪽 `OpeningTheDoorLab` 폴더 안에 끌어 놓습니다. 파일 복사 옵션과 **Add to targets: OpeningTheDoorLab**을 선택하고 추가를 마칩니다.
+
+                **확인** 기존 파일과 준비 파일 세 개가 한 프로젝트에 보입니다. `Answers`는 가져오지 않습니다.
+                **막혔나요?** 파일을 잘못 추가했다면 ⌘Z로 취소하고 다시 가져오세요. `SceneSupport.swift`는 1장 파일이므로 이번 앱에는 필요하지 않습니다.
+            }
+            @Step {
+                **카메라를 쓰는 이유 적기** Xcode 왼쪽 맨 위의 파란 프로젝트 아이콘을 누르세요. 가운데 **TARGETS** 아래에서 `OpeningTheDoorLab`을 고르고 **Info** 탭을 엽니다. **Custom iOS Target Properties**의 행에 마우스를 올려 `+`를 누르고 `Privacy - Camera Usage Description`을 추가하세요. Value에는 `내 방 바닥을 찾아 돼지를 놓기 위해 카메라를 사용합니다.`라고 적습니다.
+
+                **확인** 방금 추가한 항목과 문장이 Info 목록에 보입니다. `NSCameraUsageDescription`은 같은 항목의 코드 이름입니다. 둘을 따로 추가하지 않습니다.
+                **막혔나요?** 이 항목이 빠지면 카메라를 여는 순간 앱이 종료될 수 있습니다. 문자열은 Swift 코드에 붙여 넣는 것이 아니라 이 Info 화면에 입력합니다.
+            }
+            @Step {
+                **iPhone 연결하고 실행 대상으로 고르기** iPhone을 Mac에 연결하고 잠금을 푸세요. 기기에 이 컴퓨터를 신뢰할지 묻는 창이 나오면 안내를 따릅니다. Xcode 위쪽 실행 대상 메뉴에서 연결한 iPhone의 이름을 선택하세요.
+
+                **확인** 실행 대상에 시뮬레이터 이름 대신 연결한 기기 이름이 보입니다.
+                **막혔나요?** Developer Mode가 필요하다는 안내가 나오면 iPhone의 **설정 → 개인정보 보호 및 보안 → 개발자 모드**에서 설정하고 기기의 재시작 안내를 따르세요. 기기가 목록에 없으면 케이블 연결과 잠금 해제 상태부터 확인합니다.
+            }
+            @Step {
+                **앱 서명 설정하고 실행하기** 앞에서 연 앱 타깃의 **Signing & Capabilities** 탭으로 갑니다. **Automatically manage signing**을 켜고 **Team**에서 본인 계정을 고르세요. 계정이 없다면 **Xcode → Settings → Apple Accounts**에서 먼저 추가합니다. **⌘R**로 실행하세요.
+
+                **확인** iPhone에 “Hello, world!”가 보이면 준비가 끝났습니다. 아직 카메라가 나오지 않는 것이 정상입니다.
+                **막혔나요?** Bundle Identifier를 등록할 수 없다는 오류가 나오면 `com.example.myname2026.OpeningTheDoorLab`처럼 입력하되, `myname2026`은 본인의 영문 이름과 숫자로 바꿔 주세요. 기기 설정은 [Apple의 앱 실행 안내](https://developer.apple.com/documentation/xcode/running-your-app-on-simulated-or-physical-devices)에서도 확인할 수 있습니다.
+            }
+        }
+    }
+
+    @Section(title: "1. 카메라 켜기") {
+        @ContentAndMedia {
+            먼저 주변이 화면에 보이게 합니다. 코드의 `ARWorldTrackingConfiguration()`은 카메라로 기기의 위치와 움직임을 추적할 때 쓰는 설정입니다. 지금은 이 이름을 외울 필요 없이 카메라가 켜지는지부터 확인하세요.
+        }
+        @Steps {
+            @Step {
+                **인사 화면을 카메라로 바꾸기** 아래 **전체 복사**를 누르세요. Xcode의 `ContentView.swift`를 열고 코드 편집 영역에서 **⌘A → ⌘V → ⌘S**를 누릅니다. 코드 전체가 아래 내용으로 바뀌어야 합니다.
+                @Code(name: "ContentView.swift", file: "Door-01-ContentView.swift")
+                **실행 확인 · ⌘R** iPhone 앱에서 **카메라 허용하기**를 누르고 카메라 접근을 허용하세요. 주변 풍경과 “**카메라가 켜졌습니다. 아직 평면 탐지는 꺼져 있습니다.**”라는 안내가 보이면 됐습니다. 돼지는 다음 단계에서 추가합니다.
+                **막혔나요?** 권한을 거절했다면 앱의 **앱 설정 열기**를 눌러 카메라를 켜세요. `Cannot find 'SpatialLessonView' in scope` 오류는 준비 파일 누락일 수 있습니다. `SpatialSupport.swift`를 선택하고 **View → Inspectors → File → Target Membership**에서 앱이 선택되어 있는지 확인합니다.
+            }
+        }
+    }
+
+    @Section(title: "2. 바닥 찾기") {
+        @ContentAndMedia {
+            바닥에 돼지를 놓으려면 먼저 바닥의 위치를 알아야 합니다. `.horizontal`은 수평인 면을 찾으라는 뜻입니다. 바닥뿐 아니라 책상 윗면도 찾을 수 있습니다.
+        }
+        @Steps {
+            @Step {
+                **수평면 탐지 한 줄 추가하기** 아래 전체 코드로 `ContentView.swift`를 바꾸세요. 새로 들어간 줄은 `configuration.planeDetection = [.horizontal]`입니다.
+                @Code(name: "ContentView.swift", file: "Door-02-ContentView.swift")
+                **실행 확인 · ⌘R** 밝은 곳에서 바닥을 비추며 기기를 천천히 좌우로 움직이세요. “**수평면을 찾았습니다. 다음 단계에서 돼지를 추가하세요.**”가 뜨면 됐습니다. 바닥에 색칠된 표시가 생기는 앱은 아니므로 안내 문장을 확인하세요.
+                **막혔나요?** 계속 찾는 중이라면 무늬가 보이는 바닥이나 책상을 비춰 보세요. 어둡거나 반짝이는 표면, 무늬가 전혀 없는 면은 인식이 어려울 수 있습니다. 아직 화면을 눌러도 돼지는 나오지 않습니다.
+            }
+        }
+    }
+
+    @Section(title: "3. 바닥을 눌러 돼지 놓기") {
+        @ContentAndMedia {
+            이제 찾은 면에 돼지를 붙입니다. `anchor`는 현실 공간의 한 위치를 잡아 두는 기준점입니다. `anchor.addChild(...)`는 그 자리에 돼지를 놓는 코드입니다.
+        }
+        @Steps {
+            @Step {
+                **돼지를 추가하는 코드 붙여 넣기** 아래 전체 코드로 `ContentView.swift`를 바꾸세요. 준비 파일이 돼지의 크기를 약 18cm로 맞춰 줍니다.
+                @Code(name: "ContentView.swift", file: "Door-03-ContentView.swift")
+                **실행 확인 · ⌘R** 바닥을 천천히 비추다가 “**수평면을 찾았습니다. 보이는 바닥을 눌러 돼지를 놓으세요.**”가 뜨면, 화면에 보이는 바닥을 한 번 탭하세요. 그 자리에 돼지가 보이면 됐습니다. 다른 바닥을 탭하면 돼지 한 마리가 새 위치로 옮겨집니다.
+                **막혔나요?** 탭해도 반응이 없으면 기기가 아직 그 부분을 바닥으로 찾지 못한 것입니다. 넓은 바닥을 화면 중앙에 두고 조금 더 비춘 뒤 다시 누르세요. 분홍 상자가 나오면 `Piggy.usdc`의 앱 포함 여부를 확인합니다. 앱을 다시 실행하면 바닥을 찾고 돼지를 놓는 과정도 다시 해야 합니다.
+            }
+        }
+    }
+
+    @Section(title: "마무리 · 숫자 대신 바닥을 고르기") {
+        @ContentAndMedia {
+            1장에서는 목적지를 숫자로 적었습니다. 이번에는 실제 바닥을 누르면 앱이 그 위치를 찾아 주었습니다. 이를 위해 화면의 탭과 탐지한 면을 연결하는 계산을 쓰며, 이 계산을 **raycast**라고 부릅니다.
+
+            아직 실제 상자가 돼지를 가리지는 않습니다. 그 차이는 다음 장에서 직접 켰다 껐다 하며 살펴봅니다. 평면 탐지 설정이 더 궁금하면 [Apple의 ARKit 문서](https://developer.apple.com/documentation/arkit/arworldtrackingconfiguration)를 참고하세요.
+        }
+        @Steps {
+            @Step {
+                **다른 위치에도 한 번 놓아 보기** 화면의 다른 바닥을 눌러 돼지가 그 자리로 옮겨지는지 확인하세요. 된다면 <doc:03-RealHideAndSeek>로 넘어갑니다. 다음 장에는 LiDAR와 메시 재구성을 지원하는 기기가 필요합니다. 해당 기기가 없다면 <doc:04-Comparison>으로 이어 가세요.
+            }
+        }
+    }
+}

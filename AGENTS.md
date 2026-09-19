@@ -21,6 +21,11 @@
 - 구현 단위와 검증·커밋 순서는 `docs/superpowers/plans/2026-08-29-four-chapter-experience-and-docc-implementation.md`의 13개 태스크를 따른다.
 - 이전 Chapter 1 설계·계획과 방·가짜 소파 구현은 변경 이유와 SceneKit 개념을 설명하는 참고 기준으로 보존한다. 승인된 4개 챕터 계획 밖으로 범위를 넓히지 않는다.
 
+## 공개 튜토리얼
+
+- 2026-09-20 후속 요청으로 기존 GitHub Pages의 진입점을 초보자 독립 실습 네 장으로 교체한다. 원본은 `Guides/SceneKitToRealityKit.docc`, 변환·검증은 `tools/tutorial_site/`다.
+- 본편 앱과 기존 `Tutorials/SceneKitToRealityKit.docc` 해설은 보존한다. 정확한 공개 경로와 검증 순서는 `docs/2026-09-20-github-pages-reader.md`를 따른다.
+
 ## 협업 규칙
 
 - 의사결정, 변경 이유, 다음 작업에 필요한 정보는 Git으로 추적되는 Markdown 문서에 기록한다.

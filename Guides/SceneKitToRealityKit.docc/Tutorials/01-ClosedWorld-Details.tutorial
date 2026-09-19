@@ -1,0 +1,192 @@
+@Tutorial(time: 45, projectFiles: "ClosedWorld-Lab.zip") {
+    @Intro(title: "선택 학습: 방을 만드는 코드 읽기") {
+        기본 실습을 마쳤다면, 준비 코드가 어떻게 만들어졌는지 살펴보세요. 이 페이지는 별도의 새 프로젝트에서 방·모델·탭 연결을 처음부터 만드는 선택 학습입니다. 기본 실습의 SceneSupport.swift와 이 페이지의 파일들을 같은 앱에 넣으면 이름이 중복됩니다.
+
+        **준비물** Mac · Xcode 26 · iOS 17 이상 시뮬레이터. Swift의 변수·함수와 SwiftUI의 View를 읽을 수 있으면 충분합니다. 3D·AR 경험이나 실물 iPhone은 필요하지 않습니다.
+    }
+
+    @Section(title: "시작 전에 · 실습 준비") {
+        @ContentAndMedia {
+            **이번 장의 경로** 빈 화면 → 방 → 돼지 → 탭 이동 → 노드 관찰. 약 45–60분을 잡고, 각 구간의 실행 확인을 마친 뒤 다음으로 넘어가세요.
+
+            이 실습은 별도의 작은 앱에서 진행합니다. 기존 프로젝트를 열거나 다른 사람의 비공개 저장소를 준비할 필요가 없습니다. 프로젝트 본편의 Tuist 구성과는 분리된 학습용 예제입니다.
+        }
+        @Steps {
+            @Step {
+                **Xcode에서 새 앱을 만드세요.** File → New → Project → iOS → App을 선택합니다. Product Name은 `ClosedWorldLab`, Interface는 `SwiftUI`, Language는 `Swift`, Storage는 `None`으로 설정합니다. Organization Identifier에는 `com.example`을 사용해도 됩니다.
+
+                **확인** 왼쪽 파일 목록에 `ClosedWorldLabApp.swift`와 `ContentView.swift`가 보입니다. 실행 대상에서 iPhone 시뮬레이터를 선택하고 ⌘R을 누르면 기본 화면이 열립니다. 실기기를 선택하지 않아도 됩니다.
+                **막혔나요?** 시뮬레이터가 없으면 Xcode → Settings → Components에서 iOS Simulator를 설치하세요. 앱 생성 화면에 테스트 옵션이 있으면 이번 실습에서는 None을 선택해도 됩니다.
+            }
+            @Step {
+                **파일을 편집하는 규칙을 확인하세요.** 아래에서 “새 파일”이라고 하면 File → New → File from Template에서 Swift File을 만들고, 표시된 이름으로 저장합니다. Target Membership에서 `ClosedWorldLab`에 포함되어 있는지 확인하세요.
+
+                “전체 교체”라고 하면 해당 파일의 내용을 모두 지운 뒤 코드 전체를 붙여 넣습니다. 같은 이름의 파일을 또 만들지 마세요. 코드 예제의 `01-…` 번호는 문서 내부 이름이므로 Xcode 파일 이름에 넣지 않습니다.
+                **모델은 나중에 추가해도 됩니다.** 모델 파일이 없으면 분홍 상자가 돼지 역할을 합니다. 상자로도 마지막 단계까지 진행할 수 있습니다. 돼지 모양을 보고 싶다면 페이지 위쪽의 실습 자료에 포함된 `Models/Piggy.usdc`를 3번째 구간에서 추가하세요.
+            }
+        }
+    }
+
+    @Section(title: "1. 빈 3D 화면 띄우기") {
+        @ContentAndMedia {
+            **이번 목표** SwiftUI 안에 SceneKit이 그릴 자리를 만듭니다. 이 구간의 마지막에 검은 화면이 보이면 성공입니다.
+
+            **처음 보는 말** `SCNScene`은 물체를 담는 장면, `SCNView`는 그 장면을 그리는 화면입니다. `UIViewRepresentable`은 SwiftUI 안에서 UIKit 화면을 쓰는 연결부입니다.
+        }
+        @Steps {
+            @Step {
+                **새 파일 · ClosedWorldSceneView.swift** 아래 코드 전체를 붙여 넣습니다. 장면을 전달받아 화면에 연결합니다. 아직 탭 동작은 없습니다.
+                @Code(name: "ClosedWorldSceneView.swift", file: "01-ClosedWorld-00-view.swift")
+                **확인** 파일이 저장되면 다음 단계로 이동하세요. 실행은 이 구간의 세 파일을 모두 준비한 뒤에 합니다.
+            }
+            @Step {
+                **새 파일 · ClosedWorld.swift** 아래 코드 전체를 붙여 넣습니다. 빈 장면에 카메라와 조명만 준비합니다.
+                @Code(name: "ClosedWorld.swift", file: "01-ClosedWorld-00-world.swift")
+                **읽을 부분** `camera.position`은 방을 내려다볼 위치입니다. 이 카메라는 3D 장면 속 시점이며, iPhone으로 현실을 촬영하는 카메라가 아닙니다.
+            }
+            @Step {
+                **전체 교체 · ContentView.swift** 기본으로 만들어진 파일을 아래 코드로 교체합니다. `ClosedWorldLabApp.swift`는 처음 생성된 상태 그대로 둡니다.
+                @Code(name: "ContentView.swift", file: "01-ClosedWorld-00-content.swift")
+                **실행 확인 · ⌘R** 시뮬레이터에 검은 화면이 나타납니다. 아직 물체를 추가하지 않았으므로 정상입니다. 이제 SwiftUI → SceneKit 연결이 끝났습니다.
+                **막혔나요?** `Cannot find 'ClosedWorld' in scope`가 보이면 앞 단계의 파일 이름과 Target Membership을 확인하세요. 기본 “Hello, world!” 화면이 보이면 `ContentView.swift` 전체가 교체되었는지 확인하세요.
+            }
+        }
+    }
+
+    @Section(title: "2. 바닥과 벽 세우기") {
+        @ContentAndMedia {
+            **이번 목표** 검은 화면에 바닥과 네 벽을 추가합니다. “물체를 만드는 코드”와 “장면에 넣는 코드”를 나누어 작성합니다.
+
+            **좌표 읽기** `SCNVector3(x, y, z)`는 위치를 담습니다. +x는 오른쪽, +y는 위쪽, +z는 이 장면의 카메라 쪽입니다. 바닥의 중심을 `(0, 0, 0)`으로 정합니다. 숫자는 실제 방을 측정한 값이 아닙니다.
+        }
+        @Steps {
+            @Step {
+                **새 파일 · AssetLoader.swift** 아래 코드 전체를 붙여 넣습니다. 모델이 있으면 불러오고, 없으면 상자를 만드는 공통 도구입니다.
+                @Code(name: "AssetLoader.swift", file: "01-ClosedWorld-02-01.swift")
+                **읽을 부분** `object(named:fallback:)`의 `fallback`은 파일을 못 찾았을 때 쓸 대체 물체입니다. 지금은 구조만 읽고 코드를 그대로 사용하세요.
+            }
+            @Step {
+                **새 파일 · RoomBuilder.swift** 아래 코드 전체를 붙여 넣습니다. 바닥 하나와 벽 네 개를 `Room` 노드 아래에 모읍니다.
+                @Code(name: "RoomBuilder.swift", file: "01-ClosedWorld-03-01.swift")
+                **처음 보는 말** `SCNNode`는 장면 속 물체의 위치와 관계를 담는 단위입니다. `addChildNode`는 다른 노드를 그 아래에 붙입니다. `SCNBox`는 상자 모양입니다.
+            }
+            @Step {
+                **전체 교체 · ClosedWorld.swift** 이번 버전으로 교체합니다. `init()`에 `RoomBuilder.build()`를 장면에 붙이는 줄이 추가되었습니다.
+                @Code(name: "ClosedWorld.swift", file: "01-ClosedWorld-03-room.swift")
+                **실행 확인 · ⌘R** 회색 바닥과 남색 벽이 보입니다. 카메라가 위에서 내려다보므로 방 안을 볼 수 있습니다. 아직 돼지와 소파는 없습니다.
+                **막혔나요?** 검은 화면이면 `scene.rootNode.addChildNode(RoomBuilder.build())`가 있는지 확인하세요. 방을 만드는 함수를 작성하는 것만으로는 화면에 나타나지 않습니다.
+            }
+        }
+    }
+
+    @Section(title: "3. 돼지를 정해진 자리에 놓기") {
+        @ContentAndMedia {
+            **이번 목표** 방 안에 캐릭터를 하나 놓습니다. 모델 파일이 없으면 분홍 상자가 나타납니다. 어느 쪽이든 이동 실습은 같습니다.
+
+            `x = 0, z = 1.5`는 바닥 중심보다 카메라 쪽으로 조금 앞선 위치입니다. 모델의 밑면을 바닥에 맞추기 위해 y 값에는 보정값을 더합니다.
+        }
+        @Steps {
+            @Step {
+                **선택 · 돼지 모델 추가** 실습 자료의 `Models/Piggy.usdc`를 Xcode 왼쪽 파일 목록으로 끌어옵니다. 복사 옵션을 켜고 `ClosedWorldLab` 타깃에 추가하세요. 이 모델은 Assets.xcassets에 넣지 않고 프로젝트 파일로 추가합니다.
+
+                **확인** 파일 이름이 `Piggy.usdc`인지 확인하세요. 이 단계를 건너뛰면 다음 실행에서 분홍 상자가 보입니다. 모델을 넣었는데 상자가 보이면 앱 타깃의 Build Phases → Copy Bundle Resources에서 파일을 확인하세요.
+            }
+            @Step {
+                **새 파일 · PigPlacement.swift** 아래 코드 전체를 붙여 넣습니다. 모델을 읽고, 높이를 맞추고, 바닥 위에 놓습니다.
+                @Code(name: "PigPlacement.swift", file: "01-ClosedWorld-04-01.swift")
+                **읽을 부분** 먼저 `hardcodedPosition`과 `makePigNode()`만 읽으세요. 아래의 `normalize`는 모델 크기가 달라도 같은 높이로 맞추는 준비 코드입니다. 이번 실습에서는 고칠 필요가 없습니다.
+            }
+            @Step {
+                **전체 교체 · ClosedWorld.swift** 아래 버전으로 교체해 돼지를 장면에 추가합니다.
+                @Code(name: "ClosedWorld.swift", file: "01-ClosedWorld-04-world.swift")
+                **실행 확인 · ⌘R** 방의 앞쪽에 돼지 또는 분홍 상자가 서 있습니다. 화면을 눌러도 아직 움직이지 않습니다.
+                **직접 확인하기** `PigPlacement.swift`의 `hardcodedPosition`에서 x를 `0`에서 `-1.5`로 바꾸고 다시 실행해 보세요. 왼쪽으로 옮겨지면 성공입니다. 다음 구간 전에 x를 `0`으로 되돌립니다. 위치는 현실 물체가 아닌 이 숫자가 결정합니다.
+            }
+        }
+    }
+
+    @Section(title: "4. 탭하면 소파 뒤로 이동하기") {
+        @ContentAndMedia {
+            **이번 목표** 숨을 장소를 추가하고 화면 탭과 이동을 연결합니다. 네 파일을 아래 순서대로 준비한 뒤 실행하세요.
+
+            여기서 소파는 갈색 상자 또는 나무 모델입니다. 돼지는 정해진 좌표로 이동할 뿐, 소파를 스스로 발견하거나 경로를 계산하지 않습니다. 이동 후 몸 일부가 보일 수 있습니다.
+
+            아래는 이 구간을 마치고 화면을 탭한 뒤의 실제 시뮬레이터 결과입니다. 돼지는 소파 뒤쪽으로 이동했지만 위에서 보는 시점이므로 몸이 보입니다.
+            @Image(source: "closed-world-lab-result.png", alt: "실습 결과: 남색 벽과 회색 바닥이 있는 방에서 돼지가 갈색 소파 뒤쪽으로 이동한 모습.")
+        }
+        @Steps {
+            @Step {
+                **새 파일 · FakeSofa.swift** 아래 코드 전체를 붙여 넣습니다. 소파의 x와 z 위치를 정합니다.
+                @Code(name: "FakeSofa.swift", file: "01-ClosedWorld-06-01.swift")
+                **읽을 부분** `hardcodedPosition`의 `(1.5, 0, -2.0)`이 숨을 장소의 기준입니다. `Wood_Color.usdc`가 없으면 갈색 상자를 씁니다.
+            }
+            @Step {
+                **새 파일 · HideAction.swift** 아래 코드 전체를 붙여 넣습니다. 현재 높이를 유지한 채 소파보다 조금 뒤쪽으로 0.8초 동안 이동합니다.
+                @Code(name: "HideAction.swift", file: "01-ClosedWorld-06-02.swift")
+                **처음 보는 말** `SCNAction`은 이동처럼 시간에 걸쳐 실행할 동작입니다. 동작을 만드는 것만으로는 움직이지 않습니다. 마지막 단계에서 `runAction`으로 실행합니다.
+            }
+            @Step {
+                **전체 교체 · ClosedWorld.swift** 아래 버전으로 교체해 소파 노드도 장면에 넣습니다.
+                @Code(name: "ClosedWorld.swift", file: "01-ClosedWorld-03-02.swift")
+                **읽을 부분** `init()`에서 방·돼지·소파 세 물체를 장면에 추가합니다. 이 목록에 없는 현실의 가구는 이 장면에 존재하지 않습니다.
+            }
+            @Step {
+                **전체 교체 · ClosedWorldSceneView.swift** 아래 버전으로 교체합니다. 탭을 받는 `Coordinator`가 `Piggy` 노드를 찾아 이동시킵니다.
+                @Code(name: "ClosedWorldSceneView.swift", file: "01-ClosedWorld-01-01.swift")
+                **실행 확인 · ⌘R** 방 안에 갈색 소파가 보입니다. 시뮬레이터 화면 안을 클릭하면 돼지가 소파 뒤쪽으로 이동합니다. 다시 처음부터 보려면 Xcode에서 실행을 중단하고 ⌘R로 재실행하세요. 이미 도착한 상태에서 다시 탭하면 같은 자리로 이동하므로 변화가 작습니다.
+                **막혔나요?** 아무 반응이 없으면 이 파일의 전체 교체 여부와 `PigPlacement.swift`의 `pig.name = "Piggy"`를 확인하세요. `ContentView.swift`는 1번 구간의 코드를 그대로 사용합니다.
+            }
+        }
+    }
+
+    @Section(title: "5. 노드에 붙은 기능 읽어 보기") {
+        @ContentAndMedia {
+            **이번 목표** 돼지의 생김새와 동작이 어디에 붙어 있는지 Xcode 콘솔로 확인합니다. 화면을 더 만들지 않고, 방금 실행한 장면을 관찰합니다.
+
+            `geometry`는 생김새, `physicsBody`는 물리 계산 설정, `action`은 실행 중인 동작입니다. 모든 노드가 세 가지를 반드시 갖는 것은 아닙니다. 이 실습은 물리 설정을 추가하지 않았습니다.
+        }
+        @Steps {
+            @Step {
+                **새 파일 · NodeInspector.swift** 아래 코드 전체를 붙여 넣습니다. 돼지 노드 자체와 그 아래 자식 노드의 생김새를 구분해 출력합니다.
+                @Code(name: "NodeInspector.swift", file: "01-ClosedWorld-05-01.swift")
+                **읽을 부분** 모델 파일은 여러 자식 노드로 이루어질 수 있습니다. 부모의 `geometry`가 없어도 자식에 생김새가 있으면 화면에 보입니다.
+            }
+            @Step {
+                **전체 교체 · ClosedWorldSceneView.swift** 콘솔 출력 한 줄이 추가된 마지막 버전으로 교체합니다.
+                @Code(name: "ClosedWorldSceneView.swift", file: "01-ClosedWorld-05-view.swift")
+                **실행 확인 · ⌘R** Xcode의 View → Debug Area → Activate Console을 열고 시뮬레이터 화면을 탭하세요. `node: Piggy`, `physicsBody: 없음`, `actions: hide`가 출력됩니다. `geometry (subtree)`는 1 이상의 수입니다. 실제 모델을 썼는지 상자를 썼는지에 따라 수와 `geometry (self)` 결과가 달라집니다.
+                **관찰** 이동은 부모인 Piggy 노드에 걸려 있고, 모델의 생김새는 자식에 있을 수도 있습니다. SceneKit은 노드 트리에 이런 기능을 붙여 장면을 구성합니다. “한 노드에 모든 기능이 반드시 있다”는 뜻은 아닙니다.
+            }
+        }
+    }
+
+    @Section(title: "마무리 · 무엇이 닫혀 있었을까요?") {
+        @ContentAndMedia {
+            처음에는 아무것도 없던 화면에 방·돼지·소파를 직접 추가했습니다. 돼지는 탭에 반응하지만, 목적지는 여전히 코드에 적힌 좌표입니다.
+
+            실제 앱의 섬 화면도 같은 아이디어에서 출발했습니다. 아래 사진은 이야기의 참고 화면이며, 이번 실습의 완성 화면은 네 벽이 있는 방입니다.
+            @Image(source: "closed-world-app-screen.jpeg", alt: "참고 앱 화면: 초록 섬 위의 돼지. 이번 실습의 방 배치와는 다르다.")
+        }
+        @Steps {
+            @Step {
+                **완료 확인** ① 탭하면 소파 뒤쪽으로 이동한다. ② 위치의 숫자를 바꾸면 시작 위치도 바뀐다. ③ 콘솔에서 생김새·물리·동작을 구분할 수 있다. 세 가지를 확인했다면 이번 장을 마쳤습니다.
+
+                **생각해 보기** 현실의 소파를 옮기면 돼지의 목적지도 바뀔까요? 이 앱에는 현실 공간을 관찰하는 AR 세션이 없으므로 바뀌지 않습니다. 우리가 만든 장면이 현실과 분리되어 있다는 뜻입니다. SceneKit도 ARKit과 함께 사용할 수 있으므로, SceneKit 전체의 불가능한 기능으로 일반화하지 마세요.
+            }
+        }
+    }
+
+    @Section(title: "다음 이야기 · 현실의 바닥을 읽기") {
+        @ContentAndMedia {
+            다음 이야기에서는 카메라로 본 실제 바닥을 배치 기준으로 삼습니다. 아래 참고 화면에서 “바닥 확인됨” 표시를 찾아보세요.
+            @Image(source: "opening-door-app-screen.jpeg", alt: "다음 이야기의 참고 앱 화면: 실제 책상 아래 바닥을 탐색하고 바닥 확인됨 표시를 보여준다.")
+
+            **다음 실습** <doc:02-OpeningTheDoor>에서 실기기의 카메라로 수평면을 찾아 돼지를 놓습니다. 이 사진은 이야기의 참고 화면이며, 다음 장 실습의 실행 증거나 실제 가려짐의 검증 사진은 아닙니다. 메시 가려짐은 <doc:03-RealHideAndSeek>, Entity·Component·System 비교는 <doc:04-Comparison>에서 이어집니다.
+        }
+        @Steps {
+            @Step {
+                **기억할 한 문장** 지금 만든 세계는 코드에 적힌 것만 알 수 있습니다. 현실과 연결하려면 현실을 관찰하고, 물체를 놓을 기준을 얻는 과정이 더 필요합니다.
+            }
+        }
+    }
+}

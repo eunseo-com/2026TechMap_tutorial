@@ -357,6 +357,16 @@ async function main() {
                 + (targets ? ` (${targets})` : ""),
               );
             }
+            const navigation = routeExpectations[route].navigation;
+            if (navigation) {
+              await page.getByRole("link", { name: navigation.linkText, exact: true }).click();
+              await page.waitForURL(`${baseURL}${navigation.path}`, { timeout: 15_000 });
+              const nextHeading = page.locator("h1").first();
+              await nextHeading.waitFor({ state: "visible", timeout: 15_000 });
+              if ((await nextHeading.innerText()).trim() !== navigation.h1) {
+                issues.push(`[${viewport.name}] ${route} reference link did not open the current reading page`);
+              }
+            }
           } finally {
             await page.close();
           }

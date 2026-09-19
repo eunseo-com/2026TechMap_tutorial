@@ -1,0 +1,28 @@
+@Tutorials(name: "씬킷에서 리얼리티킷으로") {
+    @Intro(title: "작은 방에서 현실 공간까지 돼지를 따라가 보세요") {
+        코드로 만든 방에서 돼지를 움직인 뒤, 실제 수평면에 놓고, 실물 물체의 가려짐을 비교합니다. 마지막에는 돼지의 왕복 이동을 RealityKit의 컴포넌트와 시스템으로 나눠 봅니다.
+
+        각 장의 기본 실습에서는 `ContentView.swift` 하나만 고칩니다. 장별 ZIP의 준비 파일을 새 앱에 넣고 시작할 수 있습니다. 1·4장은 시뮬레이터로, 2·3장의 카메라·실측 공간은 지원 실기기로 확인하세요.
+    }
+    @Chapter(name: "Chapter 1 · 갇힌 세계") {
+        기본 실습을 먼저 진행하세요. SwiftUI 화면 코드를 읽을 수 있으면 시작할 수 있습니다. 준비물은 Mac, Xcode 26, iPhone 시뮬레이터입니다.
+        @Image(source: "closed-world-chapter-icon.png", alt: "파란 방 안의 분홍 돼지")
+        @TutorialReference(tutorial: "doc:01-ClosedWorld")
+        @TutorialReference(tutorial: "doc:01-ClosedWorld-Details")
+    }
+    @Chapter(name: "Chapter 2 · 현실로 문 열기") {
+        지원 실기기의 카메라로 수평면을 찾고 탭한 위치에 돼지를 놓습니다. 실물 iPhone 또는 iPad와 카메라 권한 설정이 필요합니다.
+        @Image(source: "closed-world-chapter-icon.png", alt: "네 장의 이야기에서 공통으로 사용하는 파란 방 안의 분홍 돼지 그림")
+        @TutorialReference(tutorial: "doc:02-OpeningTheDoor")
+    }
+    @Chapter(name: "Chapter 3 · 진짜 숨바꼭질") {
+        메시 재구성을 지원하는 실기기에서 같은 위치의 돼지를 유지하며 실제 물체의 가려짐을 켜고 끕니다.
+        @Image(source: "closed-world-chapter-icon.png", alt: "네 장의 이야기에서 공통으로 사용하는 파란 방 안의 분홍 돼지 그림")
+        @TutorialReference(tutorial: "doc:03-RealHideAndSeek")
+    }
+    @Chapter(name: "Chapter 4 · 두 구조 비교하기") {
+        시뮬레이터에서 움직임 컴포넌트를 붙이고 속도를 바꿔 Entity와 System의 책임을 읽습니다.
+        @Image(source: "closed-world-chapter-icon.png", alt: "네 장의 이야기에서 공통으로 사용하는 파란 방 안의 분홍 돼지 그림")
+        @TutorialReference(tutorial: "doc:04-Comparison")
+    }
+}
