@@ -1,0 +1,3 @@
+/* Use DocC's theme-aware foreground on pale code panels and inline links. */
+.syntax-comment { color: var(--color-figure-gray) !important; }
+a.inline-link { color: var(--color-figure-gray) !important; text-decoration: underline; }

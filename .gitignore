@@ -19,3 +19,6 @@ build/
 
 # Local Node tooling used by the rendered DocC browser verifier
 node_modules/
+
+# Python verification bytecode
+__pycache__/

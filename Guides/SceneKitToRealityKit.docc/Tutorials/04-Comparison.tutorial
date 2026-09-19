@@ -1,0 +1,121 @@
+@Tutorial(time: 25, projectFiles: "Comparison-Lab.zip") {
+    @Intro(title: "움직이는 돼지 멈추기") {
+        돼지가 좌우로 움직이다가, 스위치를 끄면 그 자리에 멈추게 만듭니다. 실행해 본 뒤 돼지를 움직이는 코드와 속도를 담는 코드가 어떻게 나뉘는지 살펴봅니다.
+
+        이번에는 Mac의 iPhone 시뮬레이터로 진행합니다. 카메라와 실제 iPhone은 필요하지 않습니다. 2·3장을 건너뛰었다면 여기서 다시 시작하세요.
+    }
+
+    @Section(title: "준비 · 새 연습 앱 만들기") {
+        @ContentAndMedia {
+            **실습 자료 내려받기**를 누르고 ZIP을 풀어 두세요. 이전 장의 앱은 그대로 두고, 카메라를 사용하지 않는 새 앱을 만듭니다.
+
+            | Starter 안의 파일 | 하는 일 |
+            | --- | --- |
+            | `ECSSceneSupport.swift` | 바닥·카메라·돼지를 화면에 준비합니다 |
+            | `TutorialPig.swift`, `Piggy.usdc` | 돼지 모델을 불러옵니다 |
+            | `PatrolSystem.swift`, `PatrolMotion.swift` | 돼지를 왕복 이동시킵니다 |
+
+            준비 파일은 모두 다섯 개입니다. 지금은 내용을 읽지 않아도 됩니다.
+        }
+        @Steps {
+            @Step {
+                **ComparisonLab 만들기** Xcode에서 **File → New → Project… → iOS → App**을 고르세요. Product Name은 `ComparisonLab`, Organization Identifier는 `com.example`, Interface는 `SwiftUI`, Language는 `Swift`로 입력합니다. Storage와 Testing System은 `None`으로 선택하고 저장합니다.
+
+                **확인** 왼쪽 파일 목록에 `ContentView.swift`가 보입니다. 새 프로젝트 생성이 낯설다면 <doc:01-ClosedWorld>의 준비 단계를 먼저 따라 해 보세요.
+            }
+            @Step {
+                **준비 파일 다섯 개 가져오기** Finder의 `Starter` 안에서 위 표의 다섯 파일을 선택해 Xcode 왼쪽 `ComparisonLab` 폴더 안으로 끌어 놓습니다. 파일 복사 옵션과 **Add to targets: ComparisonLab**을 선택하고 추가를 마치세요. `Answers`는 넣지 않습니다.
+
+                **확인** `ContentView.swift`와 다섯 파일이 함께 보입니다. `ComparisonLabApp.swift`는 Xcode가 만든 그대로 둡니다.
+            }
+            @Step {
+                **iPhone 시뮬레이터로 실행하기** Xcode 위쪽 실행 대상에서 설치된 iPhone 시뮬레이터를 고르고 **⌘R**을 누르세요.
+
+                **확인** 가상 iPhone 창에 “Hello, world!”가 보이면 준비가 끝났습니다. 앞으로 코드를 바꿀 때마다 ⌘R로 다시 실행합니다.
+                **막혔나요?** 시뮬레이터가 목록에 없다면 **Xcode → Settings → Components**에서 iOS 시뮬레이터를 설치하세요. 이 장에서는 카메라 권한이나 실물 기기 서명을 설정하지 않습니다.
+            }
+        }
+    }
+
+    @Section(title: "1. 가만히 서 있는 돼지 띄우기") {
+        @ContentAndMedia {
+            먼저 돼지를 화면에 띄웁니다. `pig`는 화면 속 돼지를 가리킵니다. RealityKit에서는 이렇게 장면에 놓이는 대상을 **Entity**라고 부릅니다.
+        }
+        @Steps {
+            @Step {
+                **기본 화면 바꾸기** 아래 전체 코드를 복사하세요. Xcode의 `ContentView.swift`를 열고 코드 편집 영역을 클릭한 뒤 **⌘A → ⌘V → ⌘S**를 누릅니다.
+                @Code(name: "ContentView.swift", file: "Compare-01-ContentView.swift")
+                **실행 확인 · ⌘R** 바닥 위에 돼지가 서 있습니다. 지금은 이동 설정을 지웠기 때문에 움직이지 않습니다. 다음 단계에서 설정을 붙여 봅니다.
+                **막혔나요?** `Cannot find 'ECSLessonView' in scope`가 나오면 `ECSSceneSupport.swift`를 선택하고 **View → Inspectors → File → Target Membership**에서 앱이 선택되어 있는지 확인하세요. 분홍 상자가 보인다면 `Piggy.usdc`도 같은 방법으로 확인합니다. 상자로도 이동 연습은 할 수 있습니다.
+            }
+        }
+    }
+
+    @Section(title: "2. 돼지 움직이기") {
+        @ContentAndMedia {
+            이번에는 돼지에 속도를 적은 설정을 붙입니다. `PatrolComponent(speed: 0.25)`의 `0.25`는 1초에 0.25미터를 움직이라는 값입니다. 이런 설정 데이터를 **Component**라고 부릅니다.
+        }
+        @Steps {
+            @Step {
+                **이동 설정 붙이기** 아래 전체 코드로 `ContentView.swift`를 바꾸세요. 이전의 `remove` 줄 대신 `set(PatrolComponent(speed: 0.25))`가 들어갑니다.
+                @Code(name: "ContentView.swift", file: "Compare-02-ContentView.swift")
+                **실행 확인 · ⌘R** 돼지가 왼쪽과 오른쪽을 오갑니다. 잠시 지켜보면 끝에서 방향을 바꾸는 모습도 볼 수 있습니다. 준비 파일의 `PatrolSystem`이 속도 값을 읽어 실제로 움직이는 일을 맡습니다. 이 실행 코드를 **System**이라고 부릅니다.
+                **막혔나요?** 계속 서 있다면 `PatrolSystem.swift`와 `PatrolMotion.swift`를 모두 가져왔는지 보세요. 정답과 비교하려면 `Answers/2/ContentView.swift`를 엽니다.
+            }
+        }
+    }
+
+    @Section(title: "3. 멈췄다 다시 움직이기") {
+        @ContentAndMedia {
+            스위치를 끄면 속도를 `0`으로, 켜면 `0.25`로 바꿉니다. 돼지를 지웠다가 다시 만드는 것이 아니라 같은 돼지의 설정만 바꿉니다.
+            @Image(source: "comparison-paused.jpg", alt: "움직이기를 끈 실제 실행 화면입니다. 돼지는 지금 서 있는 자리에 멈춥니다. 다시 켜면 그 자리에서 이동을 이어 갑니다.")
+        }
+        @Steps {
+            @Step {
+                **움직이기 스위치 추가하기** 아래 전체 코드로 `ContentView.swift`를 바꿉니다. `Toggle`이 화면의 스위치이고, `isMoving`에는 스위치가 켜졌는지가 담깁니다.
+                @Code(name: "ContentView.swift", file: "Compare-03-ContentView.swift")
+                **실행 확인 · ⌘R** 돼지가 움직이는 동안 **움직이기**를 끄세요. 멈춘 것을 확인하고 다시 켜 봅니다. 같은 자리에서 이동을 이어 가면 실습을 마친 것입니다.
+                **막혔나요?** 스위치는 바뀌는데 계속 움직인다면 `patrol.speed = isMoving ? 0.25 : 0` 줄과 바로 아래 `pig.components.set(patrol)` 줄을 확인하세요. 첫 줄은 속도를 고르고, 두 번째 줄은 바뀐 설정을 돼지에 다시 넣습니다.
+            }
+        }
+    }
+
+    @Section(title: "선택 · 돼지는 어느 코드에서 움직일까요?") {
+        @ContentAndMedia {
+            여기부터는 코드를 더 읽어 보고 싶을 때 진행하세요. 파일을 고치거나 새로 만들 필요는 없습니다. `Starter`에서 가져온 `PatrolSystem.swift`를 엽니다.
+
+            | 이름 | 이번 앱에서 하는 일 |
+            | --- | --- |
+            | Entity · `pig` | 화면 속 돼지 |
+            | Component · `PatrolComponent` | 돼지에 붙인 속도와 진행 방향 |
+            | System · `PatrolSystem` | 그 값을 읽고 돼지의 위치를 바꾸는 코드 |
+        }
+        @Steps {
+            @Step {
+                **speed와 position.x 찾기** 위쪽 `PatrolComponent`의 `speed`를 찾으세요. 아래로 내려가면 `PatrolMotion.step`에 그 속도를 전달하고, 계산 결과를 `entity.position.x`에 넣는 줄이 있습니다. 속도를 저장하는 곳과 위치를 바꾸는 곳이 나뉘어 있습니다.
+                @Code(name: "PatrolSystem.swift · 읽기 전용", file: "PatrolSystem.swift")
+                **확인** `ContentView.swift`에서는 속도만 바꿨는데 돼지가 움직였던 이유를 찾았습니다. 이 구조를 Entity, Component, System의 첫 글자를 따서 **ECS**라고 부릅니다.
+            }
+        }
+    }
+
+    @Section(title: "마무리 · 네 장에서 달라진 것") {
+        @ContentAndMedia {
+            처음에는 코드로 만든 방 안에서 좌표를 바꿨습니다. 이어서 실제 바닥에 돼지를 놓고, 상자 뒤에 가려지게 했습니다. 마지막에는 돼지의 속도와 움직이는 코드를 나눠 보았습니다.
+
+            | 살펴본 것 | 1장 · SceneKit | 2–4장 · RealityKit |
+            | --- | --- | --- |
+            | 위치 | 방 안의 좌표를 직접 입력 | 2·3장에서는 실제 바닥을 눌러 배치 |
+            | 움직임 | 돼지 노드에 `SCNAction` 실행 | 돼지의 속도를 System이 읽어 이동 |
+            | 모델 | `Piggy.usdc`를 노드로 불러오기 | 같은 모델을 Entity로 불러오기 |
+            | 화면 | `SCNView`에 방 표시 | `ARView`에 현실 또는 가상 장면 표시 |
+
+            RealityKit도 이번 장처럼 카메라 없이 쓸 수 있고, SceneKit도 ARKit과 함께 쓸 수 있습니다. 표는 이번에 만든 예제의 차이입니다. 기존 SceneKit 앱을 옮길 때 살펴볼 점은 [Apple의 마이그레이션 세션](https://developer.apple.com/videos/play/wwdc2025/288/)에 정리되어 있습니다.
+        }
+        @Steps {
+            @Step {
+                **한 번 더 바꿔 보기** `ContentView.swift`의 `0.25`를 `0.1`로 바꾸고 다시 실행해 보세요. 돼지가 더 천천히 움직이고 스위치로도 멈춘다면, 이제 스스로 설정을 바꿔 본 것입니다. 원래 속도로 돌아가려면 `0.25`로 되돌립니다.
+            }
+        }
+    }
+}

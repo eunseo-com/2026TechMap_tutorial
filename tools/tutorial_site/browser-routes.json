@@ -1,0 +1,76 @@
+{
+  "/": {
+    "h1": "돼지를 소파 뒤로 움직여 보기"
+  },
+  "/chapters/2/": {
+    "h1": "내 방 바닥에 돼지 놓기"
+  },
+  "/chapters/3/": {
+    "h1": "상자 뒤에 돼지 숨기기"
+  },
+  "/chapters/4/": {
+    "h1": "움직이는 돼지 멈추기"
+  },
+  "/documentation/scenekittorealitykit/": {
+    "h1": "SceneKit에서 RealityKit으로"
+  },
+  "/documentation/scenekittorealitykit/devicecameradiagnostics/": {
+    "h1": "실기기 카메라 진단 — 레이아웃, 세션과 준비 상태 분리"
+  },
+  "/documentation/scenekittorealitykit/migrationworksheet/": {
+    "h1": "SceneKit에서 RealityKit으로 — 세계관 번역 워크시트",
+    "navigation": {
+      "linkText": "Chapter 1 — C3의 닫힌 세계",
+      "path": "/",
+      "h1": "돼지를 소파 뒤로 움직여 보기"
+    }
+  },
+  "/documentation/scenekittorealitykit/realitykitecs/": {
+    "h1": "RealityKit 심화 — 관찰, Entity와 cycle의 책임"
+  },
+  "/documentation/scenekittorealitykit/scenegraphdeepdive/": {
+    "h1": "SceneKit 심화 — C3 섬의 노드 트리와 입력 경계"
+  },
+  "/tutorials/scenekittorealitykit/01-closedworld/": {
+    "h1": "돼지를 소파 뒤로 움직여 보기",
+    "redirectsTo": "/"
+  },
+  "/guide/tutorials/scenekittorealitykit/01-closedworld/": {
+    "h1": "돼지를 소파 뒤로 움직여 보기"
+  },
+  "/tutorials/scenekittorealitykit/02-openingthedoor/": {
+    "h1": "내 방 바닥에 돼지 놓기",
+    "redirectsTo": "/chapters/2/"
+  },
+  "/guide/tutorials/scenekittorealitykit/02-openingthedoor/": {
+    "h1": "내 방 바닥에 돼지 놓기"
+  },
+  "/tutorials/scenekittorealitykit/03-realhideandseek/": {
+    "h1": "상자 뒤에 돼지 숨기기",
+    "redirectsTo": "/chapters/3/"
+  },
+  "/guide/tutorials/scenekittorealitykit/03-realhideandseek/": {
+    "h1": "상자 뒤에 돼지 숨기기"
+  },
+  "/tutorials/scenekittorealitykit/04-comparison/": {
+    "h1": "움직이는 돼지 멈추기",
+    "redirectsTo": "/chapters/4/"
+  },
+  "/guide/tutorials/scenekittorealitykit/04-comparison/": {
+    "h1": "움직이는 돼지 멈추기"
+  },
+  "/tutorials/scenekittorealitykit/": {
+    "h1": "돼지를 소파 뒤로 움직여 보기",
+    "redirectsTo": "/"
+  },
+  "/guide/tutorials/scenekittorealitykit/": {
+    "h1": "작은 방에서 현실 공간까지 돼지를 따라가 보세요"
+  },
+  "/guide/": {
+    "h1": "작은 방에서 현실 공간까지 돼지를 따라가 보세요",
+    "redirectsTo": "/guide/tutorials/scenekittorealitykit/"
+  },
+  "/guide/tutorials/scenekittorealitykit/01-closedworld-details/": {
+    "h1": "선택 학습: 방을 만드는 코드 읽기"
+  }
+}

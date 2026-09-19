@@ -8,7 +8,7 @@
 - 상세 기준: 사용자가 [4개 챕터 완성 설계](superpowers/specs/2026-08-29-four-chapter-experience-and-docc-design.md)를 승인했다. 구현은 이 설계와 [4개 챕터 실행 계획](superpowers/plans/2026-08-29-four-chapter-experience-and-docc-implementation.md)의 테스트·커밋 순서를 따른다.
 - 기준선: 기존 방·가짜 소파 구현은 SceneKit 개념을 설명하는 참고 예제로 보존한다. 실행 앱의 Chapter 1은 현재 C3 섬·기존 나무·돼지 경험을 기준으로 한다.
 - 진입 화면: `ContentView`는 `EscapeRootView` 하나를 시작한다. Chapter 2와 3은 같은 `RealityHideARView`·AR session을 유지하고 Chapter 4에서 정리한다.
-- 공개 문서: 저장소 루트 `Tutorials/SceneKitToRealityKit.docc`를 유일한 공개 DocC 원본으로 통합하고, `scripts/build-docc-site.sh`와 Pages 파이프라인으로 기준 URL의 네 챕터를 앱 구현과 동기화한다.
+- 공개 문서: 초보자 독립 실습은 `Guides/SceneKitToRealityKit.docc`를 원본으로 네 읽기 페이지를 생성해 기존 GitHub Pages의 첫 화면으로 제공한다. 본편 앱 해설의 원본 `Tutorials/SceneKitToRealityKit.docc`와 심화 문서는 보존한다. 두 카탈로그는 학습 범위가 다르며 본편 앱을 입문 실습 코드로 교체하지 않는다. 재생성·경로 계약은 [게시 통합 기록](2026-09-20-github-pages-reader.md)을 따른다.
 - 제외: 금융 상태, SwiftData 저장, 용돈·작은 돼지, WatchConnectivity, Watch UI, 물체 의미 자동 분류, LiDAR 미지원 기기의 가짜 오클루전.
 
 ## 경험 계약

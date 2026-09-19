@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - "Tutorials/SceneKitToRealityKit.docc/**"
+      - "Guides/SceneKitToRealityKit.docc/**"
+      - "tools/tutorial_site/**"
+      - "scripts/build-readable-guide.sh"
       - "Web/index.html"
       - "Web/docc-accessibility-fixes.js"
       - "scripts/build-docc-site.sh"
@@ -50,6 +53,12 @@ jobs:
         run: npm run test:docc-browser
       - name: Verify rendered DocC routes and accessibility
         run: npm run verify:docc-browser -- "$RUNNER_TEMP/docc-site"
+      - name: Add beginner reading pages and preserve shared chapter links
+        run: bash scripts/build-readable-guide.sh "$RUNNER_TEMP/docc-site"
+      - name: Verify runnable guide, downloads, and project-path links
+        run: python3 tools/tutorial_site/verify.py "$RUNNER_TEMP/docc-site" --base-path /2026TechMap_tutorial --docc-subdirectory guide
+      - name: Verify final reading pages and retained documentation
+        run: npm run verify:docc-browser -- "$RUNNER_TEMP/docc-site" tools/tutorial_site/browser-routes.json
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: ${{ runner.temp }}/docc-site
