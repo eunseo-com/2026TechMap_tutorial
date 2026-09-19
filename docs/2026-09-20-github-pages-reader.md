@@ -32,3 +32,7 @@
 ## 남은 확인
 
 실제 초보 독자의 무도움 완주·소요 시간과 2·3장의 실물 AR 관찰은 별도다. SDK·웹 검사나 게시 성공은 이를 대신하지 않는다. 최신 게시 결과와 실행 근거는 `WORK_LOG.md`에 기록한다.
+
+## 게시 결과
+
+2026-09-20 [PR #10](https://github.com/eunseo-com/2026TechMap_tutorial/pull/10), main `e6502e2`, [Pages 실행 35456178708](https://github.com/eunseo-com/2026TechMap_tutorial/actions/runs/35456178708)의 build·deploy 성공. 공개 21개 경로 HTTP 200, 네 읽기 페이지 제목, 5개 ZIP 원본 해시, 최신 CSS/JS, 기존 주소 이동과 실제 첫 화면을 확인했다.
